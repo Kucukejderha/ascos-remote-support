@@ -1,0 +1,26 @@
+# Build outputs
+**/bin/
+**/obj/
+artifacts/
+work/
+
+# IDE and user-specific files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Local secrets and signing material
+.env
+.env.*
+*.pfx
+*.p12
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak

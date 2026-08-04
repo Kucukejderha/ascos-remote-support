@@ -1,0 +1,11 @@
+45.87.173.201.nip.io {
+    encode zstd gzip
+    reverse_proxy remote-support:8080
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://45.87.173.201.nip.io"
+    }
+}
