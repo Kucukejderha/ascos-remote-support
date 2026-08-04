@@ -11,6 +11,7 @@ public sealed class WindowsInputDispatcher
     private readonly object _rateGate = new();
     private int _rateWindow = Environment.TickCount;
     private int _eventsInWindow;
+    private bool _inputLogged;
 
     public WindowsInputDispatcher(ConsentStateMachine consent, Guid sessionId) => (_consent, _sessionId) = (consent, sessionId);
 
@@ -22,11 +23,17 @@ public sealed class WindowsInputDispatcher
         catch (ArgumentException) { return false; }
         if (message is null) return false;
 
+        if (!_inputLogged)
+        {
+            AppDiagnostics.Write("First remote input received. Type=" + message.Type);
+            _inputLogged = true;
+        }
+
         return message.Type switch
         {
-            "move" => SendMouse(message.X, message.Y, 0x0001 | 0x8000 | 0x4000, 0),
+            "move" => MoveCursor(message.X, message.Y),
             "button" => SendButton(message),
-            "wheel" when message.Delta is >= -1200 and <= 1200 => SendMouse(message.X, message.Y, 0x0001 | 0x0800 | 0x8000 | 0x4000, message.Delta),
+            "wheel" when message.Delta is >= -1200 and <= 1200 => SendWheel(message),
             "key" => SendKey(message.Code, message.Down),
             _ => false
         };
@@ -51,22 +58,38 @@ public sealed class WindowsInputDispatcher
             (2, true) => 0x0008u, (2, false) => 0x0010u,
             _ => 0u
         };
-        return flag != 0 && SendMouse(message.X, message.Y, flag | 0x0001 | 0x8000 | 0x4000, 0);
+        if (flag == 0 || !MoveCursor(message.X, message.Y)) return false;
+        mouse_event(flag, 0, 0, 0, UIntPtr.Zero);
+        return true;
     }
 
-    private static bool SendMouse(int x, int y, uint flags, int data)
+    private static bool SendWheel(InputMessage message)
+    {
+        if (!MoveCursor(message.X, message.Y)) return false;
+        mouse_event(0x0800u, 0, 0, unchecked((uint)message.Delta), UIntPtr.Zero);
+        return true;
+    }
+
+    private static bool MoveCursor(int x, int y)
     {
         if (x is < 0 or > 65535 || y is < 0 or > 65535) return false;
-        var input = new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { X = x, Y = y, MouseData = unchecked((uint)data), Flags = flags } } };
-        return SendInput(1, [input], Marshal.SizeOf<Input>()) == 1;
+        var left = GetSystemMetrics(76);
+        var top = GetSystemMetrics(77);
+        var width = Math.Max(1, GetSystemMetrics(78));
+        var height = Math.Max(1, GetSystemMetrics(79));
+        var physicalX = left + (int)Math.Round(x * (width - 1) / 65535d);
+        var physicalY = top + (int)Math.Round(y * (height - 1) / 65535d);
+        var moved = SetCursorPos(physicalX, physicalY);
+        if (!moved) AppDiagnostics.Write("SetCursorPos failed. Win32Error=" + Marshal.GetLastWin32Error());
+        return moved;
     }
 
     private static bool SendKey(string? code, bool down)
     {
         var virtualKey = MapKey(code);
         if (virtualKey == 0) return false;
-        var input = new Input { Type = 1, Union = new InputUnion { Keyboard = new KeyboardInput { VirtualKey = virtualKey, Flags = down ? 0u : 0x0002u } } };
-        return SendInput(1, [input], Marshal.SizeOf<Input>()) == 1;
+        keybd_event((byte)virtualKey, 0, down ? 0u : 0x0002u, UIntPtr.Zero);
+        return true;
     }
 
     private static ushort MapKey(string? code)
@@ -90,6 +113,10 @@ public sealed class WindowsInputDispatcher
     [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
 }
 
 internal sealed class InputMessage
