@@ -4,6 +4,7 @@ public enum ConsentStatus { Pending, Approved, Denied, Stopped, Expired }
 
 public sealed class ConsentStateMachine
 {
+    private static readonly TimeSpan MaximumLifetime = TimeSpan.FromHours(8);
     private readonly object _gate = new();
     private Guid _sessionId;
     private ConsentStatus _status = ConsentStatus.Stopped;
@@ -13,7 +14,7 @@ public sealed class ConsentStateMachine
 
     public void Request(Guid sessionId, TimeSpan lifetime)
     {
-        if (lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromMinutes(30)) throw new ArgumentOutOfRangeException(nameof(lifetime));
+        if (lifetime <= TimeSpan.Zero || lifetime > MaximumLifetime) throw new ArgumentOutOfRangeException(nameof(lifetime));
         lock (_gate)
         {
             _sessionId = sessionId;
