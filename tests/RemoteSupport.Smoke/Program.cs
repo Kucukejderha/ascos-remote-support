@@ -156,9 +156,9 @@ static void VerifyFrameEncoder()
     var encoder = new ScreenFrameEncoder();
     var keyFrame = encoder.Encode(new CapturedFrame(width, height, firstPixels))
         ?? throw new InvalidOperationException("Initial key frame was skipped.");
-    if (keyFrame[0] != ScreenFrameProtocol.CompressedFrame || (keyFrame[1] & ScreenFrameProtocol.KeyFrame) == 0)
-        throw new InvalidOperationException("Compressed key-frame header is invalid.");
-    var decoded = DecompressFrame(keyFrame);
+    if (keyFrame[0] != ScreenFrameProtocol.RawFrame)
+        throw new InvalidOperationException("Initial compatibility frame is invalid.");
+    var decoded = keyFrame.AsSpan(5).ToArray();
     if (!decoded.SequenceEqual(firstPixels)) throw new InvalidOperationException("Key frame did not round-trip.");
     if (encoder.Encode(new CapturedFrame(width, height, firstPixels.ToArray())) is not null)
         throw new InvalidOperationException("Unchanged frame was not skipped.");
@@ -172,9 +172,9 @@ static void VerifyFrameEncoder()
     var delta = DecompressFrame(deltaFrame);
     for (var i = 0; i < decoded.Length; i++) decoded[i] ^= delta[i];
     if (!decoded.SequenceEqual(secondPixels)) throw new InvalidOperationException("Delta frame did not round-trip.");
-    if (keyFrame.Length >= firstPixels.Length / 10)
-        throw new InvalidOperationException("Static desktop key frame compression is unexpectedly poor.");
-    Console.WriteLine($"Codec smoke: raw={firstPixels.Length}, key={keyFrame.Length}, delta={deltaFrame.Length}, keyRatio={(double)keyFrame.Length / firstPixels.Length:P2}");
+    if (deltaFrame.Length >= secondPixels.Length / 10)
+        throw new InvalidOperationException("Desktop delta compression is unexpectedly poor.");
+    Console.WriteLine($"Codec smoke: raw={firstPixels.Length}, compatibility={keyFrame.Length}, delta={deltaFrame.Length}, deltaRatio={(double)deltaFrame.Length / firstPixels.Length:P2}");
 }
 
 static byte[] DecompressFrame(byte[] packet)

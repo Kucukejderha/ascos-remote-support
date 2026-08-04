@@ -4,6 +4,7 @@ namespace RemoteSupport.SessionAgent;
 
 public static class ScreenFrameProtocol
 {
+    public const byte RawFrame = 1;
     public const byte CompressedFrame = 2;
     public const byte KeyFrame = 1;
     public const int HeaderBytes = 6;
@@ -22,6 +23,7 @@ public sealed class ScreenFrameEncoder
         if (pixels.Length != checked(frame.Width * frame.Height * 4))
             throw new ArgumentException("Frame pixel length does not match its dimensions.", nameof(frame));
 
+        var firstFrame = _previous is null;
         var dimensionsChanged = frame.Width != _width || frame.Height != _height;
         var keyFrame = forceKeyFrame || dimensionsChanged || _previous is null || _previous.Length != pixels.Length;
         byte[] source;
@@ -46,6 +48,21 @@ public sealed class ScreenFrameEncoder
         _previous = pixels.ToArray();
         _width = frame.Width;
         _height = frame.Height;
+
+        // The first frame is intentionally uncompressed. This guarantees that
+        // every supported operator browser can paint an initial desktop even
+        // when its native gzip stream API is unavailable or disabled.
+        if (firstFrame)
+        {
+            var raw = new byte[5 + pixels.Length];
+            raw[0] = ScreenFrameProtocol.RawFrame;
+            var rawWidth = checked((ushort)frame.Width);
+            var rawHeight = checked((ushort)frame.Height);
+            raw[1] = (byte)rawWidth; raw[2] = (byte)(rawWidth >> 8);
+            raw[3] = (byte)rawHeight; raw[4] = (byte)(rawHeight >> 8);
+            Buffer.BlockCopy(pixels, 0, raw, 5, pixels.Length);
+            return raw;
+        }
 
         using var output = new MemoryStream(Math.Min(source.Length, 256 * 1024));
         output.WriteByte(ScreenFrameProtocol.CompressedFrame);
