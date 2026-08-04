@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text;
+using System.Web.Script.Serialization;
 
 namespace RemoteSupport.SessionAgent;
 
@@ -14,12 +14,12 @@ public sealed class WindowsInputDispatcher
 
     public WindowsInputDispatcher(ConsentStateMachine consent, Guid sessionId) => (_consent, _sessionId) = (consent, sessionId);
 
-    public bool TryDispatch(ReadOnlySpan<byte> json)
+    public bool TryDispatch(byte[] json, int length)
     {
-        if (!_consent.IsControlAllowed(_sessionId) || json.Length is 0 or > 4096 || !TryAcquireRatePermit()) return false;
+        if (!_consent.IsControlAllowed(_sessionId) || length <= 0 || length > 4096 || !TryAcquireRatePermit()) return false;
         InputMessage? message;
-        try { message = JsonSerializer.Deserialize(json, SessionAgentJsonContext.Default.InputMessage); }
-        catch (JsonException) { return false; }
+        try { message = new JavaScriptSerializer().Deserialize<InputMessage>(Encoding.UTF8.GetString(json, 0, length)); }
+        catch (ArgumentException) { return false; }
         if (message is null) return false;
 
         return message.Type switch
@@ -92,15 +92,13 @@ public sealed class WindowsInputDispatcher
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
 }
 
-internal sealed record InputMessage(string Type, int X, int Y, int Button, bool Down, int Delta, string? Code);
-
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
-[JsonSerializable(typeof(InputMessage))]
-[JsonSerializable(typeof(RegisterDeviceRequest))]
-[JsonSerializable(typeof(RegistrationResponse))]
-[JsonSerializable(typeof(EmptyRequest))]
-[JsonSerializable(typeof(ChallengeResponse))]
-[JsonSerializable(typeof(VerifyRequest))]
-[JsonSerializable(typeof(AccessResponse))]
-[JsonSerializable(typeof(SupportCodeResponse))]
-internal partial class SessionAgentJsonContext : JsonSerializerContext;
+internal sealed class InputMessage
+{
+    public string? Type { get; set; }
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Button { get; set; }
+    public bool Down { get; set; }
+    public int Delta { get; set; }
+    public string? Code { get; set; }
+}

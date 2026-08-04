@@ -47,7 +47,7 @@ internal static class RemoteSession
             var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
             if (result.MessageType == WebSocketMessageType.Close) return;
             if (result.MessageType == WebSocketMessageType.Text && result.EndOfMessage)
-                input.TryDispatch(buffer.AsSpan(0, result.Count));
+                input.TryDispatch(buffer, result.Count);
         }
     }
 }

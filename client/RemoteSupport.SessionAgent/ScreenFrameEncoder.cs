@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.IO.Compression;
 
 namespace RemoteSupport.SessionAgent;
@@ -51,10 +50,11 @@ public sealed class ScreenFrameEncoder
         using var output = new MemoryStream(Math.Min(source.Length, 256 * 1024));
         output.WriteByte(ScreenFrameProtocol.CompressedFrame);
         output.WriteByte(keyFrame ? ScreenFrameProtocol.KeyFrame : (byte)0);
-        Span<byte> dimensions = stackalloc byte[4];
-        BinaryPrimitives.WriteUInt16LittleEndian(dimensions, checked((ushort)frame.Width));
-        BinaryPrimitives.WriteUInt16LittleEndian(dimensions.Slice(2), checked((ushort)frame.Height));
-        var dimensionBytes = dimensions.ToArray();
+        var dimensionBytes = new byte[4];
+        var width = checked((ushort)frame.Width);
+        var height = checked((ushort)frame.Height);
+        dimensionBytes[0] = (byte)width; dimensionBytes[1] = (byte)(width >> 8);
+        dimensionBytes[2] = (byte)height; dimensionBytes[3] = (byte)(height >> 8);
         output.Write(dimensionBytes, 0, dimensionBytes.Length);
         using (var gzip = new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true))
             gzip.Write(source, 0, source.Length);

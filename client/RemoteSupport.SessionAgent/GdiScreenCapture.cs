@@ -3,7 +3,13 @@ using System.Runtime.InteropServices;
 
 namespace RemoteSupport.SessionAgent;
 
-public sealed record CapturedFrame(int Width, int Height, byte[] Pixels);
+public sealed class CapturedFrame
+{
+    public CapturedFrame(int width, int height, byte[] pixels) { Width = width; Height = height; Pixels = pixels; }
+    public int Width { get; }
+    public int Height { get; }
+    public byte[] Pixels { get; }
+}
 
 public sealed class GdiScreenCapture : IDisposable
 {
@@ -35,7 +41,7 @@ public sealed class GdiScreenCapture : IDisposable
             throw new Win32Exception(Marshal.GetLastWin32Error());
         var pixels = new byte[_width * _height * 4];
         Marshal.Copy(_bits, pixels, 0, pixels.Length);
-        return new(_width, _height, pixels);
+        return new CapturedFrame(_width, _height, pixels);
     }
 
     public void Dispose()

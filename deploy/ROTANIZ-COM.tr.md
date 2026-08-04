@@ -15,5 +15,5 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 
 Son doğrulanan yayın:
 
-- Dosya boyutu: `1.125.376` bayt
-- SHA-256: `63dcfebe1e208785f0b85ee3e24c3a66110eec580e2451930e771ea7452e4553`
+- Dosya boyutu: `100.352` bayt
+- SHA-256: `dd77e00b27aa4392bd3f9f43d0d01ee831fc755846b26a0271a780f65518acdf`
