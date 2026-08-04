@@ -18,10 +18,10 @@ Release date: 2026-08-04
 - Windows package executable starts and prints help
 - Self-contained Windows installer installs the embedded host payload and creates the desktop shortcut without PowerShell interaction
 - HTTPS device registration and P-256 signed challenge authentication
-- Five-minute, single-use, nine-digit support code
+- Reusable nine-digit support code that remains valid while the local host session is active; guest credentials rotate on every redemption
 - Separate host and guest WSS authentication
 - Browser WebSocket subprotocol token handling
-- Host-to-guest 921,605-byte frame relay without corruption
+- Lossless 960×540 compressed key/delta frame transport at up to 10 FPS, with unchanged-frame suppression
 - Authenticated Named Pipe framing and replay rejection
 - Windows DPAPI device identity round-trip
 - Input rejected before explicit local consent
@@ -30,4 +30,4 @@ Release date: 2026-08-04
 
 ## Product boundary
 
-This release is the completed consent-first instant-support MVP. It intentionally excludes unattended access, hidden persistence, UAC secure-desktop control, clipboard transfer, and file transfer. Video uses a functional 640×360, 5 FPS raw relay; DXGI/H.264/WebRTC is a future performance upgrade rather than a requirement for this release.
+This release is the completed consent-first instant-support MVP. It intentionally excludes unattended access, hidden persistence, UAC secure-desktop control, clipboard transfer, and file transfer. Video uses a lossless compressed 960×540 transport with delta frames and up to 10 FPS; DXGI/H.264/WebRTC remains a future optimization for high-motion workloads.

@@ -1,5 +1,7 @@
 # ASCOS Remote Support — Phase 1
 
+[Türkçe belge](README.tr.md)
+
 Current release status and live endpoints are recorded in `STATUS.md`.
 
 Consent-first remote support foundation for Windows 10/11 and the ASCOS server.
@@ -21,7 +23,7 @@ Phase 1 deliberately does **not** enable unattended access, silent operation, fi
 4. The operator opens `/operator`, enters the code, and controls the visible desktop.
 5. The local user can press Enter at any time to terminate the session.
 
-The current MVP transports a 640×360 BGRA frame at 5 FPS through the authenticated relay. This is functional but intentionally not presented as the final high-performance DXGI/H.264/WebRTC transport.
+The current transport captures at 960×540 and targets 10 FPS. It skips unchanged frames, sends XOR delta frames between two-second lossless keyframes, and gzip-compresses every transmitted frame. The browser decodes frames in order before rendering, substantially reducing relay bandwidth while improving text clarity. A future DXGI/H.264/WebRTC transport can replace this codec without changing the authenticated session boundary.
 
 The protocol provides both a `CurrentUserOnly` development pipe and a Windows service pipe whose protected ACL allows only `LocalSystem` plus the selected interactive user SID. The service device private key is P-256 and is persisted with Windows DPAPI `CurrentUser` scope; under the installed service this binds decryption to the service account.
 

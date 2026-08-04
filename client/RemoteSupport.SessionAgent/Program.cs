@@ -44,7 +44,7 @@ consent.Request(sessionId, TimeSpan.FromMinutes(15));
 consent.Decide(sessionId, approved: true);
 
 using var socket = await api.ConnectHostSocketAsync(session, CancellationToken.None);
-using var capture = new GdiScreenCapture(640, 360);
+using var capture = new GdiScreenCapture(960, 540);
 var input = new WindowsInputDispatcher(consent, sessionId);
 using var cancellation = new CancellationTokenSource();
 Console.WriteLine("\nOTURUM AKTİF — durdurmak için ENTER tuşuna basın.");
@@ -67,17 +67,17 @@ return 0;
 
 static async Task CaptureLoopAsync(ClientWebSocket socket, GdiScreenCapture capture, CancellationToken cancellationToken)
 {
-    using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(200));
+    using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
+    var encoder = new ScreenFrameEncoder();
+    var nextKeyFrame = Environment.TickCount64;
     while (await timer.WaitForNextTickAsync(cancellationToken) && socket.State == WebSocketState.Open)
     {
         var frame = capture.Capture();
-        var packet = new byte[5 + frame.Pixels.Length];
-        packet[0] = 1;
-        packet[1] = (byte)frame.Width;
-        packet[2] = (byte)(frame.Width >> 8);
-        packet[3] = (byte)frame.Height;
-        packet[4] = (byte)(frame.Height >> 8);
-        frame.Pixels.CopyTo(packet.AsMemory(5));
+        var now = Environment.TickCount64;
+        var forceKeyFrame = now >= nextKeyFrame;
+        var packet = encoder.Encode(frame, forceKeyFrame);
+        if (packet is null) continue;
+        if (forceKeyFrame) nextKeyFrame = now + 2_000;
         await socket.SendAsync(packet, WebSocketMessageType.Binary, true, cancellationToken);
     }
 }

@@ -1,0 +1,31 @@
+# ASCOS Uzaktan Destek — Sürüm Durumu
+
+Sürüm tarihi: 2026-08-04
+
+## Canlı hizmet
+
+- Operatör arayüzü: https://45.87.173.201.nip.io/operator
+- Sağlık kontrolü: https://45.87.173.201.nip.io/health
+- Host sunucu adresi: `https://45.87.173.201.nip.io`
+- Sunucu dizini: `/opt/ascos-remote-support`
+- Konteynerler: `ascos_remote_support`, `ascos_remote_support_proxy`
+- TLS: Caddy üzerinden otomatik Let’s Encrypt sertifikası
+- Denetim kaydı: `/opt/ascos-remote-support/deploy/data/audit.jsonl`
+
+## Doğrulanan davranışlar
+
+- Release derlemesi: sıfır hata ve sıfır uyarı
+- Kurulum gerektirmeyen, self-contained tek EXE
+- HTTPS cihaz kaydı ve P-256 imzalı doğrulama
+- Host açıkken yeniden kullanılabilen 9 haneli kod ve her kullanımda yenilenen operatör anahtarı
+- Ayrı host/operatör WSS kimlik doğrulaması
+- 960×540, en fazla 10 FPS, kayıpsız sıkıştırılmış anahtar/delta kare aktarımı
+- Değişmeyen karelerin atlanması
+- HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
+- Windows DPAPI cihaz kimliği saklama
+- Yerel onaydan önce input reddi
+- Kalıcı güvenlik denetim kayıtları
+
+## Ürün sınırı
+
+Bu sürüm, kullanıcı onaylı anlık destek MVP’sidir. Gözetimsiz erişim, gizli kalıcılık, UAC güvenli masaüstü kontrolü, pano ve dosya aktarımı kapsam dışıdır. Yüksek hareketli kullanım için DXGI/H.264/WebRTC sonraki performans aşamasıdır.

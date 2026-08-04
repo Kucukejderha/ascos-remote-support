@@ -105,7 +105,7 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
 
     try
     {
-        var buffer = new byte[1024 * 1024 + 64];
+        var buffer = new byte[4 * 1024 * 1024 + 64];
         while (socket.State == WebSocketState.Open)
         {
             var result = await socket.ReceiveAsync(buffer, context.RequestAborted);

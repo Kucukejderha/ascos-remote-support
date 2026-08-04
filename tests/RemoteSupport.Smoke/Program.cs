@@ -5,6 +5,7 @@ using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.IO.Compression;
 using RemoteSupport.Protocol;
 using RemoteSupport.Service;
 using RemoteSupport.SessionAgent;
@@ -12,6 +13,12 @@ using RemoteSupport.SessionAgent;
 await VerifyIpcAsync();
 await VerifyDeviceIdentityAsync();
 VerifyCaptureAndConsentGate();
+VerifyFrameEncoder();
+if (args is ["--codec-only"])
+{
+    Console.WriteLine("Local codec and security smoke checks passed.");
+    return;
+}
 
 var baseUri = new Uri(args.FirstOrDefault() ?? "http://127.0.0.1:5188");
 using var http = new HttpClient { BaseAddress = baseUri };
@@ -50,9 +57,10 @@ var result = await guestSocket.ReceiveAsync(received, timeout.Token);
 var relayed = Encoding.UTF8.GetString(received, 0, result.Count);
 if (relayed != Encoding.UTF8.GetString(sent)) throw new InvalidOperationException("Relayed payload differs.");
 
-var frame = new byte[5 + 640 * 360 * 4];
-frame[0] = 1; frame[1] = 0x80; frame[2] = 0x02; frame[3] = 0x68; frame[4] = 0x01;
-RandomNumberGenerator.Fill(frame.AsSpan(5));
+var relayPixels = new byte[960 * 540 * 4];
+RandomNumberGenerator.Fill(relayPixels);
+var frame = new ScreenFrameEncoder().Encode(new CapturedFrame(960, 540, relayPixels))
+    ?? throw new InvalidOperationException("Relay key frame was skipped.");
 await hostSocket.SendAsync(frame, WebSocketMessageType.Binary, true, CancellationToken.None);
 var frameReceived = new byte[frame.Length];
 var offset = 0;
@@ -132,6 +140,50 @@ static void VerifyCaptureAndConsentGate()
     var dispatcher = new WindowsInputDispatcher(consent, sessionId);
     if (dispatcher.TryDispatch("{\"type\":\"move\",\"x\":1,\"y\":1}"u8))
         throw new InvalidOperationException("Input was accepted before local consent.");
+}
+
+static void VerifyFrameEncoder()
+{
+    const int width = 320, height = 180;
+    var firstPixels = new byte[width * height * 4];
+    for (var i = 0; i < firstPixels.Length; i += 4)
+    {
+        firstPixels[i] = 28;
+        firstPixels[i + 1] = 35;
+        firstPixels[i + 2] = 48;
+    }
+
+    var encoder = new ScreenFrameEncoder();
+    var keyFrame = encoder.Encode(new CapturedFrame(width, height, firstPixels))
+        ?? throw new InvalidOperationException("Initial key frame was skipped.");
+    if (keyFrame[0] != ScreenFrameProtocol.CompressedFrame || (keyFrame[1] & ScreenFrameProtocol.KeyFrame) == 0)
+        throw new InvalidOperationException("Compressed key-frame header is invalid.");
+    var decoded = DecompressFrame(keyFrame);
+    if (!decoded.SequenceEqual(firstPixels)) throw new InvalidOperationException("Key frame did not round-trip.");
+    if (encoder.Encode(new CapturedFrame(width, height, firstPixels.ToArray())) is not null)
+        throw new InvalidOperationException("Unchanged frame was not skipped.");
+
+    var secondPixels = firstPixels.ToArray();
+    secondPixels.AsSpan(1000, 4000).Fill(0xA5);
+    var deltaFrame = encoder.Encode(new CapturedFrame(width, height, secondPixels))
+        ?? throw new InvalidOperationException("Changed frame was skipped.");
+    if ((deltaFrame[1] & ScreenFrameProtocol.KeyFrame) != 0)
+        throw new InvalidOperationException("Delta frame was marked as a key frame.");
+    var delta = DecompressFrame(deltaFrame);
+    for (var i = 0; i < decoded.Length; i++) decoded[i] ^= delta[i];
+    if (!decoded.SequenceEqual(secondPixels)) throw new InvalidOperationException("Delta frame did not round-trip.");
+    if (keyFrame.Length >= firstPixels.Length / 10)
+        throw new InvalidOperationException("Static desktop key frame compression is unexpectedly poor.");
+    Console.WriteLine($"Codec smoke: raw={firstPixels.Length}, key={keyFrame.Length}, delta={deltaFrame.Length}, keyRatio={(double)keyFrame.Length / firstPixels.Length:P2}");
+}
+
+static byte[] DecompressFrame(byte[] packet)
+{
+    using var input = new MemoryStream(packet, ScreenFrameProtocol.HeaderBytes, packet.Length - ScreenFrameProtocol.HeaderBytes);
+    using var gzip = new GZipStream(input, CompressionMode.Decompress);
+    using var output = new MemoryStream();
+    gzip.CopyTo(output);
+    return output.ToArray();
 }
 
 ClientWebSocket CreateSocket(string token)
