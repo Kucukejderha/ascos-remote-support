@@ -38,7 +38,7 @@ $hostProject = Join-Path $root 'client\RemoteSupport.SessionAgent\RemoteSupport.
 dotnet restore $hostProject -r win-x64 `
     -p:PortableBuild=true `
     -p:PublishTrimmed=true `
-    -p:TrimMode=full `
+    -p:TrimMode=partial `
     --configfile (Join-Path $root 'NuGet.Config') --source $offlineNuget
 if ($LASTEXITCODE -ne 0) { throw "Portable host restore failed." }
 dotnet publish $hostProject -c $Configuration -o $portableOutput -r win-x64 --self-contained true `
@@ -47,7 +47,7 @@ dotnet publish $hostProject -c $Configuration -o $portableOutput -r win-x64 --se
     -p:IncludeNativeLibrariesForSelfExtract=true `
     -p:EnableCompressionInSingleFile=true `
     -p:PublishTrimmed=true `
-    -p:TrimMode=full `
+    -p:TrimMode=partial `
     -p:DebugType=None `
     --no-restore
 if ($LASTEXITCODE -ne 0) { throw "Portable host publish failed." }
