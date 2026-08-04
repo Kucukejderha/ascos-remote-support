@@ -25,8 +25,28 @@ internal static class RemoteSession
         finally
         {
             consent.Stop(sessionId);
-            if (socket.State == WebSocketState.Open)
-                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "local user stopped", CancellationToken.None);
+            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            {
+                using var closeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                try
+                {
+                    await socket.CloseOutputAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "local user stopped",
+                        closeTimeout.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    AppDiagnostics.Write("WebSocket close handshake timed out; aborting the socket.");
+                }
+                catch (WebSocketException ex)
+                {
+                    AppDiagnostics.Write("WebSocket close handshake failed; aborting the socket.", ex);
+                }
+            }
+
+            if (socket.State != WebSocketState.Closed)
+                socket.Abort();
         }
     }
 

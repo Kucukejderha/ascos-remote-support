@@ -5,6 +5,12 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $artifacts = Join-Path $root "artifacts"
 $hostOutput = Join-Path $artifacts "windows-host"
+$taskAppData = Join-Path $root "work\dotnet-appdata"
+$taskPackages = Join-Path $root "work\nuget-packages"
+
+New-Item -ItemType Directory -Force -Path (Join-Path $taskAppData "NuGet"), $taskPackages | Out-Null
+$env:APPDATA = $taskAppData
+$env:NUGET_PACKAGES = $taskPackages
 
 if (Test-Path -LiteralPath $artifacts) { Remove-Item -LiteralPath $artifacts -Recurse -Force }
 New-Item -ItemType Directory -Path $hostOutput | Out-Null
@@ -15,11 +21,7 @@ Copy-Item (Join-Path $PSScriptRoot "Install-ASCOS-RemoteSupport.ps1") $hostOutpu
 Copy-Item (Join-Path $PSScriptRoot "Uninstall-ASCOS-RemoteSupport.ps1") $hostOutput
 $payload = Join-Path $artifacts "host-payload.zip"
 Compress-Archive -Path @(
-    (Join-Path $hostOutput 'RotaLink.exe'),
-    (Join-Path $hostOutput 'RotaLink.dll'),
-    (Join-Path $hostOutput 'RotaLink.deps.json'),
-    (Join-Path $hostOutput 'RotaLink.runtimeconfig.json'),
-    (Join-Path $hostOutput 'RemoteSupport.Protocol.dll')
+    (Join-Path $hostOutput 'RotaLink.exe')
 ) -DestinationPath $payload -CompressionLevel Optimal
 
 $installerProject = Join-Path $root 'installer\RemoteSupport.Installer\RemoteSupport.Installer.csproj'
@@ -33,26 +35,8 @@ if ($LASTEXITCODE -ne 0) { throw "Installer publish failed." }
 $installerFile = Join-Path $artifacts 'RotaLink-Kurulum.exe'
 Copy-Item (Join-Path $installerOutput 'RotaLink-Kurulum.exe') $installerFile -Force
 
-$portableOutput = Join-Path $artifacts 'portable-publish'
-$hostProject = Join-Path $root 'client\RemoteSupport.SessionAgent\RemoteSupport.SessionAgent.csproj'
-dotnet restore $hostProject -r win-x64 `
-    -p:PortableBuild=true `
-    -p:PublishTrimmed=true `
-    -p:TrimMode=partial `
-    --configfile (Join-Path $root 'NuGet.Config') --source $offlineNuget
-if ($LASTEXITCODE -ne 0) { throw "Portable host restore failed." }
-dotnet publish $hostProject -c $Configuration -o $portableOutput -r win-x64 --self-contained true `
-    -p:PortableBuild=true `
-    -p:PublishSingleFile=true `
-    -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=true `
-    -p:PublishTrimmed=true `
-    -p:TrimMode=partial `
-    -p:DebugType=None `
-    --no-restore
-if ($LASTEXITCODE -ne 0) { throw "Portable host publish failed." }
 $portableFile = Join-Path $artifacts 'RotaLink.exe'
-Copy-Item (Join-Path $portableOutput 'RotaLink.exe') $portableFile -Force
+Copy-Item (Join-Path $hostOutput 'RotaLink.exe') $portableFile -Force
 
 $archive = Join-Path $artifacts "Rotaniz-Remote-Support-Windows.zip"
 Compress-Archive -Path (Join-Path $hostOutput "*") -DestinationPath $archive -CompressionLevel Optimal

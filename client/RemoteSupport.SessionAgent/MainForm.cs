@@ -21,6 +21,7 @@ public sealed class MainForm : Form
     private SignalingHostClient? _api;
     private HostSession? _session;
     private ECDsaCng? _identity;
+    private bool _closing;
 
     public MainForm(string? serverAddress)
     {
@@ -75,7 +76,7 @@ public sealed class MainForm : Form
 
         Controls.Add(new Label
         {
-            Text = "v0.4.1",
+            Text = "v0.4.2",
             ForeColor = Color.FromArgb(99, 120, 138),
             AutoSize = true,
             Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
@@ -93,7 +94,11 @@ public sealed class MainForm : Form
         Controls.Add(diagnostics);
 
         Shown += async (_, _) => await PrepareSessionAsync();
-        FormClosing += (_, _) => StopSession();
+        FormClosing += (_, _) =>
+        {
+            _closing = true;
+            StopSession();
+        };
     }
 
     private static void ConfigureButton(Button button, string text, Color backColor, Color foreColor, Point location, Size size)
@@ -111,16 +116,22 @@ public sealed class MainForm : Form
     {
         try
         {
-            _identity = new ECDsaCng(ECCurve.NamedCurves.nistP256);
-            _api = new SignalingHostClient(_server, _identity);
+            _start.Enabled = false;
+            _stop.Enabled = false;
+            _copy.Enabled = false;
+            _code.Text = "Hazırlanıyor…";
+            SetStatus("Yeni destek kodu hazırlanıyor…", Color.FromArgb(99, 120, 138));
+
+            _identity ??= new ECDsaCng(ECCurve.NamedCurves.nistP256);
+            _api ??= new SignalingHostClient(_server, _identity);
             _session = await _api.CreateSessionAsync(Environment.MachineName, CancellationToken.None);
+            if (_closing || IsDisposed) return;
+
             AppDiagnostics.Write("Support session prepared. SessionId=" + _session.SessionId);
             _code.Text = _session.Code;
             _copy.Enabled = true;
             _start.Enabled = true;
-            SetStatus("Hazır — paylaşım izninizi bekliyor.", Blue);
-            AppDiagnostics.Write("Showing the local screen-sharing consent prompt.");
-            BeginInvoke(new Action(TryStartSession));
+            SetStatus("Hazır — kodu iletin ve Paylaşımı Başlat'a tıklayın.", Blue);
         }
         catch (Exception ex)
         {
@@ -134,18 +145,9 @@ public sealed class MainForm : Form
     private void TryStartSession()
     {
         if (_api == null || _session == null || _sessionTask != null) return;
-        var approved = MessageBox.Show(this,
-            "Destek kodunuz hazır. Ekranınızın paylaşılmasına ve uzaktan fare/klavye kontrolüne izin veriyor musunuz?\n\nEvet'i seçtiğinizde destek bağlantısı hemen başlatılır.",
-            "RotaLink — Kullanıcı Onayı", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
-        if (!approved)
-        {
-            AppDiagnostics.Write("Local user postponed screen sharing.");
-            SetStatus("Beklemede — başlatmak için Paylaşımı Başlat'a tıklayın.", Color.FromArgb(99, 120, 138));
-            return;
-        }
-
+        _sessionCancellation?.Dispose();
         _sessionCancellation = new CancellationTokenSource();
-        AppDiagnostics.Write("Local user approved screen sharing.");
+        AppDiagnostics.Write("Local user started screen sharing from the main window.");
         _start.Enabled = false;
         _stop.Enabled = true;
         SetStatus("Bağlantı aktif", Mint);
@@ -165,12 +167,29 @@ public sealed class MainForm : Form
         finally
         {
             _sessionTask = null;
-            _stop.Enabled = false;
-            _start.Enabled = _session != null;
+            _sessionCancellation?.Dispose();
+            _sessionCancellation = null;
+            _session = null;
+
+            if (!_closing && !IsDisposed)
+            {
+                _stop.Enabled = false;
+                _start.Enabled = false;
+                _copy.Enabled = false;
+                await PrepareSessionAsync();
+            }
         }
     }
 
-    private void StopSession() => _sessionCancellation?.Cancel();
+    private void StopSession()
+    {
+        var cancellation = _sessionCancellation;
+        if (cancellation == null || cancellation.IsCancellationRequested) return;
+
+        _stop.Enabled = false;
+        SetStatus("Bağlantı sonlandırılıyor…", Color.FromArgb(99, 120, 138));
+        cancellation.Cancel();
+    }
 
     private void SetStatus(string text, Color color)
     {
