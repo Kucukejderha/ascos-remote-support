@@ -1,4 +1,4 @@
-# ASCOS Remote Support — Release Status
+# Rotaniz Remote Support — Release Status
 
 Release date: 2026-08-04
 

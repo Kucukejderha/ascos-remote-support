@@ -15,10 +15,10 @@ Copy-Item (Join-Path $PSScriptRoot "Install-ASCOS-RemoteSupport.ps1") $hostOutpu
 Copy-Item (Join-Path $PSScriptRoot "Uninstall-ASCOS-RemoteSupport.ps1") $hostOutput
 $payload = Join-Path $artifacts "host-payload.zip"
 Compress-Archive -Path @(
-    (Join-Path $hostOutput 'ASCOS.RemoteSupport.Host.exe'),
-    (Join-Path $hostOutput 'ASCOS.RemoteSupport.Host.dll'),
-    (Join-Path $hostOutput 'ASCOS.RemoteSupport.Host.deps.json'),
-    (Join-Path $hostOutput 'ASCOS.RemoteSupport.Host.runtimeconfig.json'),
+    (Join-Path $hostOutput 'RotaLink.exe'),
+    (Join-Path $hostOutput 'RotaLink.dll'),
+    (Join-Path $hostOutput 'RotaLink.deps.json'),
+    (Join-Path $hostOutput 'RotaLink.runtimeconfig.json'),
     (Join-Path $hostOutput 'RemoteSupport.Protocol.dll')
 ) -DestinationPath $payload -CompressionLevel Optimal
 
@@ -30,8 +30,8 @@ if ($LASTEXITCODE -ne 0) { throw "Installer restore failed." }
 $installerOutput = Join-Path $artifacts 'installer-publish'
 dotnet publish $installerProject -c $Configuration -o $installerOutput -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=None --no-restore
 if ($LASTEXITCODE -ne 0) { throw "Installer publish failed." }
-$installerFile = Join-Path $artifacts 'ASCOS-Uzaktan-Destek-Kurulum.exe'
-Copy-Item (Join-Path $installerOutput 'ASCOS-Uzaktan-Destek-Kurulum.exe') $installerFile -Force
+$installerFile = Join-Path $artifacts 'RotaLink-Kurulum.exe'
+Copy-Item (Join-Path $installerOutput 'RotaLink-Kurulum.exe') $installerFile -Force
 
 $portableOutput = Join-Path $artifacts 'portable-publish'
 $hostProject = Join-Path $root 'client\RemoteSupport.SessionAgent\RemoteSupport.SessionAgent.csproj'
@@ -51,10 +51,10 @@ dotnet publish $hostProject -c $Configuration -o $portableOutput -r win-x64 --se
     -p:DebugType=None `
     --no-restore
 if ($LASTEXITCODE -ne 0) { throw "Portable host publish failed." }
-$portableFile = Join-Path $artifacts 'ASCOS-Uzaktan-Destek-Portatif.exe'
-Copy-Item (Join-Path $portableOutput 'ASCOS.RemoteSupport.Host.exe') $portableFile -Force
+$portableFile = Join-Path $artifacts 'RotaLink.exe'
+Copy-Item (Join-Path $portableOutput 'RotaLink.exe') $portableFile -Force
 
-$archive = Join-Path $artifacts "ASCOS-Remote-Support-Windows.zip"
+$archive = Join-Path $artifacts "Rotaniz-Remote-Support-Windows.zip"
 Compress-Archive -Path (Join-Path $hostOutput "*") -DestinationPath $archive -CompressionLevel Optimal
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
 $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installerFile).Hash.ToLowerInvariant()

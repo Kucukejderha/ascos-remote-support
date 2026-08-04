@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><AssemblyName>ASCOS.RemoteSupport.Host</AssemblyName></PropertyGroup>
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><AssemblyName>RotaLink</AssemblyName></PropertyGroup>
   <PropertyGroup Condition="'$(PortableBuild)' == 'true'"><DefineConstants>$(DefineConstants);PORTABLE_BUILD</DefineConstants></PropertyGroup>
   <ItemGroup Condition="'$(PortableBuild)' == 'true'"><Compile Remove="SelfInstaller.cs" /></ItemGroup>
   <ItemGroup><ProjectReference Include="..\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" /></ItemGroup>

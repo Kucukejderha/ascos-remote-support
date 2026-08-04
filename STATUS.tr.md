@@ -1,4 +1,4 @@
-# ASCOS Uzaktan Destek — Sürüm Durumu
+# Rotaniz Remote Support — Sürüm Durumu
 
 Sürüm tarihi: 2026-08-04
 

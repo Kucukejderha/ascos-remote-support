@@ -4,13 +4,13 @@ using RemoteSupport.SessionAgent;
 
 if (args is ["--help"] or ["-h"])
 {
-    Console.WriteLine("ASCOS Remote Support Host\nUsage: ASCOS.RemoteSupport.Host.exe <https-server-url>\nA native consent dialog is shown before every session.");
+    Console.WriteLine("Rotaniz Remote Support\nKullanım: RotaLink.exe <https-sunucu-adresi>\nHer oturumdan önce yerel kullanıcı onayı gösterilir.");
     return 0;
 }
 
 if (!OperatingSystem.IsWindows())
 {
-    Console.Error.WriteLine("ASCOS Session Agent yalnızca Windows üzerinde çalışır.");
+    Console.Error.WriteLine("RotaLink yalnızca Windows üzerinde çalışır.");
     return 2;
 }
 
@@ -23,8 +23,8 @@ var server = new Uri(args.FirstOrDefault() ?? "https://45.87.173.201.nip.io");
 using var identity = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 using var api = new SignalingHostClient(server, identity);
 
-Console.Title = "ASCOS Uzaktan Destek";
-Console.WriteLine("ASCOS Uzaktan Destek — görünür ve kullanıcı onaylı oturum");
+Console.Title = "Rotaniz Remote Support — RotaLink";
+Console.WriteLine("Rotaniz Remote Support — görünür ve kullanıcı onaylı oturum");
 Console.WriteLine($"Sunucu: {server}");
 var session = await api.CreateSessionAsync(Environment.MachineName, CancellationToken.None);
 Console.WriteLine($"\nCihaz ID : {session.DeviceId}");

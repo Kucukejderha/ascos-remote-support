@@ -1,8 +1,8 @@
-# ASCOS Uzaktan Destek — Faz 1
+# Rotaniz Remote Support — Faz 1
 
 [English documentation](README.md)
 
-Windows 10/11 ve ASCOS sunucusu için kullanıcı onayını zorunlu tutan modüler uzaktan destek uygulamasıdır.
+Windows 10/11 ve Rotaniz sunucusu için kullanıcı onayını zorunlu tutan modüler uzaktan destek uygulamasıdır.
 
 ## Bileşenler
 
@@ -26,7 +26,7 @@ Bu yapı metin okunabilirliğini artırırken masaüstü kullanımındaki bant g
 
 ## Kullanım
 
-1. Destek alan bilgisayarda `ASCOS-Uzaktan-Destek-Portatif.exe` çalıştırılır.
+1. Destek alan bilgisayarda `RotaLink.exe` çalıştırılır.
 2. Kullanıcı gösterilen 9 haneli kodu paylaşır ve bağlantıyı onaylar.
 3. Operatör `/operator` sayfasına kodu girer.
 4. Yerel kullanıcı uygulamayı kapatana kadar aynı kod yeniden kullanılabilir.
@@ -39,7 +39,7 @@ dotnet build AscosRemoteSupport.sln
 powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
 ```
 
-Portatif paket `artifacts/ASCOS-Uzaktan-Destek-Portatif.exe` olarak üretilir; kurulum veya önceden yüklenmiş .NET gerektirmez.
+Portatif paket `artifacts/RotaLink.exe` olarak üretilir; kurulum veya önceden yüklenmiş .NET gerektirmez.
 
 Canlı operatör: https://45.87.173.201.nip.io/operator
 

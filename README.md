@@ -1,10 +1,10 @@
-# ASCOS Remote Support — Phase 1
+# Rotaniz Remote Support — Phase 1
 
 [Türkçe belge](README.tr.md)
 
 Current release status and live endpoints are recorded in `STATUS.md`.
 
-Consent-first remote support foundation for Windows 10/11 and the ASCOS server.
+Consent-first remote support foundation for Windows 10/11 and the Rotaniz server.
 
 ## Components
 
@@ -51,11 +51,11 @@ The smoke test also verifies authenticated Named Pipe framing, replay rejection,
 powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
 ```
 
-For end users, distribute only `artifacts/ASCOS-Uzaktan-Destek-Kurulum.exe`. It is a self-contained, double-click installer with the ASCOS server address embedded; it requires no PowerShell or preinstalled .NET runtime.
+For end users, distribute only `artifacts/RotaLink-Kurulum.exe`. It is a self-contained, double-click installer with the Rotaniz server address embedded; it requires no PowerShell or preinstalled .NET runtime.
 
-For zero-install support, distribute `artifacts/ASCOS-Uzaktan-Destek-Portatif.exe`. It is a self-contained single executable: double-clicking it immediately opens the support-code and consent flow without copying files or creating shortcuts.
+For zero-install support, distribute `artifacts/RotaLink.exe`. It is a self-contained single executable: double-clicking it immediately opens the support-code and consent flow without copying files or creating shortcuts.
 
-Extract `artifacts/ASCOS-Remote-Support-Windows.zip` and run:
+Extract `artifacts/Rotaniz-Remote-Support-Windows.zip` and run:
 
 ```powershell
 .\Install-ASCOS-RemoteSupport.ps1 -ServerUrl https://45.87.173.201.nip.io
