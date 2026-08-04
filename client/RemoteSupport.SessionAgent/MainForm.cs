@@ -75,7 +75,7 @@ public sealed class MainForm : Form
 
         Controls.Add(new Label
         {
-            Text = "v0.4.0",
+            Text = "v0.4.1",
             ForeColor = Color.FromArgb(99, 120, 138),
             AutoSize = true,
             Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
@@ -118,7 +118,9 @@ public sealed class MainForm : Form
             _code.Text = _session.Code;
             _copy.Enabled = true;
             _start.Enabled = true;
-            SetStatus("Hazır — kodu destek personeline iletin.", Blue);
+            SetStatus("Hazır — paylaşım izninizi bekliyor.", Blue);
+            AppDiagnostics.Write("Showing the local screen-sharing consent prompt.");
+            BeginInvoke(new Action(TryStartSession));
         }
         catch (Exception ex)
         {
@@ -127,13 +129,20 @@ public sealed class MainForm : Form
         }
     }
 
-    private void StartClicked(object? sender, EventArgs e)
+    private void StartClicked(object? sender, EventArgs e) => TryStartSession();
+
+    private void TryStartSession()
     {
         if (_api == null || _session == null || _sessionTask != null) return;
         var approved = MessageBox.Show(this,
-            "Ekranınızın paylaşılmasına ve uzaktan fare/klavye kontrolüne izin veriyor musunuz?",
+            "Destek kodunuz hazır. Ekranınızın paylaşılmasına ve uzaktan fare/klavye kontrolüne izin veriyor musunuz?\n\nEvet'i seçtiğinizde destek bağlantısı hemen başlatılır.",
             "RotaLink — Kullanıcı Onayı", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
-        if (!approved) return;
+        if (!approved)
+        {
+            AppDiagnostics.Write("Local user postponed screen sharing.");
+            SetStatus("Beklemede — başlatmak için Paylaşımı Başlat'a tıklayın.", Color.FromArgb(99, 120, 138));
+            return;
+        }
 
         _sessionCancellation = new CancellationTokenSource();
         AppDiagnostics.Write("Local user approved screen sharing.");
