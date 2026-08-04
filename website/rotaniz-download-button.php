@@ -6,6 +6,7 @@
 ?>
 <a class="btn btn-primary"
    href="<?php echo esc_url(home_url('/downloads/RotaLink.exe')); ?>"
-   download>
+   download
+   aria-label="RotaLink uzaktan destek uygulamasını indir">
     RotaLink indir <span>&darr;</span>
 </a>
