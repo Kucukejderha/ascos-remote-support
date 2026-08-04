@@ -5,12 +5,11 @@ public enum ConsentStatus { Pending, Approved, Denied, Stopped, Expired }
 public sealed class ConsentStateMachine
 {
     private readonly object _gate = new();
-    private readonly TimeProvider _clock;
     private Guid _sessionId;
     private ConsentStatus _status = ConsentStatus.Stopped;
     private DateTimeOffset _expiresAt;
 
-    public ConsentStateMachine(TimeProvider clock) => _clock = clock;
+    public ConsentStateMachine() { }
 
     public void Request(Guid sessionId, TimeSpan lifetime)
     {
@@ -18,7 +17,7 @@ public sealed class ConsentStateMachine
         lock (_gate)
         {
             _sessionId = sessionId;
-            _expiresAt = _clock.GetUtcNow().Add(lifetime);
+            _expiresAt = DateTimeOffset.UtcNow.Add(lifetime);
             _status = ConsentStatus.Pending;
         }
     }
@@ -50,7 +49,7 @@ public sealed class ConsentStateMachine
 
     private void RefreshExpiry()
     {
-        if ((_status == ConsentStatus.Pending || _status == ConsentStatus.Approved) && _expiresAt <= _clock.GetUtcNow())
+        if ((_status == ConsentStatus.Pending || _status == ConsentStatus.Approved) && _expiresAt <= DateTimeOffset.UtcNow)
             _status = ConsentStatus.Expired;
     }
 }

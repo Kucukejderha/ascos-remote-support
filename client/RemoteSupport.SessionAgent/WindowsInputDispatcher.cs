@@ -1,17 +1,15 @@
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace RemoteSupport.SessionAgent;
 
-[SupportedOSPlatform("windows")]
 public sealed class WindowsInputDispatcher
 {
     private readonly ConsentStateMachine _consent;
     private readonly Guid _sessionId;
     private readonly object _rateGate = new();
-    private long _rateWindow = Environment.TickCount64;
+    private int _rateWindow = Environment.TickCount;
     private int _eventsInWindow;
 
     public WindowsInputDispatcher(ConsentStateMachine consent, Guid sessionId) => (_consent, _sessionId) = (consent, sessionId);
@@ -38,8 +36,8 @@ public sealed class WindowsInputDispatcher
     {
         lock (_rateGate)
         {
-            var now = Environment.TickCount64;
-            if (now - _rateWindow >= 1000) { _rateWindow = now; _eventsInWindow = 0; }
+            var now = Environment.TickCount;
+            if (unchecked(now - _rateWindow) >= 1000) { _rateWindow = now; _eventsInWindow = 0; }
             return ++_eventsInWindow <= 240;
         }
     }

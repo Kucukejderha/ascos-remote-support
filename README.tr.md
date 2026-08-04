@@ -39,7 +39,7 @@ dotnet build AscosRemoteSupport.sln
 powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
 ```
 
-Portatif paket `artifacts/RotaLink.exe` olarak üretilir; kurulum veya önceden yüklenmiş .NET gerektirmez.
+Hafif istemci `artifacts/RotaLink.exe` olarak üretilir. Windows 10/11 ile birlikte gelen .NET Framework 4.8'i ve standart Windows iletişim pencerelerini kullanır; ayrıca .NET kurulumu veya çalışma zamanı gömme gerektirmez.
 
 Canlı operatör: https://45.87.173.201.nip.io/operator
 

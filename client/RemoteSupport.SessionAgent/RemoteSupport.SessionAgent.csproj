@@ -1,22 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <TargetPlatformMoniker>Windows,Version=7.0</TargetPlatformMoniker>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <TargetPlatformSdkPath>C:\Program Files (x86)\Windows Kits\10\</TargetPlatformSdkPath>
     <TargetPlatformDisplayName>Windows</TargetPlatformDisplayName>
-    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AssemblyName>RotaLink</AssemblyName>
     <ApplicationIcon>Assets\RotaLink.ico</ApplicationIcon>
-    <_SuppressWinFormsTrimError>true</_SuppressWinFormsTrimError>
   </PropertyGroup>
   <PropertyGroup Condition="'$(PortableBuild)' == 'true'"><DefineConstants>$(DefineConstants);PORTABLE_BUILD</DefineConstants></PropertyGroup>
-  <ItemGroup Condition="'$(PortableBuild)' == 'true'"><Compile Remove="SelfInstaller.cs" /></ItemGroup>
-  <ItemGroup><ProjectReference Include="..\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" /></ItemGroup>
-  <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">
-    <TrimmerRootAssembly Include="System.Windows.Forms" />
-    <TrimmerRootAssembly Include="System.Drawing.Common" />
+  <ItemGroup><Compile Remove="SelfInstaller.cs;NativeConsentPrompt.cs" /></ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="ILRepack" Version="2.0.29" PrivateAssets="all" />
+    <PackageReference Include="System.Net.Http.Json" Version="8.0.1" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 </Project>

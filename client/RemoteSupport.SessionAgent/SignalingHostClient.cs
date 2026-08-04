@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
@@ -24,7 +25,7 @@ public sealed class SignalingHostClient : IDisposable
     public async Task<HostSession> CreateSessionAsync(string displayName, CancellationToken cancellationToken)
     {
         var registration = await PostAsync("/v1/devices",
-            new RegisterDeviceRequest(Convert.ToBase64String(_identity.ExportSubjectPublicKeyInfo()), displayName),
+            new RegisterDeviceRequest(Convert.ToBase64String(ExportPublicKeySpki()), displayName),
             SessionAgentJsonContext.Default.RegisterDeviceRequest, SessionAgentJsonContext.Default.RegistrationResponse, cancellationToken);
         var challenge = await PostAsync($"/v1/devices/{registration.DeviceId}/challenge", new EmptyRequest(),
             SessionAgentJsonContext.Default.EmptyRequest, SessionAgentJsonContext.Default.ChallengeResponse, cancellationToken);
@@ -56,6 +57,19 @@ public sealed class SignalingHostClient : IDisposable
     }
 
     public void Dispose() => _http.Dispose();
+
+    private byte[] ExportPublicKeySpki()
+    {
+        var cng = _identity as ECDsaCng ?? throw new PlatformNotSupportedException("Windows ECDSA anahtarı gerekli.");
+        var blob = cng.Key.Export(CngKeyBlobFormat.EccPublicBlob);
+        if (blob.Length != 72 || BitConverter.ToInt32(blob, 4) != 32)
+            throw new CryptographicException("Beklenmeyen P-256 açık anahtar biçimi.");
+        var spki = new byte[91];
+        byte[] prefix = { 0x30,0x59,0x30,0x13,0x06,0x07,0x2A,0x86,0x48,0xCE,0x3D,0x02,0x01,0x06,0x08,0x2A,0x86,0x48,0xCE,0x3D,0x03,0x01,0x07,0x03,0x42,0x00,0x04 };
+        Buffer.BlockCopy(prefix, 0, spki, 0, prefix.Length);
+        Buffer.BlockCopy(blob, 8, spki, prefix.Length, 64);
+        return spki;
+    }
 }
 
 internal sealed record RegisterDeviceRequest(string PublicKeySpkiBase64, string DisplayName);

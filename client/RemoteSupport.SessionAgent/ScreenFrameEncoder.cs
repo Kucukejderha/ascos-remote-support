@@ -18,7 +18,7 @@ public sealed class ScreenFrameEncoder
 
     public byte[]? Encode(CapturedFrame frame, bool forceKeyFrame = false)
     {
-        ArgumentNullException.ThrowIfNull(frame);
+        if (frame is null) throw new ArgumentNullException(nameof(frame));
         var pixels = frame.Pixels;
         if (pixels.Length != checked(frame.Width * frame.Height * 4))
             throw new ArgumentException("Frame pixel length does not match its dimensions.", nameof(frame));
@@ -53,10 +53,11 @@ public sealed class ScreenFrameEncoder
         output.WriteByte(keyFrame ? ScreenFrameProtocol.KeyFrame : (byte)0);
         Span<byte> dimensions = stackalloc byte[4];
         BinaryPrimitives.WriteUInt16LittleEndian(dimensions, checked((ushort)frame.Width));
-        BinaryPrimitives.WriteUInt16LittleEndian(dimensions[2..], checked((ushort)frame.Height));
-        output.Write(dimensions);
+        BinaryPrimitives.WriteUInt16LittleEndian(dimensions.Slice(2), checked((ushort)frame.Height));
+        var dimensionBytes = dimensions.ToArray();
+        output.Write(dimensionBytes, 0, dimensionBytes.Length);
         using (var gzip = new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true))
-            gzip.Write(source);
+            gzip.Write(source, 0, source.Length);
         return output.ToArray();
     }
 }

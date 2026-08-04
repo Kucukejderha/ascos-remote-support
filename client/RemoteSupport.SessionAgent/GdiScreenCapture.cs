@@ -1,12 +1,10 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 
 namespace RemoteSupport.SessionAgent;
 
 public sealed record CapturedFrame(int Width, int Height, byte[] Pixels);
 
-[SupportedOSPlatform("windows")]
 public sealed class GdiScreenCapture : IDisposable
 {
     private readonly int _width;
