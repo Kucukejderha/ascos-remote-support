@@ -11,9 +11,17 @@ internal static class RemoteSession
         consent.Request(sessionId, TimeSpan.FromHours(8));
         consent.Decide(sessionId, approved: true);
         using var socket = await api.ConnectHostSocketAsync(session, token);
+        AppDiagnostics.Write("Host WebSocket connected.");
         using var capture = new GdiScreenCapture(960, 540);
+        AppDiagnostics.Write("Screen capture initialized at 960x540.");
         var input = new WindowsInputDispatcher(consent, sessionId);
-        try { await Task.WhenAny(CaptureLoopAsync(socket, capture, token), ReceiveInputLoopAsync(socket, input, token)); }
+        try
+        {
+            var completed = await Task.WhenAny(
+                CaptureLoopAsync(socket, capture, token),
+                ReceiveInputLoopAsync(socket, input, token));
+            await completed;
+        }
         finally
         {
             consent.Stop(sessionId);
@@ -26,6 +34,7 @@ internal static class RemoteSession
     {
         var encoder = new ScreenFrameEncoder();
         var nextKeyFrame = Environment.TickCount;
+        var firstFrame = true;
         while (socket.State == WebSocketState.Open)
         {
             await Task.Delay(100, token);
@@ -36,6 +45,11 @@ internal static class RemoteSession
             if (packet is null) continue;
             if (forceKeyFrame) nextKeyFrame = now + 2_000;
             await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token);
+            if (firstFrame)
+            {
+                AppDiagnostics.Write("First screen frame sent. Bytes=" + packet.Length + ", Type=" + packet[0]);
+                firstFrame = false;
+            }
         }
     }
 

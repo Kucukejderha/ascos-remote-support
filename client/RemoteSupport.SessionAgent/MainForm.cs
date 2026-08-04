@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Drawing;
 using System.Windows.Forms;
+using System.Diagnostics;
 
 namespace RemoteSupport.SessionAgent;
 
@@ -72,6 +73,25 @@ public sealed class MainForm : Form
         _stop.Click += (_, _) => StopSession();
         Controls.Add(_stop);
 
+        Controls.Add(new Label
+        {
+            Text = "v0.4.0",
+            ForeColor = Color.FromArgb(99, 120, 138),
+            AutoSize = true,
+            Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
+            Location = new Point(492, 414)
+        });
+        var diagnostics = new LinkLabel
+        {
+            Text = "Tanılama günlüğü",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left | AnchorStyles.Bottom,
+            Location = new Point(28, 414),
+            LinkColor = Color.FromArgb(70, 96, 117)
+        };
+        diagnostics.Click += (_, _) => Process.Start("explorer.exe", "/select,\"" + AppDiagnostics.LogPath + "\"");
+        Controls.Add(diagnostics);
+
         Shown += async (_, _) => await PrepareSessionAsync();
         FormClosing += (_, _) => StopSession();
     }
@@ -94,6 +114,7 @@ public sealed class MainForm : Form
             _identity = new ECDsaCng(ECCurve.NamedCurves.nistP256);
             _api = new SignalingHostClient(_server, _identity);
             _session = await _api.CreateSessionAsync(Environment.MachineName, CancellationToken.None);
+            AppDiagnostics.Write("Support session prepared. SessionId=" + _session.SessionId);
             _code.Text = _session.Code;
             _copy.Enabled = true;
             _start.Enabled = true;
@@ -101,6 +122,7 @@ public sealed class MainForm : Form
         }
         catch (Exception ex)
         {
+            AppDiagnostics.Write("Session preparation failed.", ex);
             SetStatus("Sunucuya bağlanılamadı: " + ex.Message, Color.Firebrick);
         }
     }
@@ -114,6 +136,7 @@ public sealed class MainForm : Form
         if (!approved) return;
 
         _sessionCancellation = new CancellationTokenSource();
+        AppDiagnostics.Write("Local user approved screen sharing.");
         _start.Enabled = false;
         _stop.Enabled = true;
         SetStatus("Bağlantı aktif", Mint);
@@ -125,7 +148,11 @@ public sealed class MainForm : Form
     {
         try { await task; SetStatus("Bağlantı sonlandırıldı.", Color.FromArgb(99, 120, 138)); }
         catch (OperationCanceledException) { SetStatus("Bağlantı sizin tarafınızdan sonlandırıldı.", Color.FromArgb(99, 120, 138)); }
-        catch (Exception ex) { SetStatus("Bağlantı kapandı: " + ex.Message, Color.Firebrick); }
+        catch (Exception ex)
+        {
+            AppDiagnostics.Write("Remote session failed.", ex);
+            SetStatus("Bağlantı kapandı: " + ex.Message, Color.Firebrick);
+        }
         finally
         {
             _sessionTask = null;
