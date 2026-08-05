@@ -98,12 +98,12 @@ public sealed class WindowsInputDispatcher : IDisposable
             (2, true) => 0x0008u, (2, false) => 0x0010u,
             _ => 0u
         };
-        return flag != 0 && SendMouse(message.X, message.Y, flag, 0);
+        return flag != 0 && (SendMouse(message.X, message.Y, flag, 0) || PostButton(message));
     }
 
     private static bool SendWheel(InputMessage message)
     {
-        return SendMouse(message.X, message.Y, 0x0800u, unchecked((uint)message.Delta));
+        return SendMouse(message.X, message.Y, 0x0800u, unchecked((uint)message.Delta)) || PostWheel(message);
     }
 
     private static bool MoveCursor(int x, int y)
@@ -113,7 +113,7 @@ public sealed class WindowsInputDispatcher : IDisposable
         {
             Type = 0,
             Union = new InputUnion { Mouse = new MouseInput { X = x, Y = y, Flags = 0x8000u | 0x4000u | 0x0001u } }
-        });
+        }) || PostMouseMove(x, y);
     }
 
     private static bool SendMouse(int x, int y, uint action, uint data)
@@ -132,8 +132,49 @@ public sealed class WindowsInputDispatcher : IDisposable
         {
             Type = 1,
             Union = new InputUnion { Keyboard = new KeyboardInput { VirtualKey = virtualKey, Flags = down ? 0u : 0x0002u } }
-        });
+        }) || PostMessage(GetForegroundWindow(), down ? 0x0100u : 0x0101u, new UIntPtr(virtualKey), IntPtr.Zero);
     }
+
+    private static bool PostMouseMove(int x, int y)
+    {
+        var point = ToPhysicalPoint(x, y);
+        var window = WindowFromPoint(point);
+        if (window == IntPtr.Zero || !ScreenToClient(window, ref point)) return false;
+        return PostMessage(window, 0x0200u, UIntPtr.Zero, MakePointParameter(point));
+    }
+
+    private static bool PostButton(InputMessage message)
+    {
+        var point = ToPhysicalPoint(message.X, message.Y);
+        var window = WindowFromPoint(point);
+        if (window == IntPtr.Zero) return false;
+        if (message.Down) SetForegroundWindow(GetAncestor(window, 2));
+        if (!ScreenToClient(window, ref point)) return false;
+        var windowsMessage = (message.Button, message.Down) switch
+        {
+            (0, true) => 0x0201u, (0, false) => 0x0202u,
+            (1, true) => 0x0207u, (1, false) => 0x0208u,
+            (2, true) => 0x0204u, (2, false) => 0x0205u,
+            _ => 0u
+        };
+        return windowsMessage != 0 && PostMessage(window, windowsMessage, UIntPtr.Zero, MakePointParameter(point));
+    }
+
+    private static bool PostWheel(InputMessage message)
+    {
+        var point = ToPhysicalPoint(message.X, message.Y);
+        var window = WindowFromPoint(point);
+        return window != IntPtr.Zero && PostMessage(window, 0x020Au, new UIntPtr(unchecked((uint)(message.Delta << 16))), MakePointParameter(point));
+    }
+
+    private static Point ToPhysicalPoint(int x, int y)
+    {
+        var left = GetSystemMetrics(76); var top = GetSystemMetrics(77);
+        var width = Math.Max(1, GetSystemMetrics(78)); var height = Math.Max(1, GetSystemMetrics(79));
+        return new Point(left + (int)Math.Round(x * (width - 1) / 65535d), top + (int)Math.Round(y * (height - 1) / 65535d));
+    }
+
+    private static IntPtr MakePointParameter(Point point) => new((point.Y << 16) | (point.X & 0xffff));
 
     private static bool SendInputs(params Input[] inputs)
     {
@@ -163,10 +204,18 @@ public sealed class WindowsInputDispatcher : IDisposable
     [StructLayout(LayoutKind.Explicit)] private struct InputUnion { [FieldOffset(0)] public MouseInput Mouse; [FieldOffset(0)] public KeyboardInput Keyboard; }
     [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
+    [StructLayout(LayoutKind.Sequential)] private struct Point { public int X; public int Y; public Point(int x, int y) { X = x; Y = y; } }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr OpenDesktop(string desktop, uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint desiredAccess);
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(IntPtr desktop);
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CloseDesktop(IntPtr desktop);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(Point point);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ScreenToClient(IntPtr window, ref Point point);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool PostMessage(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr window);
 
     private sealed class InputWorkItem
     {

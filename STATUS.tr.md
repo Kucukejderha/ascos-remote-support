@@ -28,6 +28,8 @@ Sürüm tarihi: 2026-08-05
 - UAC geçişinden etkilenmeyen, etkileşimli `Default` masaüstüne sabit yakalama ve kontrol
 - Taşınabilir istemcide UAC yükseltmesi olmadan doğrudan kullanıcı oturumunda çalışma
 - Host kapandığında operatör bağlantısını sunucu tarafından otomatik sonlandırma
+- Global input enjeksiyonu engellenen oturumlarda pencere mesajı tabanlı kontrol yedeği
+- Operatörde görüntü ve gerçek kontrol kabulünü ayrı durumlar olarak gösterme
 - HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
 - Windows DPAPI cihaz kimliği saklama
 - Yerel onaydan önce input reddi
