@@ -45,7 +45,7 @@ public sealed class WindowsInputDispatcher : IDisposable
 
     private void DesktopThreadMain()
     {
-        var desktop = OpenInputDesktop(0, false, 0x0001u | 0x0080u | 0x0100u);
+        var desktop = OpenDesktop("Default", 0, false, 0x0001u | 0x0080u | 0x0100u);
         if (desktop == IntPtr.Zero || !SetThreadDesktop(desktop))
         {
             AppDiagnostics.Write("Could not attach input worker to the active desktop. Win32Error=" + Marshal.GetLastWin32Error());
@@ -54,7 +54,7 @@ public sealed class WindowsInputDispatcher : IDisposable
             return;
         }
 
-        AppDiagnostics.Write("Input worker attached to the active Windows desktop.");
+        AppDiagnostics.Write("Input worker attached to the interactive Default desktop.");
         foreach (var work in _queue.GetConsumingEnumerable())
         {
             work.Accepted = DispatchOnDesktop(work.Message);
@@ -164,7 +164,7 @@ public sealed class WindowsInputDispatcher : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
-    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr OpenInputDesktop(uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint desiredAccess);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr OpenDesktop(string desktop, uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint desiredAccess);
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(IntPtr desktop);
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CloseDesktop(IntPtr desktop);
 

@@ -62,7 +62,7 @@ public sealed class MainForm : Form
 
         Controls.Add(new Label
         {
-            Text = "v0.6.1",
+            Text = "v0.6.2",
             ForeColor = Color.FromArgb(99, 120, 138),
             AutoSize = true,
             Anchor = AnchorStyles.Right | AnchorStyles.Bottom,

@@ -25,6 +25,7 @@ Sürüm tarihi: 2026-08-05
 - DPI ölçeklemesinden bağımsız tam sanal masaüstü yakalama
 - Fare, tıklama, kaydırma ve klavye için `SendInput` tabanlı birleşik kontrol hattı
 - Görüntü ve input işlemleri için aktif Windows masaüstüne bağlı kalıcı iş parçacıkları
+- UAC geçişinden etkilenmeyen, etkileşimli `Default` masaüstüne sabit yakalama ve kontrol
 - HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
 - Windows DPAPI cihaz kimliği saklama
 - Yerel onaydan önce input reddi
