@@ -1,6 +1,6 @@
 # Rotaniz Remote Support — Sürüm Durumu
 
-Sürüm tarihi: 2026-08-04
+Sürüm tarihi: 2026-08-05
 
 ## Canlı hizmet
 
@@ -21,6 +21,7 @@ Sürüm tarihi: 2026-08-04
 - Ayrı host/operatör WSS kimlik doğrulaması
 - 960×540, en fazla 10 FPS, kayıpsız sıkıştırılmış anahtar/delta kare aktarımı
 - Değişmeyen karelerin atlanması
+- Güvenli masaüstü veya masaüstü geçişindeki geçici ekran yakalama hatalarında oturumu düşürmeden otomatik devam etme
 - HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
 - Windows DPAPI cihaz kimliği saklama
 - Yerel onaydan önce input reddi

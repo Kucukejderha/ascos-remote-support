@@ -31,7 +31,7 @@ internal static class Program
             return;
         }
 
-        AppDiagnostics.Write("RotaLink v0.5.0 started elevated on " + Environment.OSVersion);
+        AppDiagnostics.Write("RotaLink v0.5.1 started elevated on " + Environment.OSVersion);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm(args.FirstOrDefault()));

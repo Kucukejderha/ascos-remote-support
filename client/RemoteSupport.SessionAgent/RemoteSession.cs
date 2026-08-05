@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Net.WebSockets;
 using System.Text;
 
@@ -13,14 +14,12 @@ internal static class RemoteSession
         consent.Decide(sessionId, approved: true);
         using var socket = await api.ConnectHostSocketAsync(session, token);
         AppDiagnostics.Write("Host WebSocket connected.");
-        using var capture = new GdiScreenCapture(960, 540);
-        AppDiagnostics.Write("Screen capture initialized at 960x540.");
         var input = new WindowsInputDispatcher(consent, sessionId);
         using var sendGate = new SemaphoreSlim(1, 1);
         try
         {
             var completed = await Task.WhenAny(
-                CaptureLoopAsync(socket, capture, sendGate, token),
+                CaptureLoopAsync(socket, sendGate, token),
                 ReceiveInputLoopAsync(socket, input, sendGate, token));
             await completed;
         }
@@ -52,27 +51,47 @@ internal static class RemoteSession
         }
     }
 
-    private static async Task CaptureLoopAsync(ClientWebSocket socket, GdiScreenCapture capture, SemaphoreSlim sendGate, CancellationToken token)
+    private static async Task CaptureLoopAsync(ClientWebSocket socket, SemaphoreSlim sendGate, CancellationToken token)
     {
         var encoder = new ScreenFrameEncoder();
         var nextKeyFrame = Environment.TickCount;
         var firstFrame = true;
+        GdiScreenCapture? capture = null;
+        var accessDeniedLogged = false;
         while (socket.State == WebSocketState.Open)
         {
-            await Task.Delay(100, token);
-            var frame = capture.Capture();
-            var now = Environment.TickCount;
-            var forceKeyFrame = unchecked(now - nextKeyFrame) >= 0;
-            var packet = encoder.Encode(frame, forceKeyFrame);
-            if (packet is null) continue;
-            if (forceKeyFrame) nextKeyFrame = now + 2_000;
-            await SendAsync(socket, packet, WebSocketMessageType.Binary, sendGate, token);
-            if (firstFrame)
+            try
             {
-                AppDiagnostics.Write("First screen frame sent. Bytes=" + packet.Length + ", Type=" + packet[0]);
-                firstFrame = false;
+                capture ??= new GdiScreenCapture(960, 540);
+                if (firstFrame) AppDiagnostics.Write("Screen capture initialized at 960x540.");
+                await Task.Delay(100, token);
+                var frame = capture.Capture();
+                accessDeniedLogged = false;
+                var now = Environment.TickCount;
+                var forceKeyFrame = unchecked(now - nextKeyFrame) >= 0;
+                var packet = encoder.Encode(frame, forceKeyFrame);
+                if (packet is null) continue;
+                if (forceKeyFrame) nextKeyFrame = now + 2_000;
+                await SendAsync(socket, packet, WebSocketMessageType.Binary, sendGate, token);
+                if (firstFrame)
+                {
+                    AppDiagnostics.Write("First screen frame sent. Bytes=" + packet.Length + ", Type=" + packet[0]);
+                    firstFrame = false;
+                }
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 5)
+            {
+                capture?.Dispose();
+                capture = null;
+                if (!accessDeniedLogged)
+                {
+                    AppDiagnostics.Write("Screen capture is temporarily unavailable (secure desktop or desktop transition). The session remains connected and capture will retry.", ex);
+                    accessDeniedLogged = true;
+                }
+                await Task.Delay(750, token);
             }
         }
+        capture?.Dispose();
     }
 
     private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, SemaphoreSlim sendGate, CancellationToken token)
