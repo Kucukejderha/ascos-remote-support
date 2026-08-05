@@ -14,7 +14,7 @@ internal static class RemoteSession
         consent.Decide(sessionId, approved: true);
         using var socket = await api.ConnectHostSocketAsync(session, token);
         AppDiagnostics.Write("Host WebSocket connected.");
-        var input = new WindowsInputDispatcher(consent, sessionId);
+        using var input = new WindowsInputDispatcher(consent, sessionId);
         using var sendGate = new SemaphoreSlim(1, 1);
         try
         {

@@ -1,10 +1,11 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Web.Script.Serialization;
 
 namespace RemoteSupport.SessionAgent;
 
-public sealed class WindowsInputDispatcher
+public sealed class WindowsInputDispatcher : IDisposable
 {
     private readonly ConsentStateMachine _consent;
     private readonly Guid _sessionId;
@@ -12,8 +13,15 @@ public sealed class WindowsInputDispatcher
     private int _rateWindow = Environment.TickCount;
     private int _eventsInWindow;
     private bool _inputLogged;
+    private readonly BlockingCollection<InputWorkItem> _queue = new();
+    private readonly Thread _desktopThread;
 
-    public WindowsInputDispatcher(ConsentStateMachine consent, Guid sessionId) => (_consent, _sessionId) = (consent, sessionId);
+    public WindowsInputDispatcher(ConsentStateMachine consent, Guid sessionId)
+    {
+        (_consent, _sessionId) = (consent, sessionId);
+        _desktopThread = new Thread(DesktopThreadMain) { IsBackground = true, Name = "RotaLink input desktop" };
+        _desktopThread.Start();
+    }
 
     public bool TryDispatch(byte[] json, int length)
     {
@@ -29,7 +37,33 @@ public sealed class WindowsInputDispatcher
             _inputLogged = true;
         }
 
-        return message.Type switch
+        var work = new InputWorkItem(message);
+        try { _queue.Add(work); }
+        catch (InvalidOperationException) { return false; }
+        return work.Completed.Wait(TimeSpan.FromSeconds(2)) && work.Accepted;
+    }
+
+    private void DesktopThreadMain()
+    {
+        var desktop = OpenInputDesktop(0, false, 0x0001u | 0x0080u | 0x0100u);
+        if (desktop == IntPtr.Zero || !SetThreadDesktop(desktop))
+        {
+            AppDiagnostics.Write("Could not attach input worker to the active desktop. Win32Error=" + Marshal.GetLastWin32Error());
+            foreach (var rejected in _queue.GetConsumingEnumerable()) rejected.Completed.Set();
+            if (desktop != IntPtr.Zero) CloseDesktop(desktop);
+            return;
+        }
+
+        AppDiagnostics.Write("Input worker attached to the active Windows desktop.");
+        foreach (var work in _queue.GetConsumingEnumerable())
+        {
+            work.Accepted = DispatchOnDesktop(work.Message);
+            work.Completed.Set();
+        }
+        CloseDesktop(desktop);
+    }
+
+    private static bool DispatchOnDesktop(InputMessage message) => message.Type switch
         {
             "move" => MoveCursor(message.X, message.Y),
             "button" => SendButton(message),
@@ -37,6 +71,12 @@ public sealed class WindowsInputDispatcher
             "key" => SendKey(message.Code, message.Down),
             _ => false
         };
+
+    public void Dispose()
+    {
+        _queue.CompleteAdding();
+        if (!_desktopThread.Join(TimeSpan.FromSeconds(2))) AppDiagnostics.Write("Input desktop worker did not stop in time.");
+        _queue.Dispose();
     }
 
     private bool TryAcquireRatePermit()
@@ -124,6 +164,17 @@ public sealed class WindowsInputDispatcher
     [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
+    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr OpenInputDesktop(uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint desiredAccess);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(IntPtr desktop);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CloseDesktop(IntPtr desktop);
+
+    private sealed class InputWorkItem
+    {
+        public InputWorkItem(InputMessage message) => Message = message;
+        public InputMessage Message { get; }
+        public ManualResetEventSlim Completed { get; } = new(false);
+        public bool Accepted { get; set; }
+    }
 }
 
 internal sealed class InputMessage
