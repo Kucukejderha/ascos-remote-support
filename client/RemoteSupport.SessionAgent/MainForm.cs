@@ -33,7 +33,7 @@ public sealed class MainForm : Form
 
         var header = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = Navy };
         header.Controls.Add(new Label { Text = "RotaLink", ForeColor = Color.White, Font = new Font("Segoe UI", 25F, FontStyle.Bold), AutoSize = true, Location = new Point(28, 18) });
-        header.Controls.Add(new Label { Text = "Rotaniz Remote Support • Yönetici modu", ForeColor = Color.FromArgb(169, 189, 203), Font = new Font("Segoe UI", 10F), AutoSize = true, Location = new Point(31, 66) });
+        header.Controls.Add(new Label { Text = "Rotaniz Remote Support • Kullanıcı oturumu", ForeColor = Color.FromArgb(169, 189, 203), Font = new Font("Segoe UI", 10F), AutoSize = true, Location = new Point(31, 66) });
         Controls.Add(header);
 
         var card = new Panel { Location = new Point(28, 130), Size = new Size(504, 196), BackColor = Color.White, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
@@ -62,7 +62,7 @@ public sealed class MainForm : Form
 
         Controls.Add(new Label
         {
-            Text = "v0.6.2",
+            Text = "v0.7.0",
             ForeColor = Color.FromArgb(99, 120, 138),
             AutoSize = true,
             Anchor = AnchorStyles.Right | AnchorStyles.Bottom,

@@ -26,6 +26,8 @@ Sürüm tarihi: 2026-08-05
 - Fare, tıklama, kaydırma ve klavye için `SendInput` tabanlı birleşik kontrol hattı
 - Görüntü ve input işlemleri için aktif Windows masaüstüne bağlı kalıcı iş parçacıkları
 - UAC geçişinden etkilenmeyen, etkileşimli `Default` masaüstüne sabit yakalama ve kontrol
+- Taşınabilir istemcide UAC yükseltmesi olmadan doğrudan kullanıcı oturumunda çalışma
+- Host kapandığında operatör bağlantısını sunucu tarafından otomatik sonlandırma
 - HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
 - Windows DPAPI cihaz kimliği saklama
 - Yerel onaydan önce input reddi

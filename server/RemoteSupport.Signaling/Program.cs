@@ -129,8 +129,17 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
     }
     finally
     {
+        var peer = broker.GetPeer(sessionId, role);
         broker.Detach(sessionId, role, socket);
-        if (role == "host") store.EndSession(sessionId);
+        if (role == "host")
+        {
+            store.EndSession(sessionId);
+            if (peer is { State: WebSocketState.Open })
+            {
+                try { await peer.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host application closed", CancellationToken.None); }
+                catch (WebSocketException) { peer.Abort(); }
+            }
+        }
         await audit.WriteAsync("session_peer_disconnected", role == "host" ? "host" : null, sessionId, context.Connection.RemoteIpAddress?.ToString(), CancellationToken.None);
     }
 });
