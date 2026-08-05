@@ -58,38 +58,49 @@ public sealed class WindowsInputDispatcher
             (2, true) => 0x0008u, (2, false) => 0x0010u,
             _ => 0u
         };
-        if (flag == 0 || !MoveCursor(message.X, message.Y)) return false;
-        mouse_event(flag, 0, 0, 0, UIntPtr.Zero);
-        return true;
+        return flag != 0 && SendMouse(message.X, message.Y, flag, 0);
     }
 
     private static bool SendWheel(InputMessage message)
     {
-        if (!MoveCursor(message.X, message.Y)) return false;
-        mouse_event(0x0800u, 0, 0, unchecked((uint)message.Delta), UIntPtr.Zero);
-        return true;
+        return SendMouse(message.X, message.Y, 0x0800u, unchecked((uint)message.Delta));
     }
 
     private static bool MoveCursor(int x, int y)
     {
         if (x is < 0 or > 65535 || y is < 0 or > 65535) return false;
-        var left = GetSystemMetrics(76);
-        var top = GetSystemMetrics(77);
-        var width = Math.Max(1, GetSystemMetrics(78));
-        var height = Math.Max(1, GetSystemMetrics(79));
-        var physicalX = left + (int)Math.Round(x * (width - 1) / 65535d);
-        var physicalY = top + (int)Math.Round(y * (height - 1) / 65535d);
-        var moved = SetCursorPos(physicalX, physicalY);
-        if (!moved) AppDiagnostics.Write("SetCursorPos failed. Win32Error=" + Marshal.GetLastWin32Error());
-        return moved;
+        return SendInputs(new Input
+        {
+            Type = 0,
+            Union = new InputUnion { Mouse = new MouseInput { X = x, Y = y, Flags = 0x8000u | 0x4000u | 0x0001u } }
+        });
+    }
+
+    private static bool SendMouse(int x, int y, uint action, uint data)
+    {
+        if (x is < 0 or > 65535 || y is < 0 or > 65535) return false;
+        return SendInputs(
+            new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { X = x, Y = y, Flags = 0x8000u | 0x4000u | 0x0001u } } },
+            new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { MouseData = data, Flags = action } } });
     }
 
     private static bool SendKey(string? code, bool down)
     {
         var virtualKey = MapKey(code);
         if (virtualKey == 0) return false;
-        keybd_event((byte)virtualKey, 0, down ? 0u : 0x0002u, UIntPtr.Zero);
-        return true;
+        return SendInputs(new Input
+        {
+            Type = 1,
+            Union = new InputUnion { Keyboard = new KeyboardInput { VirtualKey = virtualKey, Flags = down ? 0u : 0x0002u } }
+        });
+    }
+
+    private static bool SendInputs(params Input[] inputs)
+    {
+        var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input)));
+        if (sent == inputs.Length) return true;
+        AppDiagnostics.Write("SendInput failed. Sent=" + sent + "/" + inputs.Length + ", Win32Error=" + Marshal.GetLastWin32Error());
+        return false;
     }
 
     private static ushort MapKey(string? code)
@@ -113,10 +124,6 @@ public sealed class WindowsInputDispatcher
     [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
-    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetCursorPos(int x, int y);
-    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
-    [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
-    [DllImport("user32.dll")] private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
 }
 
 internal sealed class InputMessage

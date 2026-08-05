@@ -22,6 +22,8 @@ Sürüm tarihi: 2026-08-05
 - 960×540, en fazla 10 FPS, kayıpsız sıkıştırılmış anahtar/delta kare aktarımı
 - Değişmeyen karelerin atlanması
 - Güvenli masaüstü veya masaüstü geçişindeki geçici ekran yakalama hatalarında oturumu düşürmeden otomatik devam etme
+- DPI ölçeklemesinden bağımsız tam sanal masaüstü yakalama
+- Fare, tıklama, kaydırma ve klavye için `SendInput` tabanlı birleşik kontrol hattı
 - HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
 - Windows DPAPI cihaz kimliği saklama
 - Yerel onaydan önce input reddi
