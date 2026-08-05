@@ -18,6 +18,11 @@ public sealed class GdiScreenCapture : IDisposable
     private readonly int _height;
     private IntPtr _screenDc;
     private IntPtr _memoryDc;
+    private IntPtr _sourceDc;
+    private IntPtr _sourceBitmap;
+    private IntPtr _oldSourceBitmap;
+    private int _sourceWidth;
+    private int _sourceHeight;
     private IntPtr _bitmap;
     private IntPtr _oldBitmap;
     private IntPtr _bits;
@@ -39,9 +44,16 @@ public sealed class GdiScreenCapture : IDisposable
     {
         _screenDc = GetDC(IntPtr.Zero);
         _memoryDc = CreateCompatibleDC(_screenDc);
+        _sourceDc = CreateCompatibleDC(_screenDc);
+        _sourceWidth = GetSystemMetrics(78);
+        _sourceHeight = GetSystemMetrics(79);
+        _sourceBitmap = CreateCompatibleBitmap(_screenDc, _sourceWidth, _sourceHeight);
         var info = new BitmapInfo { Header = new BitmapInfoHeader { Size = 40, Width = _width, Height = -_height, Planes = 1, BitCount = 32, Compression = 0 } };
         _bitmap = CreateDIBSection(_screenDc, ref info, 0, out _bits, IntPtr.Zero, 0);
-        if (_screenDc == IntPtr.Zero || _memoryDc == IntPtr.Zero || _bitmap == IntPtr.Zero || _bits == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+        if (_screenDc == IntPtr.Zero || _memoryDc == IntPtr.Zero || _sourceDc == IntPtr.Zero ||
+            _sourceBitmap == IntPtr.Zero || _bitmap == IntPtr.Zero || _bits == IntPtr.Zero)
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        _oldSourceBitmap = SelectObject(_sourceDc, _sourceBitmap);
         _oldBitmap = SelectObject(_memoryDc, _bitmap);
         SetStretchBltMode(_memoryDc, 4);
     }
@@ -58,8 +70,10 @@ public sealed class GdiScreenCapture : IDisposable
     private CapturedFrame CaptureOnDesktop()
     {
         var x = GetSystemMetrics(76); var y = GetSystemMetrics(77);
-        var sourceWidth = GetSystemMetrics(78); var sourceHeight = GetSystemMetrics(79);
-        if (!StretchBlt(_memoryDc, 0, 0, _width, _height, _screenDc, x, y, sourceWidth, sourceHeight, 0x00CC0020))
+        const uint sourceCopyWithLayeredWindows = 0x40CC0020;
+        if (!BitBlt(_sourceDc, 0, 0, _sourceWidth, _sourceHeight, _screenDc, x, y, sourceCopyWithLayeredWindows))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        if (!StretchBlt(_memoryDc, 0, 0, _width, _height, _sourceDc, 0, 0, _sourceWidth, _sourceHeight, 0x00CC0020))
             throw new Win32Exception(Marshal.GetLastWin32Error());
         var pixels = new byte[_width * _height * 4];
         Marshal.Copy(_bits, pixels, 0, pixels.Length);
@@ -104,10 +118,14 @@ public sealed class GdiScreenCapture : IDisposable
 
     private void CleanupNativeCapture()
     {
+        if (_oldSourceBitmap != IntPtr.Zero) SelectObject(_sourceDc, _oldSourceBitmap);
         if (_oldBitmap != IntPtr.Zero) SelectObject(_memoryDc, _oldBitmap);
+        if (_sourceBitmap != IntPtr.Zero) DeleteObject(_sourceBitmap);
         if (_bitmap != IntPtr.Zero) DeleteObject(_bitmap);
+        if (_sourceDc != IntPtr.Zero) DeleteDC(_sourceDc);
         if (_memoryDc != IntPtr.Zero) DeleteDC(_memoryDc);
         if (_screenDc != IntPtr.Zero) ReleaseDC(IntPtr.Zero, _screenDc);
+        _screenDc = _memoryDc = _sourceDc = _bitmap = _sourceBitmap = _oldBitmap = _oldSourceBitmap = _bits = IntPtr.Zero;
     }
 
     [StructLayout(LayoutKind.Sequential)] private struct BitmapInfoHeader { public uint Size; public int Width; public int Height; public ushort Planes; public ushort BitCount; public uint Compression; public uint SizeImage; public int XPelsPerMeter; public int YPelsPerMeter; public uint ColorsUsed; public uint ColorsImportant; }
@@ -119,10 +137,12 @@ public sealed class GdiScreenCapture : IDisposable
     [DllImport("user32.dll", SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(IntPtr desktop);
     [DllImport("user32.dll", SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] private static extern bool CloseDesktop(IntPtr desktop);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
+    [DllImport("gdi32.dll", SetLastError=true)] private static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int width, int height);
     [DllImport("gdi32.dll", SetLastError=true)] private static extern IntPtr CreateDIBSection(IntPtr dc, ref BitmapInfo info, uint usage, out IntPtr bits, IntPtr section, uint offset);
     [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
     [DllImport("gdi32.dll")] private static extern int SetStretchBltMode(IntPtr dc, int mode);
     [DllImport("gdi32.dll", SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] private static extern bool StretchBlt(IntPtr dest,int x,int y,int width,int height,IntPtr source,int sx,int sy,int sw,int sh,uint operation);
+    [DllImport("gdi32.dll", SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] private static extern bool BitBlt(IntPtr dest,int x,int y,int width,int height,IntPtr source,int sx,int sy,uint operation);
     [DllImport("gdi32.dll")] [return:MarshalAs(UnmanagedType.Bool)] private static extern bool DeleteObject(IntPtr obj);
     [DllImport("gdi32.dll")] [return:MarshalAs(UnmanagedType.Bool)] private static extern bool DeleteDC(IntPtr dc);
 

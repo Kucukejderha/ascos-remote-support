@@ -29,6 +29,7 @@ Sürüm tarihi: 2026-08-05
 - Taşınabilir istemcide UAC yükseltmesi olmadan doğrudan kullanıcı oturumunda çalışma
 - Host kapandığında operatör bağlantısını sunucu tarafından otomatik sonlandırma
 - Global input enjeksiyonu engellenen oturumlarda pencere mesajı tabanlı kontrol yedeği
+- Odak değişmeden sürekli kare üretmek için tam boy GDI ara belleği üzerinden iki aşamalı ekran yakalama
 - Operatörde görüntü ve gerçek kontrol kabulünü ayrı durumlar olarak gösterme
 - HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
 - Windows DPAPI cihaz kimliği saklama
