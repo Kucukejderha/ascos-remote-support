@@ -9,7 +9,7 @@ internal static class Program
     private static void Main(string[] args)
     {
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-        AppDiagnostics.Write("RotaLink v0.4.3 started on " + Environment.OSVersion);
+        AppDiagnostics.Write("RotaLink v0.4.4 started on " + Environment.OSVersion);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm(args.FirstOrDefault()));

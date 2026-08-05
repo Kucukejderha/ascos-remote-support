@@ -106,6 +106,7 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
     try
     {
         var buffer = new byte[4 * 1024 * 1024 + 64];
+        var firstRelayedMessage = true;
         while (socket.State == WebSocketState.Open)
         {
             var result = await socket.ReceiveAsync(buffer, context.RequestAborted);
@@ -119,6 +120,11 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
             var peer = broker.GetPeer(sessionId, role);
             if (peer is not { State: WebSocketState.Open }) continue;
             await peer.SendAsync(buffer.AsMemory(0, result.Count), result.MessageType, true, context.RequestAborted);
+            if (firstRelayedMessage)
+            {
+                app.Logger.LogInformation("First relayed message: session={SessionId}, from={Role}, type={MessageType}, bytes={Bytes}", sessionId, role, result.MessageType, result.Count);
+                firstRelayedMessage = false;
+            }
         }
     }
     finally

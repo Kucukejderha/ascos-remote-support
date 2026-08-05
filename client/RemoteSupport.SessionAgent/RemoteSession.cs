@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Text;
 
 namespace RemoteSupport.SessionAgent;
 
@@ -15,11 +16,12 @@ internal static class RemoteSession
         using var capture = new GdiScreenCapture(960, 540);
         AppDiagnostics.Write("Screen capture initialized at 960x540.");
         var input = new WindowsInputDispatcher(consent, sessionId);
+        using var sendGate = new SemaphoreSlim(1, 1);
         try
         {
             var completed = await Task.WhenAny(
-                CaptureLoopAsync(socket, capture, token),
-                ReceiveInputLoopAsync(socket, input, token));
+                CaptureLoopAsync(socket, capture, sendGate, token),
+                ReceiveInputLoopAsync(socket, input, sendGate, token));
             await completed;
         }
         finally
@@ -50,7 +52,7 @@ internal static class RemoteSession
         }
     }
 
-    private static async Task CaptureLoopAsync(ClientWebSocket socket, GdiScreenCapture capture, CancellationToken token)
+    private static async Task CaptureLoopAsync(ClientWebSocket socket, GdiScreenCapture capture, SemaphoreSlim sendGate, CancellationToken token)
     {
         var encoder = new ScreenFrameEncoder();
         var nextKeyFrame = Environment.TickCount;
@@ -64,7 +66,7 @@ internal static class RemoteSession
             var packet = encoder.Encode(frame, forceKeyFrame);
             if (packet is null) continue;
             if (forceKeyFrame) nextKeyFrame = now + 2_000;
-            await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token);
+            await SendAsync(socket, packet, WebSocketMessageType.Binary, sendGate, token);
             if (firstFrame)
             {
                 AppDiagnostics.Write("First screen frame sent. Bytes=" + packet.Length + ", Type=" + packet[0]);
@@ -73,15 +75,32 @@ internal static class RemoteSession
         }
     }
 
-    private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, CancellationToken token)
+    private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, SemaphoreSlim sendGate, CancellationToken token)
     {
         var buffer = new byte[4096];
+        var resultReported = false;
         while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
         {
             var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
             if (result.MessageType == WebSocketMessageType.Close) return;
             if (result.MessageType == WebSocketMessageType.Text && result.EndOfMessage)
-                input.TryDispatch(buffer, result.Count);
+            {
+                var accepted = input.TryDispatch(buffer, result.Count);
+                if (!resultReported)
+                {
+                    var acknowledgement = Encoding.UTF8.GetBytes("{\"type\":\"control-result\",\"ok\":" + (accepted ? "true" : "false") + "}");
+                    await SendAsync(socket, acknowledgement, WebSocketMessageType.Text, sendGate, token);
+                    AppDiagnostics.Write("First remote input result reported. Accepted=" + accepted);
+                    resultReported = true;
+                }
+            }
         }
+    }
+
+    private static async Task SendAsync(ClientWebSocket socket, byte[] payload, WebSocketMessageType type, SemaphoreSlim gate, CancellationToken token)
+    {
+        await gate.WaitAsync(token);
+        try { await socket.SendAsync(new ArraySegment<byte>(payload), type, true, token); }
+        finally { gate.Release(); }
     }
 }
