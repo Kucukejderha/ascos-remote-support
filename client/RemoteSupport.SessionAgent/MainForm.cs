@@ -9,12 +9,9 @@ public sealed class MainForm : Form
 {
     private static readonly Color Navy = Color.FromArgb(7, 27, 43);
     private static readonly Color Blue = Color.FromArgb(11, 102, 195);
-    private static readonly Color Mint = Color.FromArgb(43, 210, 160);
     private readonly Uri _server;
     private readonly Label _status = new();
     private readonly Label _code = new();
-    private readonly Button _start = new();
-    private readonly Button _stop = new();
     private readonly Button _copy = new();
     private CancellationTokenSource? _sessionCancellation;
     private Task? _sessionTask;
@@ -29,14 +26,14 @@ public sealed class MainForm : Form
         Text = "Rotaniz Remote Support — RotaLink";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(560, 440);
-        MinimumSize = new Size(520, 410);
+        ClientSize = new Size(560, 380);
+        MinimumSize = new Size(520, 380);
         BackColor = Color.FromArgb(244, 247, 250);
         Font = new Font("Segoe UI", 10F);
 
         var header = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = Navy };
         header.Controls.Add(new Label { Text = "RotaLink", ForeColor = Color.White, Font = new Font("Segoe UI", 25F, FontStyle.Bold), AutoSize = true, Location = new Point(28, 18) });
-        header.Controls.Add(new Label { Text = "Rotaniz Remote Support", ForeColor = Color.FromArgb(169, 189, 203), Font = new Font("Segoe UI", 10F), AutoSize = true, Location = new Point(31, 66) });
+        header.Controls.Add(new Label { Text = "Rotaniz Remote Support • Yönetici modu", ForeColor = Color.FromArgb(169, 189, 203), Font = new Font("Segoe UI", 10F), AutoSize = true, Location = new Point(31, 66) });
         Controls.Add(header);
 
         var card = new Panel { Location = new Point(28, 130), Size = new Size(504, 196), BackColor = Color.White, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
@@ -60,34 +57,23 @@ public sealed class MainForm : Form
         _status.Location = new Point(24, 117);
         _status.Size = new Size(452, 24);
         card.Controls.Add(_status);
-        card.Controls.Add(new Label { Text = "Ekran paylaşımı yalnızca siz başlattığınızda etkinleşir.", ForeColor = Color.FromArgb(70, 96, 117), AutoSize = true, Location = new Point(24, 151) });
+        card.Controls.Add(new Label { Text = "Bu pencere açık kaldığı sürece destek bağlantısı aktiftir.", ForeColor = Color.FromArgb(70, 96, 117), AutoSize = true, Location = new Point(24, 151) });
         Controls.Add(card);
-
-        ConfigureButton(_start, "Paylaşımı Başlat", Blue, Color.White, new Point(28, 350), new Size(180, 48));
-        _start.Enabled = false;
-        _start.Click += StartClicked;
-        Controls.Add(_start);
-
-        ConfigureButton(_stop, "Bağlantıyı Sonlandır", Color.White, Navy, new Point(218, 350), new Size(190, 48));
-        _stop.FlatAppearance.BorderColor = Color.FromArgb(189, 204, 215);
-        _stop.Enabled = false;
-        _stop.Click += (_, _) => StopSession();
-        Controls.Add(_stop);
 
         Controls.Add(new Label
         {
-            Text = "v0.4.4",
+            Text = "v0.5.0",
             ForeColor = Color.FromArgb(99, 120, 138),
             AutoSize = true,
             Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
-            Location = new Point(492, 414)
+            Location = new Point(492, 350)
         });
         var diagnostics = new LinkLabel
         {
             Text = "Tanılama günlüğü",
             AutoSize = true,
             Anchor = AnchorStyles.Left | AnchorStyles.Bottom,
-            Location = new Point(28, 414),
+            Location = new Point(28, 350),
             LinkColor = Color.FromArgb(70, 96, 117)
         };
         diagnostics.Click += (_, _) => Process.Start("explorer.exe", "/select,\"" + AppDiagnostics.LogPath + "\"");
@@ -101,23 +87,10 @@ public sealed class MainForm : Form
         };
     }
 
-    private static void ConfigureButton(Button button, string text, Color backColor, Color foreColor, Point location, Size size)
-    {
-        button.Text = text;
-        button.BackColor = backColor;
-        button.ForeColor = foreColor;
-        button.FlatStyle = FlatStyle.Flat;
-        button.FlatAppearance.BorderSize = backColor == Color.White ? 1 : 0;
-        button.Location = location;
-        button.Size = size;
-    }
-
     private async Task PrepareSessionAsync()
     {
         try
         {
-            _start.Enabled = false;
-            _stop.Enabled = false;
             _copy.Enabled = false;
             _code.Text = "Hazırlanıyor…";
             SetStatus("Yeni destek kodu hazırlanıyor…", Color.FromArgb(99, 120, 138));
@@ -130,8 +103,8 @@ public sealed class MainForm : Form
             AppDiagnostics.Write("Support session prepared. SessionId=" + _session.SessionId);
             _code.Text = _session.Code;
             _copy.Enabled = true;
-            _start.Enabled = true;
-            SetStatus("Hazır — kodu iletin ve Paylaşımı Başlat'a tıklayın.", Blue);
+            SetStatus("Bağlantı aktif — destek kodunu iletin.", Blue);
+            StartSession();
         }
         catch (Exception ex)
         {
@@ -140,17 +113,12 @@ public sealed class MainForm : Form
         }
     }
 
-    private void StartClicked(object? sender, EventArgs e) => TryStartSession();
-
-    private void TryStartSession()
+    private void StartSession()
     {
         if (_api == null || _session == null || _sessionTask != null) return;
         _sessionCancellation?.Dispose();
         _sessionCancellation = new CancellationTokenSource();
-        AppDiagnostics.Write("Local user started screen sharing from the main window.");
-        _start.Enabled = false;
-        _stop.Enabled = true;
-        SetStatus("Bağlantı aktif", Mint);
+        AppDiagnostics.Write("Automatic screen sharing started.");
         _sessionTask = RemoteSession.RunAsync(_api, _session, _sessionCancellation.Token);
         _ = ObserveSessionAsync(_sessionTask);
     }
@@ -173,8 +141,6 @@ public sealed class MainForm : Form
 
             if (!_closing && !IsDisposed)
             {
-                _stop.Enabled = false;
-                _start.Enabled = false;
                 _copy.Enabled = false;
                 await PrepareSessionAsync();
             }
@@ -186,7 +152,6 @@ public sealed class MainForm : Form
         var cancellation = _sessionCancellation;
         if (cancellation == null || cancellation.IsCancellationRequested) return;
 
-        _stop.Enabled = false;
         SetStatus("Bağlantı sonlandırılıyor…", Color.FromArgb(99, 120, 138));
         cancellation.Cancel();
     }

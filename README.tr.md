@@ -27,10 +27,10 @@ Bu yapı metin okunabilirliğini artırırken masaüstü kullanımındaki bant g
 ## Kullanım
 
 1. Destek alan bilgisayarda `RotaLink.exe` çalıştırılır; siyah konsol yerine RotaLink Windows arayüzü açılır.
-2. Kullanıcı gösterilen 9 haneli kodu paylaşır ve **Paylaşımı Başlat** düğmesiyle bağlantıyı onaylar.
+2. Uygulama ekran paylaşımını otomatik başlatır; kullanıcı gösterilen 9 haneli kodu paylaşır.
 3. Operatör `/operator` sayfasına kodu girer.
-4. Yerel kullanıcı **Bağlantıyı Sonlandır** düğmesiyle oturumu istediği anda sonlandırabilir.
-5. Bağlantı kapandığında istemci otomatik olarak yeni bir destek kodu hazırlar ve **Paylaşımı Başlat** düğmesini yeniden etkinleştirir.
+4. Yerel kullanıcı RotaLink penceresini kapatarak paylaşımı ve kontrolü sonlandırabilir.
+5. Operatör bağlantısı kapandığında istemci açık kalırsa otomatik olarak yeni bir destek kodu hazırlar ve paylaşımı yeniden başlatır.
 
 ## Derleme
 
