@@ -19,6 +19,8 @@ public:
     bool TryAcquire(CapturedDesktopFrame& frame, std::uint32_t timeoutMilliseconds);
     void ReleaseFrame() noexcept;
     [[nodiscard]] DXGI_OUTDUPL_DESC Description() const noexcept;
+    [[nodiscard]] ID3D11Device* Device() const noexcept { return device_.Get(); }
+    [[nodiscard]] ID3D11DeviceContext* Context() const noexcept { return context_.Get(); }
 private:
     void Initialize();
     Microsoft::WRL::ComPtr<ID3D11Device> device_;

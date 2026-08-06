@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.24)
 project(RotaLinkNative LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_executable(RotaLinkCaptureProbe RotaLink.NativeHost/DesktopDuplicator.cpp RotaLink.NativeHost/main.cpp)
+add_executable(RotaLinkCaptureProbe
+  RotaLink.NativeHost/DesktopDuplicator.cpp
+  RotaLink.NativeHost/GpuColorConverter.cpp
+  RotaLink.NativeHost/main.cpp)
 target_compile_definitions(RotaLinkCaptureProbe PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_link_libraries(RotaLinkCaptureProbe PRIVATE d3d11 dxgi ole32)
 if(MSVC)
