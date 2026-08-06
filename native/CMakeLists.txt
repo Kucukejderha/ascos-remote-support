@@ -5,9 +5,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(RotaLinkCaptureProbe
   RotaLink.NativeHost/DesktopDuplicator.cpp
   RotaLink.NativeHost/GpuColorConverter.cpp
+  RotaLink.NativeHost/H264Encoder.cpp
   RotaLink.NativeHost/main.cpp)
 target_compile_definitions(RotaLinkCaptureProbe PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_link_libraries(RotaLinkCaptureProbe PRIVATE d3d11 dxgi ole32)
+target_link_libraries(RotaLinkCaptureProbe PRIVATE d3d11 dxgi ole32 oleaut32 mf mfplat mfuuid)
 if(MSVC)
   target_compile_options(RotaLinkCaptureProbe PRIVATE /W4 /WX /permissive- /EHsc)
 endif()
