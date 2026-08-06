@@ -98,12 +98,13 @@ public sealed class WindowsInputDispatcher : IDisposable
             (2, true) => 0x0008u, (2, false) => 0x0010u,
             _ => 0u
         };
-        return flag != 0 && (SendMouse(message.X, message.Y, flag, 0) || PostButton(message));
+        return flag != 0 && (SendMouse(message.X, message.Y, flag, 0) || LegacyMouse(message.X, message.Y, flag, 0) || PostButton(message));
     }
 
     private static bool SendWheel(InputMessage message)
     {
-        return SendMouse(message.X, message.Y, 0x0800u, unchecked((uint)message.Delta)) || PostWheel(message);
+        return SendMouse(message.X, message.Y, 0x0800u, unchecked((uint)message.Delta)) ||
+               LegacyMouse(message.X, message.Y, 0x0800u, unchecked((uint)message.Delta)) || PostWheel(message);
     }
 
     private static bool MoveCursor(int x, int y)
@@ -113,7 +114,7 @@ public sealed class WindowsInputDispatcher : IDisposable
         {
             Type = 0,
             Union = new InputUnion { Mouse = new MouseInput { X = x, Y = y, Flags = 0x8000u | 0x4000u | 0x0001u } }
-        }) || PostMouseMove(x, y);
+        }) || SetPhysicalCursor(x, y) || PostMouseMove(x, y);
     }
 
     private static bool SendMouse(int x, int y, uint action, uint data)
@@ -124,15 +125,31 @@ public sealed class WindowsInputDispatcher : IDisposable
             new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { MouseData = data, Flags = action } } });
     }
 
+    private static bool LegacyMouse(int x, int y, uint action, uint data)
+    {
+        if (!SetPhysicalCursor(x, y)) return false;
+        mouse_event(action, 0, 0, data, UIntPtr.Zero);
+        return true;
+    }
+
+    private static bool SetPhysicalCursor(int x, int y)
+    {
+        if (x is < 0 or > 65535 || y is < 0 or > 65535) return false;
+        var point = ToPhysicalPoint(x, y);
+        return SetCursorPos(point.X, point.Y);
+    }
+
     private static bool SendKey(string? code, bool down)
     {
         var virtualKey = MapKey(code);
         if (virtualKey == 0) return false;
-        return SendInputs(new Input
+        if (SendInputs(new Input
         {
             Type = 1,
             Union = new InputUnion { Keyboard = new KeyboardInput { VirtualKey = virtualKey, Flags = down ? 0u : 0x0002u } }
-        }) || PostMessage(GetForegroundWindow(), down ? 0x0100u : 0x0101u, new UIntPtr(virtualKey), IntPtr.Zero);
+        })) return true;
+        keybd_event((byte)virtualKey, 0, down ? 0u : 0x0002u, UIntPtr.Zero);
+        return true;
     }
 
     private static bool PostMouseMove(int x, int y)
@@ -206,6 +223,9 @@ public sealed class WindowsInputDispatcher : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct Point { public int X; public int Y; public Point(int x, int y) { X = x; Y = y; } }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr OpenDesktop(string desktop, uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint desiredAccess);
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(IntPtr desktop);
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CloseDesktop(IntPtr desktop);
