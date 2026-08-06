@@ -156,10 +156,8 @@ static void VerifyFrameEncoder()
     var encoder = new ScreenFrameEncoder();
     var keyFrame = encoder.Encode(new CapturedFrame(width, height, firstPixels))
         ?? throw new InvalidOperationException("Initial key frame was skipped.");
-    if (keyFrame[0] != ScreenFrameProtocol.RawFrame)
-        throw new InvalidOperationException("Initial compatibility frame is invalid.");
-    var decoded = keyFrame.AsSpan(5).ToArray();
-    if (!decoded.SequenceEqual(firstPixels)) throw new InvalidOperationException("Key frame did not round-trip.");
+    if (keyFrame[0] != ScreenFrameProtocol.JpegFrame || keyFrame[5] != 0xFF || keyFrame[6] != 0xD8)
+        throw new InvalidOperationException("Initial JPEG frame is invalid.");
     if (encoder.Encode(new CapturedFrame(width, height, firstPixels.ToArray())) is not null)
         throw new InvalidOperationException("Unchanged frame was not skipped.");
 
@@ -167,23 +165,11 @@ static void VerifyFrameEncoder()
     secondPixels.AsSpan(1000, 4000).Fill(0xA5);
     var deltaFrame = encoder.Encode(new CapturedFrame(width, height, secondPixels))
         ?? throw new InvalidOperationException("Changed frame was skipped.");
-    if ((deltaFrame[1] & ScreenFrameProtocol.KeyFrame) != 0)
-        throw new InvalidOperationException("Delta frame was marked as a key frame.");
-    var delta = DecompressFrame(deltaFrame);
-    for (var i = 0; i < decoded.Length; i++) decoded[i] ^= delta[i];
-    if (!decoded.SequenceEqual(secondPixels)) throw new InvalidOperationException("Delta frame did not round-trip.");
-    if (deltaFrame.Length >= secondPixels.Length / 10)
-        throw new InvalidOperationException("Desktop delta compression is unexpectedly poor.");
-    Console.WriteLine($"Codec smoke: raw={firstPixels.Length}, compatibility={keyFrame.Length}, delta={deltaFrame.Length}, deltaRatio={(double)deltaFrame.Length / firstPixels.Length:P2}");
-}
-
-static byte[] DecompressFrame(byte[] packet)
-{
-    using var input = new MemoryStream(packet, ScreenFrameProtocol.HeaderBytes, packet.Length - ScreenFrameProtocol.HeaderBytes);
-    using var gzip = new GZipStream(input, CompressionMode.Decompress);
-    using var output = new MemoryStream();
-    gzip.CopyTo(output);
-    return output.ToArray();
+    if (deltaFrame[0] != ScreenFrameProtocol.JpegFrame || deltaFrame[5] != 0xFF || deltaFrame[6] != 0xD8)
+        throw new InvalidOperationException("Changed JPEG frame is invalid.");
+    if (keyFrame.Length >= firstPixels.Length / 3 || deltaFrame.Length >= secondPixels.Length / 3)
+        throw new InvalidOperationException("JPEG compression is unexpectedly poor.");
+    Console.WriteLine($"Codec smoke: raw={firstPixels.Length}, jpeg={keyFrame.Length}, changed={deltaFrame.Length}, jpegRatio={(double)keyFrame.Length / firstPixels.Length:P2}");
 }
 
 ClientWebSocket CreateSocket(string token)

@@ -30,6 +30,8 @@ Sürüm tarihi: 2026-08-05
 - Host kapandığında operatör bağlantısını sunucu tarafından otomatik sonlandırma
 - Global input enjeksiyonu engellenen oturumlarda pencere mesajı tabanlı kontrol yedeği
 - Odak değişmeden sürekli kare üretmek için tam boy GDI ara belleği üzerinden iki aşamalı ekran yakalama
+- JPEG tabanlı düşük gecikmeli kare aktarımı ve operatörde eski kareleri atarak yalnızca en güncel kareyi çizme
+- Fare hareketlerini 30 Hz ile sınırlama ve dolu WebSocket kuyruğunda eski hareketleri atma
 - Operatörde görüntü ve gerçek kontrol kabulünü ayrı durumlar olarak gösterme
 - HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
 - Windows DPAPI cihaz kimliği saklama

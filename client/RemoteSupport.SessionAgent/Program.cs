@@ -11,7 +11,7 @@ internal static class Program
     {
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         EnablePhysicalPixelCoordinates();
-        AppDiagnostics.Write("RotaLink v0.8.0 started in the interactive user session on " + Environment.OSVersion);
+        AppDiagnostics.Write("RotaLink v0.9.0 started in the interactive user session on " + Environment.OSVersion);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm(args.FirstOrDefault()));

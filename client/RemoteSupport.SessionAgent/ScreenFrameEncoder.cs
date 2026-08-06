@@ -1,4 +1,6 @@
-using System.IO.Compression;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 
 namespace RemoteSupport.SessionAgent;
 
@@ -6,15 +8,14 @@ public static class ScreenFrameProtocol
 {
     public const byte RawFrame = 1;
     public const byte CompressedFrame = 2;
-    public const byte KeyFrame = 1;
-    public const int HeaderBytes = 6;
+    public const byte JpegFrame = 3;
 }
 
 public sealed class ScreenFrameEncoder
 {
     private byte[]? _previous;
-    private int _width;
-    private int _height;
+    private static readonly ImageCodecInfo JpegCodec = ImageCodecInfo.GetImageEncoders()
+        .Single(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
 
     public byte[]? Encode(CapturedFrame frame, bool forceKeyFrame = false)
     {
@@ -22,59 +23,40 @@ public sealed class ScreenFrameEncoder
         var pixels = frame.Pixels;
         if (pixels.Length != checked(frame.Width * frame.Height * 4))
             throw new ArgumentException("Frame pixel length does not match its dimensions.", nameof(frame));
-
-        var firstFrame = _previous is null;
-        var dimensionsChanged = frame.Width != _width || frame.Height != _height;
-        var keyFrame = forceKeyFrame || dimensionsChanged || _previous is null || _previous.Length != pixels.Length;
-        byte[] source;
-
-        if (keyFrame)
-        {
-            source = pixels;
-        }
-        else
-        {
-            source = new byte[pixels.Length];
-            var changed = false;
-            for (var i = 0; i < pixels.Length; i++)
-            {
-                var difference = (byte)(pixels[i] ^ _previous![i]);
-                source[i] = difference;
-                changed |= difference != 0;
-            }
-            if (!changed) return null;
-        }
-
+        if (!forceKeyFrame && _previous is not null && AreEqual(pixels, _previous)) return null;
         _previous = pixels.ToArray();
-        _width = frame.Width;
-        _height = frame.Height;
 
-        // The first frame is intentionally uncompressed. This guarantees that
-        // every supported operator browser can paint an initial desktop even
-        // when its native gzip stream API is unavailable or disabled.
-        if (firstFrame)
+        using var bitmap = new Bitmap(frame.Width, frame.Height, PixelFormat.Format32bppArgb);
+        var area = new Rectangle(0, 0, frame.Width, frame.Height);
+        var data = bitmap.LockBits(area, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        try
         {
-            var raw = new byte[5 + pixels.Length];
-            raw[0] = ScreenFrameProtocol.RawFrame;
-            var rawWidth = checked((ushort)frame.Width);
-            var rawHeight = checked((ushort)frame.Height);
-            raw[1] = (byte)rawWidth; raw[2] = (byte)(rawWidth >> 8);
-            raw[3] = (byte)rawHeight; raw[4] = (byte)(rawHeight >> 8);
-            Buffer.BlockCopy(pixels, 0, raw, 5, pixels.Length);
-            return raw;
+            if (data.Stride == frame.Width * 4)
+                Marshal.Copy(pixels, 0, data.Scan0, pixels.Length);
+            else
+                for (var y = 0; y < frame.Height; y++)
+                    Marshal.Copy(pixels, y * frame.Width * 4, IntPtr.Add(data.Scan0, y * data.Stride), frame.Width * 4);
         }
+        finally { bitmap.UnlockBits(data); }
 
-        using var output = new MemoryStream(Math.Min(source.Length, 256 * 1024));
-        output.WriteByte(ScreenFrameProtocol.CompressedFrame);
-        output.WriteByte(keyFrame ? ScreenFrameProtocol.KeyFrame : (byte)0);
-        var dimensionBytes = new byte[4];
-        var width = checked((ushort)frame.Width);
-        var height = checked((ushort)frame.Height);
-        dimensionBytes[0] = (byte)width; dimensionBytes[1] = (byte)(width >> 8);
-        dimensionBytes[2] = (byte)height; dimensionBytes[3] = (byte)(height >> 8);
-        output.Write(dimensionBytes, 0, dimensionBytes.Length);
-        using (var gzip = new GZipStream(output, CompressionLevel.Fastest, leaveOpen: true))
-            gzip.Write(source, 0, source.Length);
-        return output.ToArray();
+        using var jpeg = new MemoryStream(96 * 1024);
+        using var parameters = new EncoderParameters(1);
+        parameters.Param[0] = new EncoderParameter(Encoder.Quality, 68L);
+        bitmap.Save(jpeg, JpegCodec, parameters);
+        var image = jpeg.ToArray();
+        var packet = new byte[5 + image.Length];
+        packet[0] = ScreenFrameProtocol.JpegFrame;
+        packet[1] = (byte)frame.Width; packet[2] = (byte)(frame.Width >> 8);
+        packet[3] = (byte)frame.Height; packet[4] = (byte)(frame.Height >> 8);
+        Buffer.BlockCopy(image, 0, packet, 5, image.Length);
+        return packet;
+    }
+
+    private static bool AreEqual(byte[] left, byte[] right)
+    {
+        if (left.Length != right.Length) return false;
+        for (var i = 0; i < left.Length; i++)
+            if (left[i] != right[i]) return false;
+        return true;
     }
 }

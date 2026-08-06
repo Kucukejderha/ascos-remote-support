@@ -64,7 +64,7 @@ internal static class RemoteSession
             {
                 capture ??= new GdiScreenCapture(960, 540);
                 if (firstFrame) AppDiagnostics.Write("Screen capture initialized at 960x540.");
-                await Task.Delay(100, token);
+                await Task.Delay(70, token);
                 var frame = capture.Capture();
                 accessDeniedLogged = false;
                 var now = Environment.TickCount;
