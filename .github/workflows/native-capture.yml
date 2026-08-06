@@ -1,0 +1,17 @@
+name: Native capture engine
+on:
+  push:
+    paths: ['native/**', '.github/workflows/native-capture.yml']
+  pull_request:
+    paths: ['native/**']
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S native -B native/build -A x64
+      - run: cmake --build native/build --config Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RotaLinkCaptureProbe-win-x64
+          path: native/build/Release/RotaLinkCaptureProbe.exe

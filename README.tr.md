@@ -1,5 +1,7 @@
 # Rotaniz Remote Support — Faz 1
 
+> Yeni düşük gecikmeli native mimari çalışması için [`docs/ARCHITECTURE-V1.tr.md`](docs/ARCHITECTURE-V1.tr.md) belgesine bakın. Mevcut v0.x istemci, v1 gerçek cihaz testlerini geçene kadar kararlı sürüm olarak korunur.
+
 [English documentation](README.md)
 
 Windows 10/11 ve Rotaniz sunucusu için kullanıcı onayını zorunlu tutan modüler uzaktan destek uygulamasıdır.
