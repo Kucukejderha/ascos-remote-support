@@ -4,5 +4,6 @@
     <ProjectReference Include="..\..\client\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" />
     <ProjectReference Include="..\..\client\RemoteSupport.Service\RemoteSupport.Service.csproj" />
     <ProjectReference Include="..\..\client\RemoteSupport.SessionAgent\RemoteSupport.SessionAgent.csproj" />
+    <ProjectReference Include="..\..\server\RemoteSupport.Signaling\RemoteSupport.Signaling.csproj" />
   </ItemGroup>
 </Project>

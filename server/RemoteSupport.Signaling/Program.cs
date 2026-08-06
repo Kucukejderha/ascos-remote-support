@@ -83,29 +83,61 @@ app.MapPost("/v1/support-codes/redeem", async (HttpContext context, RedeemSuppor
 app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string sessionId, SecurityStore store, SessionBroker broker, AuditLog audit) =>
 {
     var role = context.Request.Query["role"].ToString();
+    var channel = context.Request.Query["channel"].ToString();
+    if (string.IsNullOrWhiteSpace(channel)) channel = "legacy";
+    var validChannel = channel is "legacy" or "control" or "video" or "input";
     var requestedProtocol = context.WebSockets.WebSocketRequestedProtocols.FirstOrDefault();
     var authorized = role == "guest"
         ? store.TryAuthorizeGuestProtocol(sessionId, requestedProtocol) || store.TryAuthorizeSession(sessionId, role, context.Request.Headers.Authorization)
         : store.TryAuthorizeSession(sessionId, role, context.Request.Headers.Authorization);
-    if (!context.WebSockets.IsWebSocketRequest || (role != "host" && role != "guest") || !authorized)
+    if (!context.WebSockets.IsWebSocketRequest || (role != "host" && role != "guest") || !validChannel || !authorized)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         return;
     }
 
     using var socket = await context.WebSockets.AcceptWebSocketAsync(role == "guest" && requestedProtocol is not null ? requestedProtocol : null);
-    if (!broker.TryAttach(sessionId, role, socket))
+    if (!broker.TryAttach(sessionId, role, channel, socket))
     {
         await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Role already connected", context.RequestAborted);
         return;
     }
-    if (role == "host") store.MarkHostConnected(sessionId);
+    if (role == "host" && channel is "legacy" or "control") store.MarkHostConnected(sessionId);
 
-    await audit.WriteAsync("session_peer_connected", role == "host" ? "host" : null, sessionId, context.Connection.RemoteIpAddress?.ToString(), context.RequestAborted);
+    await audit.WriteAsync("session_peer_connected_" + channel, role == "host" ? "host" : null, sessionId, context.Connection.RemoteIpAddress?.ToString(), context.RequestAborted);
 
     try
     {
-        var buffer = new byte[4 * 1024 * 1024 + 64];
+        if (channel == "video")
+        {
+            if (role == "host")
+            {
+                var videoBuffer = new byte[1024 * 1024 + 64];
+                while (socket.State == WebSocketState.Open)
+                {
+                    var videoResult = await socket.ReceiveAsync(videoBuffer, context.RequestAborted);
+                    if (videoResult.MessageType == WebSocketMessageType.Close) break;
+                    if (videoResult.MessageType != WebSocketMessageType.Binary || !videoResult.EndOfMessage || videoResult.Count == 0)
+                    {
+                        await socket.CloseAsync(WebSocketCloseStatus.InvalidMessageType, "Invalid video packet", context.RequestAborted);
+                        break;
+                    }
+                    broker.PublishLatestVideo(sessionId, videoBuffer.AsSpan(0, videoResult.Count).ToArray());
+                }
+            }
+            else
+            {
+                while (socket.State == WebSocketState.Open)
+                {
+                    var newestFrame = await broker.ReadLatestVideoAsync(sessionId, context.RequestAborted);
+                    await socket.SendAsync(newestFrame, WebSocketMessageType.Binary, true, context.RequestAborted);
+                }
+            }
+            return;
+        }
+
+        var maxMessageBytes = channel == "legacy" ? 4 * 1024 * 1024 : 64 * 1024;
+        var buffer = new byte[maxMessageBytes + 64];
         var firstRelayedMessage = true;
         while (socket.State == WebSocketState.Open)
         {
@@ -117,7 +149,7 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
                 break;
             }
 
-            var peer = broker.GetPeer(sessionId, role);
+            var peer = broker.GetPeer(sessionId, role, channel);
             if (peer is not { State: WebSocketState.Open }) continue;
             await peer.SendAsync(buffer.AsMemory(0, result.Count), result.MessageType, true, context.RequestAborted);
             if (firstRelayedMessage)
@@ -129,18 +161,19 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
     }
     finally
     {
-        var peer = broker.GetPeer(sessionId, role);
-        broker.Detach(sessionId, role, socket);
-        if (role == "host")
+        var peer = broker.GetPeer(sessionId, role, channel);
+        broker.Detach(sessionId, role, channel, socket);
+        if (role == "host" && channel is "legacy" or "control")
         {
             store.EndSession(sessionId);
-            if (peer is { State: WebSocketState.Open })
+            foreach (var sessionPeer in broker.GetAllPeers(sessionId, socket).Append(peer).OfType<WebSocket>().Distinct())
             {
-                try { await peer.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host application closed", CancellationToken.None); }
-                catch (WebSocketException) { peer.Abort(); }
+                if (sessionPeer.State != WebSocketState.Open) continue;
+                try { await sessionPeer.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host application closed", CancellationToken.None); }
+                catch (WebSocketException) { sessionPeer.Abort(); }
             }
         }
-        await audit.WriteAsync("session_peer_disconnected", role == "host" ? "host" : null, sessionId, context.Connection.RemoteIpAddress?.ToString(), CancellationToken.None);
+        await audit.WriteAsync("session_peer_disconnected_" + channel, role == "host" ? "host" : null, sessionId, context.Connection.RemoteIpAddress?.ToString(), CancellationToken.None);
     }
 });
 

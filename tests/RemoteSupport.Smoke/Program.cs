@@ -9,16 +9,25 @@ using System.IO.Compression;
 using RemoteSupport.Protocol;
 using RemoteSupport.Service;
 using RemoteSupport.SessionAgent;
+using RemoteSupport.Signaling;
+
+if (args is ["--native-server-only"])
+{
+    await VerifyLatestVideoQueueAsync();
+    Console.WriteLine("Native channel server checks passed.");
+    return;
+}
 
 await VerifyIpcAsync();
-await VerifyDeviceIdentityAsync();
-VerifyCaptureAndConsentGate();
 VerifyFrameEncoder();
+await VerifyLatestVideoQueueAsync();
 if (args is ["--codec-only"])
 {
     Console.WriteLine("Local codec and security smoke checks passed.");
     return;
 }
+await VerifyDeviceIdentityAsync();
+VerifyCaptureAndConsentGate();
 
 var baseUri = new Uri(args.FirstOrDefault() ?? "http://127.0.0.1:5188");
 using var http = new HttpClient { BaseAddress = baseUri };
@@ -102,6 +111,17 @@ static async Task VerifyIpcAsync()
         throw new InvalidOperationException("Named Pipe authentication failed.");
 }
 
+static async Task VerifyLatestVideoQueueAsync()
+{
+    var broker = new SessionBroker();
+    broker.PublishLatestVideo("native-smoke", new byte[] { 1 });
+    broker.PublishLatestVideo("native-smoke", new byte[] { 2 });
+    broker.PublishLatestVideo("native-smoke", new byte[] { 3 });
+    var newest = await broker.ReadLatestVideoAsync("native-smoke", CancellationToken.None);
+    if (newest.Length != 1 || newest[0] != 3)
+        throw new InvalidOperationException("Native video queue did not discard stale frames.");
+}
+
 static async Task VerifyDeviceIdentityAsync()
 {
     if (!OperatingSystem.IsWindows()) return;
@@ -135,10 +155,11 @@ static void VerifyCaptureAndConsentGate()
         Console.WriteLine("GDI capture check skipped: test desktop access denied.");
     }
     var sessionId = Guid.NewGuid();
-    var consent = new ConsentStateMachine(TimeProvider.System);
+    var consent = new ConsentStateMachine();
     consent.Request(sessionId, TimeSpan.FromMinutes(1));
-    var dispatcher = new WindowsInputDispatcher(consent, sessionId);
-    if (dispatcher.TryDispatch("{\"type\":\"move\",\"x\":1,\"y\":1}"u8))
+    using var dispatcher = new WindowsInputDispatcher(consent, sessionId);
+    var deniedInput = "{\"type\":\"move\",\"x\":1,\"y\":1}"u8.ToArray();
+    if (dispatcher.TryDispatch(deniedInput, deniedInput.Length))
         throw new InvalidOperationException("Input was accepted before local consent.");
 }
 
