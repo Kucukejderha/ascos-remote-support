@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using Microsoft.Extensions.Logging;
 using Microsoft.Win32.SafeHandles;
 
 namespace RemoteSupport.Service;
@@ -16,13 +15,13 @@ internal sealed class SessionHelperSupervisor : IDisposable
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint CreateNoWindow = 0x08000000;
     private const int TokenSessionId = 12;
-    private readonly ILogger<SessionHelperSupervisor> _logger;
+    private readonly ServiceLog _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private SafeProcessHandle? _helperProcess;
     private uint _helperSessionId = InvalidSessionId;
     private bool _disposed;
 
-    public SessionHelperSupervisor(ILogger<SessionHelperSupervisor> logger) => _logger = logger;
+    public SessionHelperSupervisor(ServiceLog logger) => _logger = logger;
 
     public async Task EnsureActiveSessionAsync(CancellationToken cancellationToken)
     {
@@ -43,7 +42,7 @@ internal sealed class SessionHelperSupervisor : IDisposable
             await StopHelperCoreAsync(cancellationToken).ConfigureAwait(false);
             _helperProcess = LaunchHelper(activeSession, out var processId);
             _helperSessionId = activeSession;
-            _logger.LogInformation("RotaLink.SessionHelper started as SYSTEM in interactive session {SessionId}, process {ProcessId}.", activeSession, processId);
+            _logger.Write("RotaLink.SessionHelper started as SYSTEM in interactive session " + activeSession + ", process " + processId + ".");
         }
         finally
         {
@@ -109,7 +108,7 @@ internal sealed class SessionHelperSupervisor : IDisposable
                 finally
                 {
                     if (environment != IntPtr.Zero && !DestroyEnvironmentBlock(environment))
-                        _logger.LogWarning("DestroyEnvironmentBlock failed with {Win32Error}.", Marshal.GetLastWin32Error());
+                        _logger.Write("DestroyEnvironmentBlock failed with " + Marshal.GetLastWin32Error() + ".");
                 }
             }
         }
@@ -134,9 +133,9 @@ internal sealed class SessionHelperSupervisor : IDisposable
 
             if (WaitForSingleObject(process, 0) == 0x00000102)
             {
-                _logger.LogWarning("Session helper did not stop gracefully; terminating its owned process.");
+                _logger.Write("Session helper did not stop gracefully; terminating its owned process.");
                 if (!TerminateProcess(process, 0x524F5441))
-                    _logger.LogWarning("TerminateProcess failed with {Win32Error}.", Marshal.GetLastWin32Error());
+                    _logger.Write("TerminateProcess failed with " + Marshal.GetLastWin32Error() + ".");
             }
         }
         finally { process.Dispose(); }
@@ -151,7 +150,7 @@ internal sealed class SessionHelperSupervisor : IDisposable
             if (!LookupPrivilegeValue(null, privilegeName, out var luid))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "LookupPrivilegeValue failed for " + privilegeName + ".");
             var privileges = new TokenPrivileges { Count = 1, Luid = luid, Attributes = 0x00000002 };
-            Marshal.SetLastPInvokeError(0);
+            SetLastError(0);
             if (!AdjustTokenPrivileges(token, false, ref privileges, 0, IntPtr.Zero, IntPtr.Zero))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "AdjustTokenPrivileges failed for " + privilegeName + ".");
             var error = Marshal.GetLastWin32Error();
@@ -210,4 +209,5 @@ internal sealed class SessionHelperSupervisor : IDisposable
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool CreateEnvironmentBlock(out IntPtr environment, SafeKernelHandle token, bool inherit);
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool DestroyEnvironmentBlock(IntPtr environment);
     [DllImport("kernel32.dll")] private static extern uint WTSGetActiveConsoleSessionId();
+    [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
 }

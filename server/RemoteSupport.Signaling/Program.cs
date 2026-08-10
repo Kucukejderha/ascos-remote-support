@@ -41,6 +41,8 @@ app.MapGet("/downloads/RotaLink.exe", (HttpContext context, IWebHostEnvironment 
     CreateClientDownload(context, environment, "RotaLink.exe"));
 app.MapGet("/downloads/RotaLink-v1.1.0-alpha.6.exe", (HttpContext context, IWebHostEnvironment environment) =>
     CreateClientDownload(context, environment, "RotaLink-v1.1.0-alpha.6.exe"));
+app.MapGet("/downloads/RotaLink-v1.1.0-alpha.7.exe", (HttpContext context, IWebHostEnvironment environment) =>
+    CreateClientDownload(context, environment, "RotaLink-v1.1.0-alpha.7.exe"));
 
 app.MapPost("/v1/devices", (RegisterDeviceRequest request, SecurityStore store) =>
 {

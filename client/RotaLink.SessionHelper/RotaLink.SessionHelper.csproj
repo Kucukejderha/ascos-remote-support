@@ -1,14 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <LangVersion>11</LangVersion>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AssemblyName>RotaLink.SessionHelper</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TargetPlatformSdkPath>C:\Program Files (x86)\Windows Kits\10\</TargetPlatformSdkPath>
+    <TargetPlatformDisplayName>Windows</TargetPlatformDisplayName>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" />
+    <Compile Include="Program.cs" />
+    <Compile Include="InputDesktop.cs" />
+    <Compile Include="CoordinateTransformationEngine.cs" />
+    <Compile Include="InputEngine.cs" />
+    <Compile Include="InputPipeServer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 </Project>

@@ -31,7 +31,8 @@ RotaLink.Service.exe (Session 0 / LocalSystem)
 - `v1.1.0-alpha.2` canlı tanısı, `Default` desktop seçildikten sonra `SendInput` çağrısının `ERROR_ACCESS_DENIED (5)` ile reddedildiğini doğruladı. Ağ, video, kontrol kanalı ve koordinat zinciri bu noktaya kadar çalışmaktadır.
 - `v1.1.0-alpha.3` portable EXE, Windows UAC üzerinden `requireAdministrator` ister. Onaylanan süreç yüksek bütünlük düzeyinde çalışır; kalıcı servis veya gözetimsiz erişim kurulmaz.
 - İstemci başlığında “Yönetici yetkili oturum” veya “Sınırlı kullanıcı oturumu” gösterilir. Böylece yanlış token ile yapılan test görsel olarak anlaşılır.
-- `v1.1.0-alpha.4`, yükseltilmiş süreçte de `SendInput` reddedildiğinde fare için `SetCursorPos` + `mouse_event`, klavye için `keybd_event` yedek yolunu kullanır. Operatör sonucu `legacy-cursor-ok`, `legacy-mouse-ok` veya `legacy-keyboard-ok` olarak görür.
+- `v1.1.0-alpha.7`, gerçek sistem girdisi ürettiği doğrulanamayan `SetCursorPos`, `mouse_event`, `keybd_event` ve pencere mesajı yedeklerini kaldırır. `SendInput` başarısızsa operatöre `Accepted=False` ve gerçek Win32 hata aşaması bildirilir; böylece imleç hareketinin yanlışlıkla tam kontrol başarısı sayılması engellenir.
+- Aynı sürüm, küçük .NET Framework 4.8 Service ve SessionHelper bileşenlerini tek taşınabilir EXE içine gömer. Uygulama açılırken görünür UAC onayından sonra geçici LocalSystem servisini başlatır; servis aktif kullanıcı oturumunda SYSTEM SessionHelper oluşturur. Pencere kapandığında servis durdurulur ve SCM kaydı silinir.
 
 ## Faz 2 — DXGI ve Shared Memory
 

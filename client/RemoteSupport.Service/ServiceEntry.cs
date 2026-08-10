@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using Microsoft.Extensions.Logging;
 
 namespace RemoteSupport.Service;
 
@@ -31,19 +30,18 @@ internal static class ServiceEntry
             new ServiceTableEntry()
         };
         if (StartServiceCtrlDispatcher(table)) return 0;
-        var error = Marshal.GetLastPInvokeError();
+        var error = Marshal.GetLastWin32Error();
         if (error == 1063) return RunConsole(); // Direct developer execution.
         throw new Win32Exception(error, "StartServiceCtrlDispatcher failed.");
     }
 
     private static int RunConsole()
     {
-        using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        var logger = loggerFactory.CreateLogger("RotaLink.Service");
-        using var supervisor = new SessionHelperSupervisor(loggerFactory.CreateLogger<SessionHelperSupervisor>());
+        var logger = new ServiceLog();
+        using var supervisor = new SessionHelperSupervisor(logger);
         using var window = new SessionNotificationWindow((reason, session) =>
         {
-            logger.LogInformation("Session change {Reason}, session {SessionId}.", reason, session);
+            logger.Write("Session change " + reason + ", session " + session + ".");
             _ = ReconcileAsync(supervisor, logger);
         }, logger);
         window.Start();
@@ -62,14 +60,13 @@ internal static class ServiceEntry
         if (_statusHandle == IntPtr.Zero) return;
         ReportStatus(ServiceStartPending, 0, 20_000);
 
-        using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        var logger = loggerFactory.CreateLogger("RotaLink.Service");
+        var logger = new ServiceLog();
         try
         {
-            using var supervisor = new SessionHelperSupervisor(loggerFactory.CreateLogger<SessionHelperSupervisor>());
+            using var supervisor = new SessionHelperSupervisor(logger);
             using var window = new SessionNotificationWindow((reason, session) =>
             {
-                logger.LogInformation("Session change {Reason}, session {SessionId}.", reason, session);
+                logger.Write("Session change " + reason + ", session " + session + ".");
                 _ = ReconcileAsync(supervisor, logger);
             }, logger);
             window.Start();
@@ -84,15 +81,15 @@ internal static class ServiceEntry
         }
         catch (Exception exception)
         {
-            logger.LogCritical(exception, "RotaLink service failed.");
+            logger.Write("RotaLink service failed: " + exception);
             ReportStatus(ServiceStopped, 0, 0, unchecked((uint)exception.HResult));
         }
     }
 
-    private static async Task ReconcileAsync(SessionHelperSupervisor supervisor, ILogger logger)
+    private static async Task ReconcileAsync(SessionHelperSupervisor supervisor, ServiceLog logger)
     {
         try { await supervisor.EnsureActiveSessionAsync(CancellationToken.None).ConfigureAwait(false); }
-        catch (Exception exception) { logger.LogError(exception, "Interactive helper reconciliation failed."); }
+        catch (Exception exception) { logger.Write("Interactive helper reconciliation failed: " + exception); }
     }
 
     private static uint Handler(uint control, uint eventType, IntPtr eventData, IntPtr context)
@@ -110,7 +107,7 @@ internal static class ServiceEntry
         _status.WaitHint = waitHint;
         _status.CheckPoint = currentState is ServiceStartPending or ServiceStopPending ? _status.CheckPoint + 1 : 0;
         if (_statusHandle != IntPtr.Zero && !SetServiceStatus(_statusHandle, ref _status))
-            throw new Win32Exception(Marshal.GetLastPInvokeError(), "SetServiceStatus failed.");
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "SetServiceStatus failed.");
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)] private delegate void ServiceMainCallback(int argumentCount, IntPtr arguments);

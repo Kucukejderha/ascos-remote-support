@@ -1,6 +1,6 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Microsoft.Extensions.Logging;
 
 namespace RemoteSupport.Service;
 
@@ -24,14 +24,14 @@ internal sealed class SessionNotificationWindow : IDisposable
     private const uint WmDestroy = 0x0002;
     private static readonly IntPtr HwndMessage = new(-3);
     private readonly Action<SessionChangeReason, uint> _callback;
-    private readonly ILogger _logger;
+    private readonly ServiceLog _logger;
     private readonly ManualResetEventSlim _started = new(false);
     private readonly WndProc _windowProcedure;
     private Thread? _thread;
     private IntPtr _window;
     private Exception? _startupError;
 
-    public SessionNotificationWindow(Action<SessionChangeReason, uint> callback, ILogger logger)
+    public SessionNotificationWindow(Action<SessionChangeReason, uint> callback, ServiceLog logger)
     {
         _callback = callback;
         _logger = logger;
@@ -50,7 +50,7 @@ internal sealed class SessionNotificationWindow : IDisposable
 
     private void MessageLoop()
     {
-        var className = "RotaLink.WtsNotification." + Environment.ProcessId;
+        var className = "RotaLink.WtsNotification." + Process.GetCurrentProcess().Id;
         try
         {
             var instance = GetModuleHandle(null);
@@ -100,7 +100,7 @@ internal sealed class SessionNotificationWindow : IDisposable
         if (message == WmWtsSessionChange)
         {
             try { _callback((SessionChangeReason)(uint)wParam.ToInt64(), unchecked((uint)lParam.ToInt64())); }
-            catch (Exception exception) { _logger.LogError(exception, "WTS session callback failed."); }
+            catch (Exception exception) { _logger.Write("WTS session callback failed: " + exception); }
             return IntPtr.Zero;
         }
         if (message == WmClose)
@@ -122,7 +122,7 @@ internal sealed class SessionNotificationWindow : IDisposable
     {
         if (_window != IntPtr.Zero) PostMessage(_window, WmClose, IntPtr.Zero, IntPtr.Zero);
         if (_thread is { IsAlive: true } && !_thread.Join(TimeSpan.FromSeconds(5)))
-            _logger.LogWarning("WTS notification thread did not stop within five seconds.");
+            _logger.Write("WTS notification thread did not stop within five seconds.");
         _started.Dispose();
     }
 

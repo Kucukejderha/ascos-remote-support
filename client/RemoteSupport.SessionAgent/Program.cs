@@ -30,6 +30,7 @@ internal static class Program
         AppDiagnostics.Write("RotaLink v" + version + " started in the interactive user session on " + Environment.OSVersion +
             ". Session=" + Process.GetCurrentProcess().SessionId + ", Identity=" + identityName +
             ", Elevated=" + elevated + ", Bitness=" + (Environment.Is64BitProcess ? "x64" : "x86") + ".");
+        using var inputRuntime = EphemeralInputService.TryStart();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm(args.FirstOrDefault(), elevated));

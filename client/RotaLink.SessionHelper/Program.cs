@@ -1,19 +1,14 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 using System.Security.Principal;
-
-[assembly: SupportedOSPlatform("windows")]
 
 namespace RotaLink.SessionHelper;
 
 internal static class Program
 {
-    public static async Task<int> Main(string[] args)
+    public static int Main(string[] args)
     {
-        if (!OperatingSystem.IsWindows()) return 10;
         var sessionId = ParseSessionId(args);
-        if (!ProcessIdToSessionId((uint)Environment.ProcessId, out var actualSessionId) || actualSessionId != sessionId)
+        if (!ProcessIdToSessionId((uint)System.Diagnostics.Process.GetCurrentProcess().Id, out var actualSessionId) || actualSessionId != sessionId)
             return 11;
 
         var log = new HelperLog(sessionId);
@@ -25,24 +20,9 @@ internal static class Program
 
             using var stop = new EventWaitHandle(false, EventResetMode.ManualReset,
                 "Global\\RotaLink.SessionHelper.Stop." + sessionId);
-            using var stopCts = new CancellationTokenSource();
-            var stopTask = Task.Run(() =>
-            {
-                stop.WaitOne();
-                stopCts.Cancel();
-            });
             using var engine = new InputEngine(log);
             var server = new InputPipeServer(sessionId, engine, log);
-            using var capture = new NativeCaptureBridge(sessionId, log);
-            try
-            {
-                var captureTask = RunCaptureSafeAsync(capture, log, stopCts.Token);
-                await server.RunAsync(stopCts.Token).ConfigureAwait(false);
-                await captureTask.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stopCts.IsCancellationRequested) { }
-            stop.Set();
-            await stopTask.ConfigureAwait(false);
+            server.Run(stop);
             return 0;
         }
         catch (Exception exception)
@@ -50,13 +30,6 @@ internal static class Program
             log.Write("Fatal helper error: " + exception);
             return 1;
         }
-    }
-
-    private static async Task RunCaptureSafeAsync(NativeCaptureBridge capture, HelperLog log, CancellationToken token)
-    {
-        try { await capture.RunAsync(token).ConfigureAwait(false); }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        catch (Exception exception) { log.Write("DXGI capture bridge is unavailable; input helper remains active. " + exception); }
     }
 
     private static uint ParseSessionId(string[] args)

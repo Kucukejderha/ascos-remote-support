@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using RemoteSupport.Protocol;
 
 namespace RotaLink.SessionHelper;
 
@@ -106,10 +105,10 @@ internal sealed class InputEngine : IDisposable
             default: return false;
         }
 
-        Marshal.SetLastPInvokeError(0);
+        SetLastError(0);
         var sent = SendInput(1, new[] { input }, Marshal.SizeOf<NativeInput>());
         if (sent == 1) return true;
-        throw new Win32Exception(Marshal.GetLastPInvokeError(), "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
+        throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
     }
 
     private static NativeInput Mouse(AbsolutePoint point, uint flags, uint data) => new()
@@ -137,8 +136,16 @@ internal sealed class InputEngine : IDisposable
         _queue.Dispose();
     }
 
-    private sealed record WorkItem(InputPacket Packet, CancellationToken CancellationToken)
+    private sealed class WorkItem
     {
+        public WorkItem(InputPacket packet, CancellationToken cancellationToken)
+        {
+            Packet = packet;
+            CancellationToken = cancellationToken;
+        }
+
+        public InputPacket Packet { get; }
+        public CancellationToken CancellationToken { get; }
         public TaskCompletionSource<bool> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
@@ -147,4 +154,29 @@ internal sealed class InputEngine : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
+    [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
+}
+
+internal enum InputEventKind : byte { Move = 1, Button = 2, Wheel = 3, Key = 4 }
+
+internal sealed class InputPacket
+{
+    public InputPacket(InputEventKind kind, bool down, long sequence, double normalizedX, double normalizedY, int data, uint keyCode)
+    {
+        Kind = kind;
+        Down = down;
+        Sequence = sequence;
+        NormalizedX = normalizedX;
+        NormalizedY = normalizedY;
+        Data = data;
+        KeyCode = keyCode;
+    }
+
+    public InputEventKind Kind { get; }
+    public bool Down { get; }
+    public long Sequence { get; }
+    public double NormalizedX { get; }
+    public double NormalizedY { get; }
+    public int Data { get; }
+    public uint KeyCode { get; }
 }

@@ -2,8 +2,16 @@ param([string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root 'client\RemoteSupport.SessionAgent\RemoteSupport.SessionAgent.csproj'
+$serviceProject = Join-Path $root 'client\RemoteSupport.Service\RemoteSupport.Service.csproj'
+$helperProject = Join-Path $root 'client\RotaLink.SessionHelper\RotaLink.SessionHelper.csproj'
 $packages = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $env:USERPROFILE '.nuget\packages' }
 
+foreach ($runtimeProject in @($serviceProject, $helperProject)) {
+    dotnet restore $runtimeProject --source 'https://api.nuget.org/v3/index.json'
+    if ($LASTEXITCODE -ne 0) { throw "Runtime restore failed: $runtimeProject" }
+    dotnet build $runtimeProject -c $Configuration --no-restore
+    if ($LASTEXITCODE -ne 0) { throw "Runtime build failed: $runtimeProject" }
+}
 dotnet restore $project --source 'https://api.nuget.org/v3/index.json'
 if ($LASTEXITCODE -ne 0) { throw 'RotaLink restore failed.' }
 dotnet build $project -c $Configuration --no-restore
