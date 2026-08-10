@@ -78,9 +78,11 @@ public sealed class MainForm : Form
         {
             Text = "v" + informationalVersion.Replace("-", " "),
             ForeColor = Color.FromArgb(99, 120, 138),
-            AutoSize = true,
+            AutoSize = false,
+            TextAlign = ContentAlignment.MiddleRight,
             Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
-            Location = new Point(492, 350)
+            Location = new Point(330, 342),
+            Size = new Size(202, 26)
         });
         var diagnostics = new LinkLabel
         {
