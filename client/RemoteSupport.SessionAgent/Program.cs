@@ -1,5 +1,6 @@
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace RemoteSupport.SessionAgent;
@@ -11,7 +12,10 @@ internal static class Program
     {
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         EnablePhysicalPixelCoordinates();
-        AppDiagnostics.Write("RotaLink v0.9.1 started in the interactive user session on " + Environment.OSVersion);
+        var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? typeof(Program).Assembly.GetName().Version?.ToString()
+            ?? "unknown";
+        AppDiagnostics.Write("RotaLink v" + version + " started in the interactive user session on " + Environment.OSVersion);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm(args.FirstOrDefault()));

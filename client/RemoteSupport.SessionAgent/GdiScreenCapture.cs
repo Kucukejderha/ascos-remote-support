@@ -82,11 +82,8 @@ public sealed class GdiScreenCapture : IDisposable
 
     private void DesktopThreadMain()
     {
-        var desktop = OpenDesktop("Default", 0, false, 0x0001u | 0x0080u | 0x0100u);
         try
         {
-            if (desktop == IntPtr.Zero || !SetThreadDesktop(desktop))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Screen capture could not attach to the active Windows desktop.");
             InitializeNativeCapture();
             _initialized.Set();
             foreach (var request in _requests.GetConsumingEnumerable())
@@ -104,7 +101,6 @@ public sealed class GdiScreenCapture : IDisposable
         finally
         {
             CleanupNativeCapture();
-            if (desktop != IntPtr.Zero) CloseDesktop(desktop);
         }
     }
 
@@ -133,9 +129,6 @@ public sealed class GdiScreenCapture : IDisposable
     [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr window);
     [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr window, IntPtr dc);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
-    [DllImport("user32.dll", CharSet=CharSet.Unicode, SetLastError=true)] private static extern IntPtr OpenDesktop(string desktop, uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint desiredAccess);
-    [DllImport("user32.dll", SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] private static extern bool SetThreadDesktop(IntPtr desktop);
-    [DllImport("user32.dll", SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] private static extern bool CloseDesktop(IntPtr desktop);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
     [DllImport("gdi32.dll", SetLastError=true)] private static extern IntPtr CreateCompatibleBitmap(IntPtr dc, int width, int height);
     [DllImport("gdi32.dll", SetLastError=true)] private static extern IntPtr CreateDIBSection(IntPtr dc, ref BitmapInfo info, uint usage, out IntPtr bits, IntPtr section, uint offset);

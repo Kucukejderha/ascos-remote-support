@@ -18,18 +18,22 @@ if (args is ["--native-server-only"])
     return;
 }
 
-await VerifyIpcAsync();
-VerifyFrameEncoder();
-await VerifyLatestVideoQueueAsync();
-if (args is ["--codec-only"])
+var transportOnly = args.Contains("--transport-only", StringComparer.Ordinal);
+if (!transportOnly)
 {
-    Console.WriteLine("Local codec and security smoke checks passed.");
-    return;
+    await VerifyIpcAsync();
+    VerifyFrameEncoder();
+    await VerifyLatestVideoQueueAsync();
+    if (args is ["--codec-only"])
+    {
+        Console.WriteLine("Local codec and security smoke checks passed.");
+        return;
+    }
+    await VerifyDeviceIdentityAsync();
+    VerifyCaptureAndConsentGate();
 }
-await VerifyDeviceIdentityAsync();
-VerifyCaptureAndConsentGate();
 
-var baseUri = new Uri(args.FirstOrDefault() ?? "http://127.0.0.1:5188");
+var baseUri = new Uri(args.FirstOrDefault(argument => argument.StartsWith("http", StringComparison.OrdinalIgnoreCase)) ?? "http://127.0.0.1:5188");
 using var http = new HttpClient { BaseAddress = baseUri };
 using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
@@ -52,11 +56,14 @@ http.DefaultRequestHeaders.Authorization = null;
 var guest = await PostAsync<GuestSession>("/v1/support-codes/redeem", new { code = support.Code });
 
 using var hostSocket = CreateSocket(access.AccessToken);
-using var guestSocket = new ClientWebSocket();
-guestSocket.Options.AddSubProtocol($"ascos.guest.{guest.GuestToken}");
+using var guestSocket = CreateGuestSocket(guest.GuestToken);
+using var hostVideoSocket = CreateSocket(access.AccessToken);
+using var guestVideoSocket = CreateGuestSocket(guest.GuestToken);
 var wsBase = new UriBuilder(baseUri) { Scheme = baseUri.Scheme == "https" ? "wss" : "ws" }.Uri;
-await hostSocket.ConnectAsync(new Uri(wsBase, $"/v1/sessions/{support.SessionId}/signal?role=host"), CancellationToken.None);
-await guestSocket.ConnectAsync(new Uri(wsBase, $"/v1/sessions/{support.SessionId}/signal?role=guest"), CancellationToken.None);
+await hostSocket.ConnectAsync(new Uri(wsBase, $"/v1/sessions/{support.SessionId}/signal?role=host&channel=control"), CancellationToken.None);
+await guestSocket.ConnectAsync(new Uri(wsBase, $"/v1/sessions/{support.SessionId}/signal?role=guest&channel=control"), CancellationToken.None);
+await hostVideoSocket.ConnectAsync(new Uri(wsBase, $"/v1/sessions/{support.SessionId}/signal?role=host&channel=video"), CancellationToken.None);
+await guestVideoSocket.ConnectAsync(new Uri(wsBase, $"/v1/sessions/{support.SessionId}/signal?role=guest&channel=video"), CancellationToken.None);
 
 var sent = Encoding.UTF8.GetBytes("{\"type\":\"offer\",\"sdp\":\"smoke-test\"}");
 await hostSocket.SendAsync(sent, WebSocketMessageType.Text, true, CancellationToken.None);
@@ -66,16 +73,25 @@ var result = await guestSocket.ReceiveAsync(received, timeout.Token);
 var relayed = Encoding.UTF8.GetString(received, 0, result.Count);
 if (relayed != Encoding.UTF8.GetString(sent)) throw new InvalidOperationException("Relayed payload differs.");
 
-var relayPixels = new byte[960 * 540 * 4];
-RandomNumberGenerator.Fill(relayPixels);
-var frame = new ScreenFrameEncoder().Encode(new CapturedFrame(960, 540, relayPixels))
-    ?? throw new InvalidOperationException("Relay key frame was skipped.");
-await hostSocket.SendAsync(frame, WebSocketMessageType.Binary, true, CancellationToken.None);
+byte[] frame;
+if (transportOnly)
+{
+    frame = new byte[128 * 1024];
+    RandomNumberGenerator.Fill(frame);
+}
+else
+{
+    var relayPixels = new byte[960 * 540 * 4];
+    RandomNumberGenerator.Fill(relayPixels);
+    frame = new ScreenFrameEncoder().Encode(new CapturedFrame(960, 540, relayPixels))
+        ?? throw new InvalidOperationException("Relay key frame was skipped.");
+}
+await hostVideoSocket.SendAsync(frame, WebSocketMessageType.Binary, true, CancellationToken.None);
 var frameReceived = new byte[frame.Length];
 var offset = 0;
 do
 {
-    var part = await guestSocket.ReceiveAsync(frameReceived.AsMemory(offset), timeout.Token);
+    var part = await guestVideoSocket.ReceiveAsync(frameReceived.AsMemory(offset), timeout.Token);
     offset += part.Count;
     if (part.EndOfMessage) break;
 } while (offset < frameReceived.Length);
@@ -197,6 +213,13 @@ ClientWebSocket CreateSocket(string token)
 {
     var socket = new ClientWebSocket();
     socket.Options.SetRequestHeader("Authorization", $"Bearer {token}");
+    return socket;
+}
+
+ClientWebSocket CreateGuestSocket(string token)
+{
+    var socket = new ClientWebSocket();
+    socket.Options.AddSubProtocol($"ascos.guest.{token}");
     return socket;
 }
 

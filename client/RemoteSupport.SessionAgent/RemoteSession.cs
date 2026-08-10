@@ -12,22 +12,23 @@ internal static class RemoteSession
         var sessionId = Guid.ParseExact(session.SessionId, "N");
         consent.Request(sessionId, TimeSpan.FromHours(8));
         consent.Decide(sessionId, approved: true);
-        using var socket = await api.ConnectHostSocketAsync(session, token);
-        AppDiagnostics.Write("Host WebSocket connected.");
+        using var controlSocket = await api.ConnectHostSocketAsync(session, "control", token);
+        using var videoSocket = await api.ConnectHostSocketAsync(session, "video", token);
+        AppDiagnostics.Write("Host control and video WebSockets connected.");
         using var input = new WindowsInputDispatcher(consent, sessionId);
-        using var sendGate = new SemaphoreSlim(1, 1);
         try
         {
             var completed = await Task.WhenAny(
-                CaptureLoopAsync(socket, sendGate, token),
-                ReceiveInputLoopAsync(socket, input, sendGate, token));
+                CaptureLoopAsync(videoSocket, token),
+                ReceiveInputLoopAsync(controlSocket, input, token));
             await completed;
         }
         finally
         {
             consent.Stop(sessionId);
-            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            foreach (var socket in new[] { controlSocket, videoSocket })
             {
+                if (socket.State is not (WebSocketState.Open or WebSocketState.CloseReceived)) continue;
                 using var closeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 try
                 {
@@ -46,12 +47,12 @@ internal static class RemoteSession
                 }
             }
 
-            if (socket.State != WebSocketState.Closed)
-                socket.Abort();
+            if (controlSocket.State != WebSocketState.Closed) controlSocket.Abort();
+            if (videoSocket.State != WebSocketState.Closed) videoSocket.Abort();
         }
     }
 
-    private static async Task CaptureLoopAsync(ClientWebSocket socket, SemaphoreSlim sendGate, CancellationToken token)
+    private static async Task CaptureLoopAsync(ClientWebSocket socket, CancellationToken token)
     {
         var encoder = new ScreenFrameEncoder();
         var nextKeyFrame = Environment.TickCount;
@@ -72,7 +73,7 @@ internal static class RemoteSession
                 var packet = encoder.Encode(frame, forceKeyFrame);
                 if (packet is null) continue;
                 if (forceKeyFrame) nextKeyFrame = now + 2_000;
-                await SendAsync(socket, packet, WebSocketMessageType.Binary, sendGate, token);
+                await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token);
                 if (firstFrame)
                 {
                     AppDiagnostics.Write("First screen frame sent. Bytes=" + packet.Length + ", Type=" + packet[0]);
@@ -94,7 +95,7 @@ internal static class RemoteSession
         capture?.Dispose();
     }
 
-    private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, SemaphoreSlim sendGate, CancellationToken token)
+    private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, CancellationToken token)
     {
         var buffer = new byte[4096];
         var resultReported = false;
@@ -108,7 +109,7 @@ internal static class RemoteSession
                 if (!resultReported)
                 {
                     var acknowledgement = Encoding.UTF8.GetBytes("{\"type\":\"control-result\",\"ok\":" + (accepted ? "true" : "false") + "}");
-                    await SendAsync(socket, acknowledgement, WebSocketMessageType.Text, sendGate, token);
+                    await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
                     AppDiagnostics.Write("First remote input result reported. Accepted=" + accepted);
                     resultReported = true;
                 }
@@ -116,10 +117,4 @@ internal static class RemoteSession
         }
     }
 
-    private static async Task SendAsync(ClientWebSocket socket, byte[] payload, WebSocketMessageType type, SemaphoreSlim gate, CancellationToken token)
-    {
-        await gate.WaitAsync(token);
-        try { await socket.SendAsync(new ArraySegment<byte>(payload), type, true, token); }
-        finally { gate.Release(); }
-    }
 }

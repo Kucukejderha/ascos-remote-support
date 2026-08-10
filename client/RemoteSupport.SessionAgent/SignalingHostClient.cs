@@ -40,11 +40,13 @@ public sealed class SignalingHostClient : IDisposable
         return new HostSession(registration.DeviceId, code.SessionId, code.Code, access.AccessToken);
     }
 
-    public async Task<ClientWebSocket> ConnectHostSocketAsync(HostSession session, CancellationToken token)
+    public async Task<ClientWebSocket> ConnectHostSocketAsync(HostSession session, string channel, CancellationToken token)
     {
+        if (channel != "control" && channel != "video") throw new ArgumentOutOfRangeException(nameof(channel));
         var socket = new ClientWebSocket();
         socket.Options.SetRequestHeader("Authorization", $"Bearer {session.AccessToken}");
-        var builder = new UriBuilder(_baseUri) { Scheme=_baseUri.Scheme=="https"?"wss":"ws", Path=$"/v1/sessions/{session.SessionId}/signal", Query="role=host" };
+        socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+        var builder = new UriBuilder(_baseUri) { Scheme=_baseUri.Scheme=="https"?"wss":"ws", Path=$"/v1/sessions/{session.SessionId}/signal", Query=$"role=host&channel={channel}" };
         try { await socket.ConnectAsync(builder.Uri, token); return socket; } catch { socket.Dispose(); throw; }
     }
 
