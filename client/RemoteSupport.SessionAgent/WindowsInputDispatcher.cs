@@ -9,6 +9,8 @@ namespace RemoteSupport.SessionAgent;
 public sealed class WindowsInputDispatcher : IDisposable
 {
     [ThreadStatic] private static int _lastSendInputError;
+    [ThreadStatic] private static int _lastSendFailureLogTick;
+    [ThreadStatic] private static string? _lastDispatchStage;
     private readonly ConsentStateMachine _consent;
     private readonly Guid _sessionId;
     private readonly object _rateGate = new();
@@ -76,11 +78,12 @@ public sealed class WindowsInputDispatcher : IDisposable
                     lastDesktop = currentDesktop;
                 }
                 _lastSendInputError = 0;
+                _lastDispatchStage = null;
                 work.Accepted = DispatchOnDesktop(work.Message);
                 work.ErrorCode = _lastSendInputError;
-                work.Stage = work.Accepted ? "sendinput-ok" :
+                work.Stage = _lastDispatchStage ?? (work.Accepted ? "sendinput-ok" :
                     work.ErrorCode == 5 ? "sendinput-access-denied" :
-                    work.ErrorCode == 0 ? "sendinput-blocked-by-uipi" : "sendinput-failed";
+                    work.ErrorCode == 0 ? "sendinput-blocked-by-uipi" : "sendinput-failed");
             }
             catch (Win32Exception ex)
             {
@@ -140,21 +143,23 @@ public sealed class WindowsInputDispatcher : IDisposable
         };
         if (flag == 0) return false;
         var point = ResolvePoint(message);
-        return SendInputs(MouseMoveInput(point), new Input
+        if (SendInputs(MouseMoveInput(point), new Input
         {
             Type = 0,
             Union = new InputUnion { Mouse = new MouseInput { Flags = flag } }
-        });
+        })) return true;
+        return SendLegacyMouse(point, flag, 0);
     }
 
     private bool SendWheel(InputMessage message)
     {
         var point = ResolvePoint(message);
-        return SendInputs(MouseMoveInput(point), new Input
+        if (SendInputs(MouseMoveInput(point), new Input
         {
             Type = 0,
             Union = new InputUnion { Mouse = new MouseInput { MouseData = unchecked((uint)message.Delta), Flags = 0x0800u } }
-        });
+        })) return true;
+        return SendLegacyMouse(point, 0x0800u, unchecked((uint)message.Delta));
     }
 
     private VirtualDesktopPoint ResolvePoint(InputMessage message)
@@ -166,7 +171,8 @@ public sealed class WindowsInputDispatcher : IDisposable
 
     private static bool MoveCursor(VirtualDesktopPoint point)
     {
-        return SendInputs(MouseMoveInput(point));
+        if (SendInputs(MouseMoveInput(point))) return true;
+        return SetLegacyCursorPosition(point);
     }
 
     private static Input MouseMoveInput(VirtualDesktopPoint point)
@@ -195,8 +201,38 @@ public sealed class WindowsInputDispatcher : IDisposable
             Type = 1,
             Union = new InputUnion { Keyboard = new KeyboardInput { VirtualKey = virtualKey, Flags = down ? 0u : 0x0002u } }
         })) return true;
+        var flags = (down ? 0u : 0x0002u) | (IsExtendedKey(virtualKey) ? 0x0001u : 0u);
+        keybd_event((byte)virtualKey, 0, flags, UIntPtr.Zero);
+        _lastDispatchStage = "legacy-keyboard-ok";
+        return true;
+    }
+
+    private static bool SendLegacyMouse(VirtualDesktopPoint point, uint flags, uint data)
+    {
+        if (!SetLegacyCursorPosition(point)) return false;
+        mouse_event(flags, 0, 0, data, UIntPtr.Zero);
+        _lastDispatchStage = "legacy-mouse-ok";
+        return true;
+    }
+
+    private static bool SetLegacyCursorPosition(VirtualDesktopPoint point)
+    {
+        SetLastError(0);
+        if (SetCursorPos(point.PixelX, point.PixelY))
+        {
+            _lastSendInputError = 0;
+            _lastDispatchStage = "legacy-cursor-ok";
+            return true;
+        }
+
+        _lastSendInputError = Marshal.GetLastWin32Error();
+        _lastDispatchStage = "legacy-cursor-failed";
+        LogInputFailure("SetCursorPos", 0, 1, _lastSendInputError);
         return false;
     }
+
+    private static bool IsExtendedKey(ushort key) => key is
+        0x21 or 0x22 or 0x23 or 0x24 or 0x25 or 0x26 or 0x27 or 0x28 or 0x2D or 0x2E or 0x6F or 0x90 or 0x91;
 
     private static bool SendInputs(params Input[] inputs)
     {
@@ -204,8 +240,16 @@ public sealed class WindowsInputDispatcher : IDisposable
         var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input)));
         if (sent == inputs.Length) return true;
         _lastSendInputError = Marshal.GetLastWin32Error();
-        AppDiagnostics.Write("SendInput failed. Sent=" + sent + "/" + inputs.Length + ", Win32Error=" + _lastSendInputError);
+        LogInputFailure("SendInput", sent, inputs.Length, _lastSendInputError);
         return false;
+    }
+
+    private static void LogInputFailure(string api, long sent, int expected, int error)
+    {
+        var now = Environment.TickCount;
+        if (_lastSendFailureLogTick != 0 && unchecked(now - _lastSendFailureLogTick) < 2000) return;
+        _lastSendFailureLogTick = now;
+        AppDiagnostics.Write(api + " failed. Sent=" + sent + "/" + expected + ", Win32Error=" + error);
     }
 
     internal static ushort MapKey(string? code)
@@ -229,6 +273,9 @@ public sealed class WindowsInputDispatcher : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extraInfo);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
     [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
 
     private sealed class InputWorkItem
