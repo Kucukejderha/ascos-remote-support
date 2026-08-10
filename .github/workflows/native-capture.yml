@@ -13,5 +13,5 @@ jobs:
       - run: cmake --build native/build --config Release
       - uses: actions/upload-artifact@v4
         with:
-          name: RotaLinkCaptureProbe-win-x64
-          path: native/build/Release/RotaLinkCaptureProbe.exe
+          name: RotaLink.NativeCapture-win-x64
+          path: native/build/Release/RotaLink.NativeCapture.exe

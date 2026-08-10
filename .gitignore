@@ -3,6 +3,8 @@
 **/obj/
 artifacts/
 work/
+.dotnet-home/
+.nuget-packages/
 
 # IDE and user-specific files
 .vs/

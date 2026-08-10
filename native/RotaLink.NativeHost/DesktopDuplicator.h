@@ -12,7 +12,7 @@ struct CapturedDesktopFrame final {
 
 class DesktopDuplicator final {
 public:
-    DesktopDuplicator();
+    explicit DesktopDuplicator(std::uint32_t outputIndex = 0);
     DesktopDuplicator(const DesktopDuplicator&) = delete;
     DesktopDuplicator& operator=(const DesktopDuplicator&) = delete;
     ~DesktopDuplicator();
@@ -22,10 +22,15 @@ public:
     [[nodiscard]] ID3D11Device* Device() const noexcept { return device_.Get(); }
     [[nodiscard]] ID3D11DeviceContext* Context() const noexcept { return context_.Get(); }
 private:
+    void AttachInputDesktop();
     void Initialize();
+    void CreateDuplication();
+    void Reinitialize();
+    std::uint32_t outputIndex_{};
     Microsoft::WRL::ComPtr<ID3D11Device> device_;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
     Microsoft::WRL::ComPtr<IDXGIOutputDuplication> duplication_;
     DXGI_OUTDUPL_DESC description_{};
     bool frameHeld_{};
+    HDESK inputDesktop_{};
 };

@@ -1,5 +1,7 @@
 # Rotaniz Remote Support — Faz 1
 
+> Service/SessionHelper/DXGI yeniden yapılandırmasının uygulama ve doğrulama durumu: [`docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md`](docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md)
+
 > Yeni düşük gecikmeli native mimari çalışması için [`docs/ARCHITECTURE-V1.tr.md`](docs/ARCHITECTURE-V1.tr.md) belgesine bakın. Mevcut v0.x istemci, v1 gerçek cihaz testlerini geçene kadar kararlı sürüm olarak korunur.
 
 [English documentation](README.md)

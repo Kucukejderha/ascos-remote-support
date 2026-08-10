@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Web.Script.Serialization;
@@ -15,6 +16,8 @@ public sealed class WindowsInputDispatcher : IDisposable
     private bool _inputLogged;
     private readonly BlockingCollection<InputWorkItem> _queue = new();
     private readonly Thread _desktopThread;
+    private readonly CoordinateTransformationEngine _coordinates = new();
+    private readonly SessionHelperInputClient _helperInput = new();
 
     public WindowsInputDispatcher(ConsentStateMachine consent, Guid sessionId)
     {
@@ -37,6 +40,9 @@ public sealed class WindowsInputDispatcher : IDisposable
             _inputLogged = true;
         }
 
+        var helperResult = _helperInput.TrySend(message);
+        if (helperResult.HasValue) return helperResult.Value;
+
         var work = new InputWorkItem(message);
         try { _queue.Add(work); }
         catch (InvalidOperationException) { return false; }
@@ -45,17 +51,43 @@ public sealed class WindowsInputDispatcher : IDisposable
 
     private void DesktopThreadMain()
     {
-        AppDiagnostics.Write("Input worker started in the application's interactive desktop.");
+        using var desktop = new InputDesktopContext();
+        string? lastDesktop = null;
+        AppDiagnostics.Write("Dynamic input-desktop worker started.");
         foreach (var work in _queue.GetConsumingEnumerable())
         {
-            work.Accepted = DispatchOnDesktop(work.Message);
-            work.Completed.Set();
+            try
+            {
+                // OpenInputDesktop is deliberately called for every command. UAC,
+                // unlock and Winlogon transitions can occur between two packets.
+                var currentDesktop = desktop.AttachToCurrentInputDesktop();
+                if (!string.Equals(lastDesktop, currentDesktop, StringComparison.Ordinal))
+                {
+                    AppDiagnostics.Write("Input worker attached to desktop '" + currentDesktop + "'.");
+                    lastDesktop = currentDesktop;
+                }
+                work.Accepted = DispatchOnDesktop(work.Message);
+            }
+            catch (Win32Exception ex)
+            {
+                AppDiagnostics.Write("Input desktop switch failed. Win32Error=" + ex.NativeErrorCode, ex);
+                work.Accepted = false;
+            }
+            catch (InvalidOperationException ex)
+            {
+                AppDiagnostics.Write("Input coordinate conversion failed.", ex);
+                work.Accepted = false;
+            }
+            finally
+            {
+                work.Completed.Set();
+            }
         }
     }
 
-    private static bool DispatchOnDesktop(InputMessage message) => message.Type switch
+    private bool DispatchOnDesktop(InputMessage message) => message.Type switch
         {
-            "move" => MoveCursor(message.X, message.Y),
+            "move" => MoveCursor(ResolvePoint(message)),
             "button" => SendButton(message),
             "wheel" when message.Delta is >= -1200 and <= 1200 => SendWheel(message),
             "key" => SendKey(message.Code, message.Down),
@@ -67,6 +99,7 @@ public sealed class WindowsInputDispatcher : IDisposable
         _queue.CompleteAdding();
         if (!_desktopThread.Join(TimeSpan.FromSeconds(2))) AppDiagnostics.Write("Input desktop worker did not stop in time.");
         _queue.Dispose();
+        _helperInput.Dispose();
     }
 
     private bool TryAcquireRatePermit()
@@ -79,7 +112,7 @@ public sealed class WindowsInputDispatcher : IDisposable
         }
     }
 
-    private static bool SendButton(InputMessage message)
+    private bool SendButton(InputMessage message)
     {
         var flag = (message.Button, message.Down) switch
         {
@@ -88,27 +121,32 @@ public sealed class WindowsInputDispatcher : IDisposable
             (2, true) => 0x0008u, (2, false) => 0x0010u,
             _ => 0u
         };
-        return flag != 0 && SendMouse(message.X, message.Y, flag, 0);
+        return flag != 0 && SendMouse(ResolvePoint(message), flag, 0);
     }
 
-    private static bool SendWheel(InputMessage message)
+    private bool SendWheel(InputMessage message)
     {
-        return SendMouse(message.X, message.Y, 0x0800u, unchecked((uint)message.Delta));
+        return SendMouse(ResolvePoint(message), 0x0800u, unchecked((uint)message.Delta));
     }
 
-    private static bool MoveCursor(int x, int y)
+    private VirtualDesktopPoint ResolvePoint(InputMessage message)
     {
-        if (x is < 0 or > 65535 || y is < 0 or > 65535) return false;
+        var normalizedX = message.NormalizedX ?? message.X / 65535d;
+        var normalizedY = message.NormalizedY ?? message.Y / 65535d;
+        return _coordinates.Transform(normalizedX, normalizedY);
+    }
+
+    private static bool MoveCursor(VirtualDesktopPoint point)
+    {
         return SendInputs(new Input
         {
             Type = 0,
-            Union = new InputUnion { Mouse = new MouseInput { X = x, Y = y, Flags = 0x8000u | 0x4000u | 0x0001u } }
+            Union = new InputUnion { Mouse = new MouseInput { X = point.AbsoluteX, Y = point.AbsoluteY, Flags = 0x8000u | 0x4000u | 0x0001u } }
         });
     }
 
-    private static bool SendMouse(int x, int y, uint action, uint data)
+    private static bool SendMouse(VirtualDesktopPoint point, uint action, uint data)
     {
-        if (x is < 0 or > 65535 || y is < 0 or > 65535) return false;
         return SendInputs(new Input
         {
             Type = 0,
@@ -116,8 +154,8 @@ public sealed class WindowsInputDispatcher : IDisposable
             {
                 Mouse = new MouseInput
                 {
-                    X = x,
-                    Y = y,
+                    X = point.AbsoluteX,
+                    Y = point.AbsoluteY,
                     MouseData = data,
                     Flags = 0x8000u | 0x4000u | 0x0001u | action
                 }
@@ -145,7 +183,7 @@ public sealed class WindowsInputDispatcher : IDisposable
         return false;
     }
 
-    private static ushort MapKey(string? code)
+    internal static ushort MapKey(string? code)
     {
         if (code is { Length: 4 } && code.StartsWith("Key", StringComparison.Ordinal) && code[3] is >= 'A' and <= 'Z') return code[3];
         if (code is { Length: 6 } && code.StartsWith("Digit", StringComparison.Ordinal) && code[5] is >= '0' and <= '9') return code[5];
@@ -181,6 +219,8 @@ internal sealed class InputMessage
     public string? Type { get; set; }
     public int X { get; set; }
     public int Y { get; set; }
+    public double? NormalizedX { get; set; }
+    public double? NormalizedY { get; set; }
     public int Button { get; set; }
     public bool Down { get; set; }
     public int Delta { get; set; }

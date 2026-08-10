@@ -54,6 +54,24 @@ internal static class RemoteSession
 
     private static async Task CaptureLoopAsync(ClientWebSocket socket, CancellationToken token)
     {
+        using var native = SessionHelperVideoClient.TryConnect();
+        if (native is not null)
+        {
+            var firstNativeFrame = true;
+            while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
+            {
+                var packet = await native.ReadWebSocketPacketAsync(token);
+                await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token);
+                if (firstNativeFrame)
+                {
+                    AppDiagnostics.Write("First DXGI/H.264 frame sent. Bytes=" + packet.Length + ".");
+                    firstNativeFrame = false;
+                }
+            }
+            return;
+        }
+
+        AppDiagnostics.Write("Privileged DXGI capture is unavailable; portable GDI fallback is active.");
         var encoder = new ScreenFrameEncoder();
         var nextKeyFrame = Environment.TickCount;
         var firstFrame = true;

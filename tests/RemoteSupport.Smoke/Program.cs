@@ -18,10 +18,22 @@ if (args is ["--native-server-only"])
     return;
 }
 
+if (args is ["--architecture-only"])
+{
+    await VerifyIpcAsync();
+    VerifyBinaryTransportProtocol();
+    VerifyCoordinateTransformation();
+    await VerifyLatestVideoQueueAsync();
+    Console.WriteLine("Service/helper protocol, coordinate and drop-frame checks passed.");
+    return;
+}
+
 var transportOnly = args.Contains("--transport-only", StringComparer.Ordinal);
 if (!transportOnly)
 {
     await VerifyIpcAsync();
+    VerifyBinaryTransportProtocol();
+    VerifyCoordinateTransformation();
     VerifyFrameEncoder();
     await VerifyLatestVideoQueueAsync();
     if (args is ["--codec-only"])
@@ -136,6 +148,31 @@ static async Task VerifyLatestVideoQueueAsync()
     var newest = await broker.ReadLatestVideoAsync("native-smoke", CancellationToken.None);
     if (newest.Length != 1 || newest[0] != 3)
         throw new InvalidOperationException("Native video queue did not discard stale frames.");
+}
+
+static void VerifyBinaryTransportProtocol()
+{
+    var input = new InputPacket(InputEventKind.Button, true, 42, 0.25, 0.75, 0, 0);
+    var inputBytes = new byte[InputPacketCodec.PacketBytes];
+    InputPacketCodec.Write(inputBytes, input);
+    if (!InputPacketCodec.TryRead(inputBytes, out var decodedInput) || decodedInput != input)
+        throw new InvalidOperationException("Binary input protocol round-trip failed.");
+
+    var video = new VideoPacketHeader(VideoCodec.H264AnnexB, true, 44, 1234567, 1920, 1080, 2048);
+    var videoBytes = new byte[VideoPacketCodec.HeaderBytes];
+    VideoPacketCodec.WriteHeader(videoBytes, video);
+    if (!VideoPacketCodec.TryReadHeader(videoBytes, out var decodedVideo) || decodedVideo != video)
+        throw new InvalidOperationException("Binary video protocol round-trip failed.");
+}
+
+static void VerifyCoordinateTransformation()
+{
+    if (!OperatingSystem.IsWindows()) return;
+    var engine = new CoordinateTransformationEngine();
+    var topLeft = engine.Transform(0, 0);
+    var bottomRight = engine.Transform(1, 1);
+    if (topLeft.AbsoluteX != 0 || topLeft.AbsoluteY != 0 || bottomRight.AbsoluteX != 65535 || bottomRight.AbsoluteY != 65535)
+        throw new InvalidOperationException("Virtual desktop absolute coordinate boundaries are invalid.");
 }
 
 static async Task VerifyDeviceIdentityAsync()

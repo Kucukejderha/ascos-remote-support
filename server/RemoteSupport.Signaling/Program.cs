@@ -112,7 +112,7 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
         {
             if (role == "host")
             {
-                var videoBuffer = new byte[1024 * 1024 + 64];
+                var videoBuffer = new byte[4 * 1024 * 1024 + 128];
                 while (socket.State == WebSocketState.Open)
                 {
                     var videoResult = await socket.ReceiveAsync(videoBuffer, context.RequestAborted);
