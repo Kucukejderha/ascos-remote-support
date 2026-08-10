@@ -37,6 +37,13 @@ app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSecond
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ascos-remote-support-signaling" }));
 app.MapGet("/operator", () => Results.Content(OperatorPage.Html, "text/html; charset=utf-8"));
+app.MapGet("/downloads/RotaLink.exe", (IWebHostEnvironment environment) =>
+{
+    var downloadPath = Path.Combine(environment.ContentRootPath, "downloads", "RotaLink.exe");
+    return File.Exists(downloadPath)
+        ? Results.File(downloadPath, "application/vnd.microsoft.portable-executable", "RotaLink.exe", enableRangeProcessing: true)
+        : Results.NotFound();
+});
 
 app.MapPost("/v1/devices", (RegisterDeviceRequest request, SecurityStore store) =>
 {

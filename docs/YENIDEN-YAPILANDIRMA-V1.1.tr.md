@@ -28,6 +28,9 @@ RotaLink.Service.exe (Session 0 / LocalSystem)
 - `SeAssignPrimaryTokenPrivilege` ve `SeIncreaseQuotaPrivilege` etkinleştirildikten sonra helper, `CreateProcessAsUser` ile `winsta0\default` üzerinde başlatılır.
 - Helper her input komutundan hemen önce `OpenInputDesktop` ve `SetThreadDesktop` çalıştırır. Bu işlem ayrı, penceresiz input thread’i üzerinde yapılır.
 - Portable istemci, kurulu helper bulunmadığında aynı dinamik desktop motorunu kendi işlemi içinde kullanır. Bu geri dönüş normal kullanıcı desktop’ı içindir; UAC secure desktop kontrolü SYSTEM helper gerektirir.
+- `v1.1.0-alpha.2` canlı tanısı, `Default` desktop seçildikten sonra `SendInput` çağrısının `ERROR_ACCESS_DENIED (5)` ile reddedildiğini doğruladı. Ağ, video, kontrol kanalı ve koordinat zinciri bu noktaya kadar çalışmaktadır.
+- `v1.1.0-alpha.3` portable EXE, Windows UAC üzerinden `requireAdministrator` ister. Onaylanan süreç yüksek bütünlük düzeyinde çalışır; kalıcı servis veya gözetimsiz erişim kurulmaz.
+- İstemci başlığında “Yönetici yetkili oturum” veya “Sınırlı kullanıcı oturumu” gösterilir. Böylece yanlış token ile yapılan test görsel olarak anlaşılır.
 
 ## Faz 2 — DXGI ve Shared Memory
 
@@ -65,7 +68,8 @@ RotaLink.Service.exe (Session 0 / LocalSystem)
 - `RotaLink.exe`, `RotaLink.Service`, `RotaLink.SessionHelper` ve signaling projeleri sıfır C# derleme hatasıyla oluşturuldu.
 - Binary input/video round-trip, sanal masaüstü sınırları ve video `DropOldest` davranışı smoke testinden geçti.
 - Canlı signaling container’ı yeniden oluşturuldu ve health endpoint’i doğrulandı.
-- Portable `v1.1.0-alpha.1` rotaniz.com’a yüklendi ve uzak SHA-256 doğrulaması yapıldı.
+- Portable `v1.1.0-alpha.3` sıfır C# derleme hatasıyla üretildi; gömülü manifestte `requireAdministrator` ve Windows 10/11 uyumluluk kimliği doğrulandı.
+- Kontrol sunucusundaki indirme dosyası `132.608` bayt ve `863b7dd913445d382c90d1a585f888aec5c6d14289d3d588d7d53934f82aa271` SHA-256 değeriyle uzaktan doğrulandı.
 - Bu geliştirme makinesinde Windows SDK/C++ workload kurulu olmadığı için native EXE burada oluşturulamadı. Native kaynakların Windows SDK içeren CI runner’da derlenmesi ve gerçek iki monitör/UAC test matrisinden geçirilmesi, SYSTEM paketini müşteriye açmadan önce zorunludur.
 
 ## Güvenlik Kuralları

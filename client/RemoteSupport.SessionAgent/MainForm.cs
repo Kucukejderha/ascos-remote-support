@@ -21,7 +21,7 @@ public sealed class MainForm : Form
     private ECDsaCng? _identity;
     private bool _closing;
 
-    public MainForm(string? serverAddress)
+    public MainForm(string? serverAddress, bool elevated)
     {
         _server = new Uri(serverAddress ?? "https://45.87.173.201.nip.io");
         Text = "Rotaniz Remote Support — RotaLink";
@@ -34,7 +34,16 @@ public sealed class MainForm : Form
 
         var header = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = Navy };
         header.Controls.Add(new Label { Text = "RotaLink", ForeColor = Color.White, Font = new Font("Segoe UI", 25F, FontStyle.Bold), AutoSize = true, Location = new Point(28, 18) });
-        header.Controls.Add(new Label { Text = "Rotaniz Remote Support • Kullanıcı oturumu", ForeColor = Color.FromArgb(169, 189, 203), Font = new Font("Segoe UI", 10F), AutoSize = true, Location = new Point(31, 66) });
+        header.Controls.Add(new Label
+        {
+            Text = elevated
+                ? "Rotaniz Remote Support • Yönetici yetkili oturum"
+                : "Rotaniz Remote Support • Sınırlı kullanıcı oturumu",
+            ForeColor = elevated ? Color.FromArgb(92, 214, 164) : Color.FromArgb(244, 179, 80),
+            Font = new Font("Segoe UI", 10F),
+            AutoSize = true,
+            Location = new Point(31, 66)
+        });
         Controls.Add(header);
 
         var card = new Panel { Location = new Point(28, 130), Size = new Size(504, 196), BackColor = Color.White, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };

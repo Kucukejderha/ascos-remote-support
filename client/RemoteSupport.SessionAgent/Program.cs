@@ -19,12 +19,13 @@ internal static class Program
             ?? "unknown";
         string identityName;
         using (var currentIdentity = WindowsIdentity.GetCurrent()) identityName = currentIdentity.Name;
+        var elevated = IsProcessElevated();
         AppDiagnostics.Write("RotaLink v" + version + " started in the interactive user session on " + Environment.OSVersion +
             ". Session=" + Process.GetCurrentProcess().SessionId + ", Identity=" + identityName +
-            ", Elevated=" + IsProcessElevated() + ", Bitness=" + (Environment.Is64BitProcess ? "x64" : "x86") + ".");
+            ", Elevated=" + elevated + ", Bitness=" + (Environment.Is64BitProcess ? "x64" : "x86") + ".");
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new MainForm(args.FirstOrDefault()));
+        Application.Run(new MainForm(args.FirstOrDefault(), elevated));
     }
 
     private static void EnablePhysicalPixelCoordinates()

@@ -5,4 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
+  <ItemGroup>
+    <Content Include="downloads\RotaLink.exe" CopyToOutputDirectory="PreserveNewest"
+             Condition="Exists('downloads\RotaLink.exe')" />
+  </ItemGroup>
 </Project>
