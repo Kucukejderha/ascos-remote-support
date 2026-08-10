@@ -98,7 +98,7 @@ internal static class RemoteSession
     private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, CancellationToken token)
     {
         var buffer = new byte[4096];
-        var resultReported = false;
+        string? lastReportedResult = null;
         while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
         {
             var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
@@ -106,12 +106,13 @@ internal static class RemoteSession
             if (result.MessageType == WebSocketMessageType.Text && result.EndOfMessage)
             {
                 var accepted = input.TryDispatch(buffer, result.Count);
-                if (!resultReported)
+                var acknowledgementText = "{\"type\":\"control-result\",\"ok\":" + (accepted ? "true" : "false") + "}";
+                if (!accepted || !string.Equals(acknowledgementText, lastReportedResult, StringComparison.Ordinal))
                 {
-                    var acknowledgement = Encoding.UTF8.GetBytes("{\"type\":\"control-result\",\"ok\":" + (accepted ? "true" : "false") + "}");
+                    var acknowledgement = Encoding.UTF8.GetBytes(acknowledgementText);
                     await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
-                    AppDiagnostics.Write("First remote input result reported. Accepted=" + accepted);
-                    resultReported = true;
+                    AppDiagnostics.Write("Remote input result reported. Accepted=" + accepted);
+                    lastReportedResult = acknowledgementText;
                 }
             }
         }

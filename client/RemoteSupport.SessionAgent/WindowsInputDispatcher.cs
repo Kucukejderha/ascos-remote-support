@@ -109,9 +109,20 @@ public sealed class WindowsInputDispatcher : IDisposable
     private static bool SendMouse(int x, int y, uint action, uint data)
     {
         if (x is < 0 or > 65535 || y is < 0 or > 65535) return false;
-        return SendInputs(
-            new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { X = x, Y = y, Flags = 0x8000u | 0x4000u | 0x0001u } } },
-            new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { MouseData = data, Flags = action } } });
+        return SendInputs(new Input
+        {
+            Type = 0,
+            Union = new InputUnion
+            {
+                Mouse = new MouseInput
+                {
+                    X = x,
+                    Y = y,
+                    MouseData = data,
+                    Flags = 0x8000u | 0x4000u | 0x0001u | action
+                }
+            }
+        });
     }
 
     private static bool SendKey(string? code, bool down)
