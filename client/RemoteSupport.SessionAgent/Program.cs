@@ -13,6 +13,13 @@ internal static class Program
     private static void Main(string[] args)
     {
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        using var singleInstance = SingleInstanceGuard.TryAcquire();
+        if (singleInstance is null)
+        {
+            AppDiagnostics.Write("Second RotaLink launch rejected; activating the existing window.");
+            SingleInstanceGuard.ActivateExistingWindow();
+            return;
+        }
         EnablePhysicalPixelCoordinates();
         var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? typeof(Program).Assembly.GetName().Version?.ToString()

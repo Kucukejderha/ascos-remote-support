@@ -19,12 +19,12 @@ Son doğrulanan yayın:
 - Dosya boyutu: `132.096` bayt
 - SHA-256: `08ce7a64b57e7cbebb645e45b38142da6ddf1a01bb7c56a0ed128f57a6bcc583`
 
-Yetkili input düzeltmesini, alternatif Win32 input motorunu ve tam sürüm etiketi düzeltmesini içeren `1.1.0-alpha.5`, cPanel oturumu yenilenene kadar
+Yetkili input düzeltmesini, alternatif Win32 input motorunu, tam sürüm etiketini ve tek örnek kilidini içeren `1.1.0-alpha.6`, cPanel oturumu yenilenene kadar
 kontrol sunucusundaki `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
-adresinden yayınlanır. Bu dosyanın boyutu `133.632` bayt, SHA-256 özeti
-`78f3727dd3e612dd4f99b7f8fbf35847de95cfc9ad820ba43c12e2c38cd9780b` değeridir.
+adresinden yayınlanır. Bu dosyanın boyutu `135.168` bayt, SHA-256 özeti
+`82c7c638f0fdd6d4ed0064a7c2499005029fa5cb0dec5f28b322fbdf1d0f8faa` değeridir.
 Önbellek veya eski İndirilenler dosyası karışıklığını önlemek için aynı derleme ayrıca
-`https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.5.exe`
+`https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.6.exe`
 adıyla ve `no-store` yanıt başlıklarıyla sunulur.
 
 İstemci bağlantı tanılama günlüğünü `%LocalAppData%\RotaLink\rotalink.log` dosyasına yazar.

@@ -39,8 +39,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ascos-rem
 app.MapGet("/operator", () => Results.Content(OperatorPage.Html, "text/html; charset=utf-8"));
 app.MapGet("/downloads/RotaLink.exe", (HttpContext context, IWebHostEnvironment environment) =>
     CreateClientDownload(context, environment, "RotaLink.exe"));
-app.MapGet("/downloads/RotaLink-v1.1.0-alpha.5.exe", (HttpContext context, IWebHostEnvironment environment) =>
-    CreateClientDownload(context, environment, "RotaLink-v1.1.0-alpha.5.exe"));
+app.MapGet("/downloads/RotaLink-v1.1.0-alpha.6.exe", (HttpContext context, IWebHostEnvironment environment) =>
+    CreateClientDownload(context, environment, "RotaLink-v1.1.0-alpha.6.exe"));
 
 app.MapPost("/v1/devices", (RegisterDeviceRequest request, SecurityStore store) =>
 {
