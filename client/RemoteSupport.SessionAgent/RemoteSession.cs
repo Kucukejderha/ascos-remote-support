@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Net.WebSockets;
 using System.Text;
+using System.Web.Script.Serialization;
 
 namespace RemoteSupport.SessionAgent;
 
@@ -117,19 +118,30 @@ internal static class RemoteSession
     {
         var buffer = new byte[4096];
         string? lastReportedResult = null;
+        var serializer = new JavaScriptSerializer();
         while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
         {
             var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
             if (result.MessageType == WebSocketMessageType.Close) return;
             if (result.MessageType == WebSocketMessageType.Text && result.EndOfMessage)
             {
-                var accepted = input.TryDispatch(buffer, result.Count);
-                var acknowledgementText = "{\"type\":\"control-result\",\"ok\":" + (accepted ? "true" : "false") + "}";
-                if (!accepted || !string.Equals(acknowledgementText, lastReportedResult, StringComparison.Ordinal))
+                var report = input.TryDispatchDetailed(buffer, result.Count);
+                var acknowledgementText = serializer.Serialize(new
+                {
+                    type = "control-result",
+                    ok = report.Accepted,
+                    stage = report.Stage,
+                    error = report.ErrorCode,
+                    desktop = report.Desktop,
+                    eventType = report.EventType
+                });
+                if (!report.Accepted || !string.Equals(acknowledgementText, lastReportedResult, StringComparison.Ordinal))
                 {
                     var acknowledgement = Encoding.UTF8.GetBytes(acknowledgementText);
                     await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
-                    AppDiagnostics.Write("Remote input result reported. Accepted=" + accepted);
+                    AppDiagnostics.Write("Remote input result reported. Accepted=" + report.Accepted +
+                        ", Stage=" + report.Stage + ", Error=" + report.ErrorCode +
+                        ", Desktop=" + report.Desktop + ", Event=" + report.EventType);
                     lastReportedResult = acknowledgementText;
                 }
             }

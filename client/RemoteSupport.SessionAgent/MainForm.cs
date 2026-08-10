@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace RemoteSupport.SessionAgent;
 
@@ -60,9 +61,13 @@ public sealed class MainForm : Form
         card.Controls.Add(new Label { Text = "Bu pencere açık kaldığı sürece destek bağlantısı aktiftir.", ForeColor = Color.FromArgb(70, 96, 117), AutoSize = true, Location = new Point(24, 151) });
         Controls.Add(card);
 
+        var informationalVersion = typeof(MainForm).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? typeof(MainForm).Assembly.GetName().Version?.ToString()
+            ?? "unknown";
         Controls.Add(new Label
         {
-            Text = "v1.0.0 alpha 2",
+            Text = "v" + informationalVersion.Replace("-", " "),
             ForeColor = Color.FromArgb(99, 120, 138),
             AutoSize = true,
             Anchor = AnchorStyles.Right | AnchorStyles.Bottom,

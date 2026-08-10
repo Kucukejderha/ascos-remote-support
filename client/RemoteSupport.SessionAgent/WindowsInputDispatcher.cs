@@ -8,6 +8,7 @@ namespace RemoteSupport.SessionAgent;
 
 public sealed class WindowsInputDispatcher : IDisposable
 {
+    [ThreadStatic] private static int _lastSendInputError;
     private readonly ConsentStateMachine _consent;
     private readonly Guid _sessionId;
     private readonly object _rateGate = new();
@@ -26,13 +27,17 @@ public sealed class WindowsInputDispatcher : IDisposable
         _desktopThread.Start();
     }
 
-    public bool TryDispatch(byte[] json, int length)
+    public bool TryDispatch(byte[] json, int length) => TryDispatchDetailed(json, length).Accepted;
+
+    public InputDispatchReport TryDispatchDetailed(byte[] json, int length)
     {
-        if (!_consent.IsControlAllowed(_sessionId) || length <= 0 || length > 4096 || !TryAcquireRatePermit()) return false;
+        if (!_consent.IsControlAllowed(_sessionId)) return new InputDispatchReport(false, "consent-denied", 0, null, null);
+        if (length <= 0 || length > 4096) return new InputDispatchReport(false, "packet-size-invalid", 0, null, null);
+        if (!TryAcquireRatePermit()) return new InputDispatchReport(false, "rate-limited", 0, null, null);
         InputMessage? message;
         try { message = new JavaScriptSerializer().Deserialize<InputMessage>(Encoding.UTF8.GetString(json, 0, length)); }
-        catch (ArgumentException) { return false; }
-        if (message is null) return false;
+        catch (ArgumentException) { return new InputDispatchReport(false, "json-invalid", 0, null, null); }
+        if (message is null) return new InputDispatchReport(false, "message-empty", 0, null, null);
 
         if (!_inputLogged)
         {
@@ -41,12 +46,15 @@ public sealed class WindowsInputDispatcher : IDisposable
         }
 
         var helperResult = _helperInput.TrySend(message);
-        if (helperResult.HasValue) return helperResult.Value;
+        if (helperResult.HasValue)
+            return new InputDispatchReport(helperResult.Value, helperResult.Value ? "system-helper-ok" : "system-helper-rejected", 0, "SYSTEM helper", message.Type);
 
         var work = new InputWorkItem(message);
         try { _queue.Add(work); }
-        catch (InvalidOperationException) { return false; }
-        return work.Completed.Wait(TimeSpan.FromSeconds(2)) && work.Accepted;
+        catch (InvalidOperationException) { return new InputDispatchReport(false, "input-worker-stopped", 0, null, message.Type); }
+        if (!work.Completed.Wait(TimeSpan.FromSeconds(2)))
+            return new InputDispatchReport(false, "input-worker-timeout", 0, null, message.Type);
+        return new InputDispatchReport(work.Accepted, work.Stage, work.ErrorCode, work.Desktop, message.Type);
     }
 
     private void DesktopThreadMain()
@@ -61,22 +69,31 @@ public sealed class WindowsInputDispatcher : IDisposable
                 // OpenInputDesktop is deliberately called for every command. UAC,
                 // unlock and Winlogon transitions can occur between two packets.
                 var currentDesktop = desktop.AttachToCurrentInputDesktop();
+                work.Desktop = currentDesktop;
                 if (!string.Equals(lastDesktop, currentDesktop, StringComparison.Ordinal))
                 {
                     AppDiagnostics.Write("Input worker attached to desktop '" + currentDesktop + "'.");
                     lastDesktop = currentDesktop;
                 }
+                _lastSendInputError = 0;
                 work.Accepted = DispatchOnDesktop(work.Message);
+                work.ErrorCode = _lastSendInputError;
+                work.Stage = work.Accepted ? "sendinput-ok" :
+                    work.ErrorCode == 5 ? "sendinput-access-denied" :
+                    work.ErrorCode == 0 ? "sendinput-blocked-by-uipi" : "sendinput-failed";
             }
             catch (Win32Exception ex)
             {
                 AppDiagnostics.Write("Input desktop switch failed. Win32Error=" + ex.NativeErrorCode, ex);
                 work.Accepted = false;
+                work.ErrorCode = ex.NativeErrorCode;
+                work.Stage = "desktop-switch-failed";
             }
             catch (InvalidOperationException ex)
             {
                 AppDiagnostics.Write("Input coordinate conversion failed.", ex);
                 work.Accepted = false;
+                work.Stage = "coordinate-failed";
             }
             finally
             {
@@ -121,12 +138,23 @@ public sealed class WindowsInputDispatcher : IDisposable
             (2, true) => 0x0008u, (2, false) => 0x0010u,
             _ => 0u
         };
-        return flag != 0 && SendMouse(ResolvePoint(message), flag, 0);
+        if (flag == 0) return false;
+        var point = ResolvePoint(message);
+        return SendInputs(MouseMoveInput(point), new Input
+        {
+            Type = 0,
+            Union = new InputUnion { Mouse = new MouseInput { Flags = flag } }
+        });
     }
 
     private bool SendWheel(InputMessage message)
     {
-        return SendMouse(ResolvePoint(message), 0x0800u, unchecked((uint)message.Delta));
+        var point = ResolvePoint(message);
+        return SendInputs(MouseMoveInput(point), new Input
+        {
+            Type = 0,
+            Union = new InputUnion { Mouse = new MouseInput { MouseData = unchecked((uint)message.Delta), Flags = 0x0800u } }
+        });
     }
 
     private VirtualDesktopPoint ResolvePoint(InputMessage message)
@@ -138,16 +166,12 @@ public sealed class WindowsInputDispatcher : IDisposable
 
     private static bool MoveCursor(VirtualDesktopPoint point)
     {
-        return SendInputs(new Input
-        {
-            Type = 0,
-            Union = new InputUnion { Mouse = new MouseInput { X = point.AbsoluteX, Y = point.AbsoluteY, Flags = 0x8000u | 0x4000u | 0x0001u } }
-        });
+        return SendInputs(MouseMoveInput(point));
     }
 
-    private static bool SendMouse(VirtualDesktopPoint point, uint action, uint data)
+    private static Input MouseMoveInput(VirtualDesktopPoint point)
     {
-        return SendInputs(new Input
+        return new Input
         {
             Type = 0,
             Union = new InputUnion
@@ -156,11 +180,10 @@ public sealed class WindowsInputDispatcher : IDisposable
                 {
                     X = point.AbsoluteX,
                     Y = point.AbsoluteY,
-                    MouseData = data,
-                    Flags = 0x8000u | 0x4000u | 0x0001u | action
+                    Flags = 0x8000u | 0x4000u | 0x0001u
                 }
             }
-        });
+        };
     }
 
     private static bool SendKey(string? code, bool down)
@@ -177,9 +200,11 @@ public sealed class WindowsInputDispatcher : IDisposable
 
     private static bool SendInputs(params Input[] inputs)
     {
+        SetLastError(0);
         var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input)));
         if (sent == inputs.Length) return true;
-        AppDiagnostics.Write("SendInput failed. Sent=" + sent + "/" + inputs.Length + ", Win32Error=" + Marshal.GetLastWin32Error());
+        _lastSendInputError = Marshal.GetLastWin32Error();
+        AppDiagnostics.Write("SendInput failed. Sent=" + sent + "/" + inputs.Length + ", Win32Error=" + _lastSendInputError);
         return false;
     }
 
@@ -204,6 +229,7 @@ public sealed class WindowsInputDispatcher : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
+    [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
 
     private sealed class InputWorkItem
     {
@@ -211,7 +237,23 @@ public sealed class WindowsInputDispatcher : IDisposable
         public InputMessage Message { get; }
         public ManualResetEventSlim Completed { get; } = new(false);
         public bool Accepted { get; set; }
+        public string Stage { get; set; } = "not-dispatched";
+        public int ErrorCode { get; set; }
+        public string? Desktop { get; set; }
     }
+}
+
+public sealed class InputDispatchReport
+{
+    public InputDispatchReport(bool accepted, string stage, int errorCode, string? desktop, string? eventType)
+    {
+        Accepted = accepted; Stage = stage; ErrorCode = errorCode; Desktop = desktop; EventType = eventType;
+    }
+    public bool Accepted { get; }
+    public string Stage { get; }
+    public int ErrorCode { get; }
+    public string? Desktop { get; }
+    public string? EventType { get; }
 }
 
 internal sealed class InputMessage
