@@ -23,5 +23,8 @@ Yetkili input düzeltmesini, alternatif Win32 input motorunu ve tam sürüm etik
 kontrol sunucusundaki `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
 adresinden yayınlanır. Bu dosyanın boyutu `133.632` bayt, SHA-256 özeti
 `78f3727dd3e612dd4f99b7f8fbf35847de95cfc9ad820ba43c12e2c38cd9780b` değeridir.
+Önbellek veya eski İndirilenler dosyası karışıklığını önlemek için aynı derleme ayrıca
+`https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.5.exe`
+adıyla ve `no-store` yanıt başlıklarıyla sunulur.
 
 İstemci bağlantı tanılama günlüğünü `%LocalAppData%\RotaLink\rotalink.log` dosyasına yazar.

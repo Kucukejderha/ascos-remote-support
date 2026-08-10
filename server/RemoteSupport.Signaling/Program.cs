@@ -37,13 +37,10 @@ app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSecond
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ascos-remote-support-signaling" }));
 app.MapGet("/operator", () => Results.Content(OperatorPage.Html, "text/html; charset=utf-8"));
-app.MapGet("/downloads/RotaLink.exe", (IWebHostEnvironment environment) =>
-{
-    var downloadPath = Path.Combine(environment.ContentRootPath, "downloads", "RotaLink.exe");
-    return File.Exists(downloadPath)
-        ? Results.File(downloadPath, "application/vnd.microsoft.portable-executable", "RotaLink.exe", enableRangeProcessing: true)
-        : Results.NotFound();
-});
+app.MapGet("/downloads/RotaLink.exe", (HttpContext context, IWebHostEnvironment environment) =>
+    CreateClientDownload(context, environment, "RotaLink.exe"));
+app.MapGet("/downloads/RotaLink-v1.1.0-alpha.5.exe", (HttpContext context, IWebHostEnvironment environment) =>
+    CreateClientDownload(context, environment, "RotaLink-v1.1.0-alpha.5.exe"));
 
 app.MapPost("/v1/devices", (RegisterDeviceRequest request, SecurityStore store) =>
 {
@@ -185,5 +182,15 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
 });
 
 app.Run();
+
+static IResult CreateClientDownload(HttpContext context, IWebHostEnvironment environment, string downloadName)
+{
+    var downloadPath = Path.Combine(environment.ContentRootPath, "downloads", "RotaLink.exe");
+    if (!File.Exists(downloadPath)) return Results.NotFound();
+    context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+    context.Response.Headers.Pragma = "no-cache";
+    context.Response.Headers.Expires = "0";
+    return Results.File(downloadPath, "application/vnd.microsoft.portable-executable", downloadName, enableRangeProcessing: true);
+}
 
 public partial class Program;
