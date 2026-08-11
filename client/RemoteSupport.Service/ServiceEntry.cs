@@ -5,7 +5,10 @@ namespace RemoteSupport.Service;
 
 internal static class ServiceEntry
 {
-    private const string ServiceName = "RotaLinkRemoteSupport";
+    // This name must exactly match the name passed to CreateService by the
+    // portable launcher. SCM rejects a service process whose dispatch-table
+    // name differs from its registered service name (ERROR_SERVICE_NOT_IN_EXE).
+    private const string ServiceName = "RotaLinkInputRuntime";
     private const uint ServiceWin32OwnProcess = 0x10;
     private const uint ServiceStartPending = 2;
     private const uint ServiceStopPending = 3;

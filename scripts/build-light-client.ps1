@@ -4,15 +4,19 @@ $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root 'client\RemoteSupport.SessionAgent\RemoteSupport.SessionAgent.csproj'
 $serviceProject = Join-Path $root 'client\RemoteSupport.Service\RemoteSupport.Service.csproj'
 $helperProject = Join-Path $root 'client\RotaLink.SessionHelper\RotaLink.SessionHelper.csproj'
+$nugetConfig = Join-Path $root 'NuGet.Config'
+$buildAppData = Join-Path $root 'work\build-appdata'
+New-Item -ItemType Directory -Force -Path (Join-Path $buildAppData 'NuGet') | Out-Null
+$env:APPDATA = $buildAppData
 $packages = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $env:USERPROFILE '.nuget\packages' }
 
 foreach ($runtimeProject in @($serviceProject, $helperProject)) {
-    dotnet restore $runtimeProject --source 'https://api.nuget.org/v3/index.json'
+    dotnet restore $runtimeProject --configfile $nugetConfig -p:NuGetAudit=false
     if ($LASTEXITCODE -ne 0) { throw "Runtime restore failed: $runtimeProject" }
     dotnet build $runtimeProject -c $Configuration --no-restore
     if ($LASTEXITCODE -ne 0) { throw "Runtime build failed: $runtimeProject" }
 }
-dotnet restore $project --source 'https://api.nuget.org/v3/index.json'
+dotnet restore $project --configfile $nugetConfig -p:NuGetAudit=false
 if ($LASTEXITCODE -ne 0) { throw 'RotaLink restore failed.' }
 dotnet build $project -c $Configuration --no-restore
 if ($LASTEXITCODE -ne 0) { throw 'RotaLink build failed.' }

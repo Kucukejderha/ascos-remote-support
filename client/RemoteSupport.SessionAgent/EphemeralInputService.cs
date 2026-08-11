@@ -18,6 +18,9 @@ internal sealed class EphemeralInputService : IDisposable
     private const uint ServiceDemandStart = 0x00000003;
     private const uint ServiceErrorNormal = 0x00000001;
     private const uint ServiceControlStop = 0x00000001;
+    private const uint ServiceStopped = 0x00000001;
+    private const uint ServiceStartPending = 0x00000002;
+    private const uint ServiceRunning = 0x00000004;
     private readonly SafeServiceHandle _manager;
     private readonly SafeServiceHandle _service;
     private readonly string _directory;
@@ -43,7 +46,7 @@ internal sealed class EphemeralInputService : IDisposable
             }
 
             var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "RotaLink", "SessionRuntime", "1.1.0-alpha.7");
+                "RotaLink", "SessionRuntime", "1.1.0-alpha.8");
             Directory.CreateDirectory(directory);
             var servicePath = Path.Combine(directory, "RotaLink.Service.exe");
             var helperPath = Path.Combine(directory, "RotaLink.SessionHelper.exe");
@@ -66,7 +69,8 @@ internal sealed class EphemeralInputService : IDisposable
                     service.Dispose();
                     throw new Win32Exception(error, "StartService failed.");
                 }
-                AppDiagnostics.Write("Temporary SYSTEM input service started; SessionHelper IPC will become available shortly.");
+                WaitUntilRunning(service);
+                AppDiagnostics.Write("Temporary SYSTEM input service is RUNNING; SessionHelper IPC will become available shortly.");
                 return new EphemeralInputService(manager, service, directory);
             }
             catch
@@ -113,6 +117,26 @@ internal sealed class EphemeralInputService : IDisposable
         {
             var error = Marshal.GetLastWin32Error();
             if (error != 1072) throw new Win32Exception(error, "DeleteService failed.");
+        }
+    }
+
+    private static void WaitUntilRunning(SafeServiceHandle service)
+    {
+        var deadline = Environment.TickCount + 10000;
+        var status = new ServiceStatus();
+        while (true)
+        {
+            if (!QueryServiceStatus(service, ref status))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "QueryServiceStatus failed while starting input runtime.");
+            if (status.CurrentState == ServiceRunning) return;
+            if (status.CurrentState == ServiceStopped)
+                throw new Win32Exception(unchecked((int)status.Win32ExitCode),
+                    "Input runtime stopped during startup. ServiceSpecificExitCode=" + status.ServiceSpecificExitCode + ".");
+            if (status.CurrentState != ServiceStartPending)
+                throw new InvalidOperationException("Input runtime entered unexpected service state " + status.CurrentState + ".");
+            if (unchecked(Environment.TickCount - deadline) >= 0)
+                throw new TimeoutException("Input runtime did not reach RUNNING state within 10 seconds.");
+            Thread.Sleep(100);
         }
     }
 
