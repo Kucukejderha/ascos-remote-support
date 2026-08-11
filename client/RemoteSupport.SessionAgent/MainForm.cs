@@ -21,7 +21,7 @@ public sealed class MainForm : Form
     private ECDsaCng? _identity;
     private bool _closing;
 
-    public MainForm(string? serverAddress, bool elevated)
+    public MainForm(string? serverAddress, bool elevated, bool privilegedInputReady)
     {
         _server = new Uri(serverAddress ?? "https://45.87.173.201.nip.io");
         Text = "Rotaniz Remote Support — RotaLink";
@@ -36,10 +36,12 @@ public sealed class MainForm : Form
         header.Controls.Add(new Label { Text = "RotaLink", ForeColor = Color.White, Font = new Font("Segoe UI", 25F, FontStyle.Bold), AutoSize = true, Location = new Point(28, 18) });
         header.Controls.Add(new Label
         {
-            Text = elevated
-                ? "Rotaniz Remote Support • Yönetici yetkili oturum"
-                : "Rotaniz Remote Support • Sınırlı kullanıcı oturumu",
-            ForeColor = elevated ? Color.FromArgb(92, 214, 164) : Color.FromArgb(244, 179, 80),
+            Text = privilegedInputReady
+                ? "Rotaniz Remote Support • SYSTEM kontrol motoru hazır"
+                : elevated
+                    ? "Rotaniz Remote Support • Kontrol motoru başlatılamadı"
+                    : "Rotaniz Remote Support • Sınırlı kullanıcı oturumu",
+            ForeColor = privilegedInputReady ? Color.FromArgb(92, 214, 164) : Color.FromArgb(244, 179, 80),
             Font = new Font("Segoe UI", 10F),
             AutoSize = true,
             Location = new Point(31, 66)
@@ -74,26 +76,50 @@ public sealed class MainForm : Form
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? typeof(MainForm).Assembly.GetName().Version?.ToString()
             ?? "unknown";
-        Controls.Add(new Label
+        var footer = new TableLayoutPanel
         {
-            Text = "v" + informationalVersion.Replace("-", " "),
-            ForeColor = Color.FromArgb(99, 120, 138),
-            AutoSize = false,
-            TextAlign = ContentAlignment.MiddleRight,
-            Anchor = AnchorStyles.Right | AnchorStyles.Bottom,
-            Location = new Point(330, 342),
-            Size = new Size(202, 26)
-        });
+            Dock = DockStyle.Bottom,
+            Height = 44,
+            BackColor = BackColor,
+            Padding = new Padding(28, 4, 28, 4),
+            ColumnCount = 2,
+            RowCount = 1
+        };
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var diagnostics = new LinkLabel
         {
-            Text = "Tanılama günlüğü",
-            AutoSize = true,
-            Anchor = AnchorStyles.Left | AnchorStyles.Bottom,
-            Location = new Point(28, 350),
+            Text = "Tanılama günlüğü (tümü)",
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
             LinkColor = Color.FromArgb(70, 96, 117)
         };
-        diagnostics.Click += (_, _) => Process.Start("explorer.exe", "/select,\"" + AppDiagnostics.LogPath + "\"");
-        Controls.Add(diagnostics);
+        diagnostics.Click += (_, _) =>
+        {
+            try
+            {
+                var bundlePath = AppDiagnostics.CreateSupportBundle();
+                Process.Start("explorer.exe", "/select,\"" + bundlePath + "\"");
+            }
+            catch (Exception exception)
+            {
+                AppDiagnostics.Write("Combined diagnostics could not be created.", exception);
+                MessageBox.Show(this, "Tanılama dosyası oluşturulamadı: " + exception.Message,
+                    "RotaLink", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
+        footer.Controls.Add(diagnostics, 0, 0);
+        footer.Controls.Add(new Label
+        {
+            Text = "v" + informationalVersion,
+            ForeColor = Color.FromArgb(99, 120, 138),
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight
+        }, 1, 0);
+        Controls.Add(footer);
 
         Shown += async (_, _) => await PrepareSessionAsync();
         FormClosing += (_, _) =>

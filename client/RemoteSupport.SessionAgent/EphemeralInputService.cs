@@ -7,6 +7,7 @@ namespace RemoteSupport.SessionAgent;
 
 internal sealed class EphemeralInputService : IDisposable
 {
+    private static int _isRunning;
     private const string ServiceName = "RotaLinkInputRuntime";
     private const uint ScManagerConnect = 0x0001;
     private const uint ScManagerCreateService = 0x0002;
@@ -25,6 +26,8 @@ internal sealed class EphemeralInputService : IDisposable
     private readonly SafeServiceHandle _service;
     private readonly string _directory;
     private bool _disposed;
+
+    public static bool IsRunning => Volatile.Read(ref _isRunning) != 0;
 
     private EphemeralInputService(SafeServiceHandle manager, SafeServiceHandle service, string directory)
     {
@@ -46,7 +49,7 @@ internal sealed class EphemeralInputService : IDisposable
             }
 
             var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "RotaLink", "SessionRuntime", "1.1.0-alpha.8");
+                "RotaLink", "SessionRuntime", "1.1.0-alpha.9");
             Directory.CreateDirectory(directory);
             var servicePath = Path.Combine(directory, "RotaLink.Service.exe");
             var helperPath = Path.Combine(directory, "RotaLink.SessionHelper.exe");
@@ -70,6 +73,7 @@ internal sealed class EphemeralInputService : IDisposable
                     throw new Win32Exception(error, "StartService failed.");
                 }
                 WaitUntilRunning(service);
+                Volatile.Write(ref _isRunning, 1);
                 AppDiagnostics.Write("Temporary SYSTEM input service is RUNNING; SessionHelper IPC will become available shortly.");
                 return new EphemeralInputService(manager, service, directory);
             }
@@ -144,6 +148,7 @@ internal sealed class EphemeralInputService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        Volatile.Write(ref _isRunning, 0);
         var status = new ServiceStatus();
         ControlService(_service, ServiceControlStop, ref status);
         for (var attempt = 0; attempt < 30; attempt++)

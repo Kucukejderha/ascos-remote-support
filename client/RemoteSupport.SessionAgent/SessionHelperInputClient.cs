@@ -11,6 +11,7 @@ internal sealed class SessionHelperInputClient : IDisposable
     private NamedPipeClientStream? _pipe;
     private long _sequence;
     private int _nextConnectAttempt;
+    private bool _unavailableLogged;
 
     public SessionHelperInputClient()
     {
@@ -57,11 +58,19 @@ internal sealed class SessionHelperInputClient : IDisposable
             candidate.ReadTimeout = 2000;
             candidate.WriteTimeout = 2000;
             _pipe = candidate;
+            _unavailableLogged = false;
             AppDiagnostics.Write("Privileged SessionHelper input IPC connected.");
             return true;
         }
-        catch (TimeoutException) { candidate.Dispose(); return false; }
-        catch (IOException) { candidate.Dispose(); return false; }
+        catch (TimeoutException exception) { candidate.Dispose(); LogUnavailable(exception); return false; }
+        catch (IOException exception) { candidate.Dispose(); LogUnavailable(exception); return false; }
+    }
+
+    private void LogUnavailable(Exception exception)
+    {
+        if (_unavailableLogged) return;
+        _unavailableLogged = true;
+        AppDiagnostics.Write("Privileged SessionHelper input IPC is unavailable. Pipe=" + _pipeName + ".", exception);
     }
 
     private static byte[] Encode(InputMessage message, long sequence)

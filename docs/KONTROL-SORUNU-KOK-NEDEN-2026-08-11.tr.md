@@ -30,6 +30,10 @@ Başarılı bir `alpha.8` çalışmasında tanılama günlüğünde şu sıra g�
 
 Bu üç aşamadan biri yoksa artık hata başarı gibi gösterilmez; tam aşama ve Windows hata kodu kayda geçirilir.
 
+### alpha.9 tanılama iyileştirmesi
+
+Yüksek DPI ölçeklemesinde sürüm bilgisinin kesilmesi esnek alt bilgi yerleşimiyle giderildi. Bu görsel hata kontrol sorununun nedeni değildir. İstemci artık SYSTEM kontrol motorunun hazır olup olmadığını başlıkta gösterir ve “Tanılama günlüğü (tümü)” bağlantısıyla kullanıcı, servis ve helper günlüklerini tek dosyada toplar. Servis çalıştığı halde named pipe kurulamıyorsa yerel `SendInput` yedeğine düşülmez; `system-helper-ipc-unavailable` sonucu açıkça raporlanır.
+
 ## Değiştirilmeyen teknoloji için gerekçe
 
 WebSocket veya signaling teknolojisi kök neden değildir. Görüntü ve kontrol olayları hedefe ulaştığı için WebRTC, UDP ya da başka bir taşıma katmanına geçmek `ERROR_ACCESS_DENIED/UIPI` sorununu çözmezdi. Video ve kontrol kanalları zaten ayrıdır. Düzeltme Windows servis/oturum sınırında yapılmıştır.

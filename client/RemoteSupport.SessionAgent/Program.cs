@@ -33,7 +33,7 @@ internal static class Program
         using var inputRuntime = EphemeralInputService.TryStart();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new MainForm(args.FirstOrDefault(), elevated));
+        Application.Run(new MainForm(args.FirstOrDefault(), elevated, inputRuntime is not null));
     }
 
     private static void EnablePhysicalPixelCoordinates()

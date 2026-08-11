@@ -50,6 +50,8 @@ public sealed class WindowsInputDispatcher : IDisposable
         var helperResult = _helperInput.TrySend(message);
         if (helperResult.HasValue)
             return new InputDispatchReport(helperResult.Value, helperResult.Value ? "system-helper-ok" : "system-helper-rejected", 0, "SYSTEM helper", message.Type);
+        if (EphemeralInputService.IsRunning)
+            return new InputDispatchReport(false, "system-helper-ipc-unavailable", 0, "SYSTEM helper", message.Type);
 
         var work = new InputWorkItem(message);
         try { _queue.Add(work); }
