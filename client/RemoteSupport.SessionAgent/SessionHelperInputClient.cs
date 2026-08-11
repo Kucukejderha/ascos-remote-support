@@ -34,7 +34,7 @@ internal sealed class SessionHelperInputClient : IDisposable
                 ReadExactly(_pipe, acknowledgement);
                 return BitConverter.ToInt64(acknowledgement, 0) == sequence && acknowledgement[8] == 1;
             }
-            catch (IOException exception)
+            catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
             {
                 AppDiagnostics.Write("Session helper input pipe disconnected.", exception);
                 Disconnect();
@@ -50,13 +50,12 @@ internal sealed class SessionHelperInputClient : IDisposable
         if (unchecked(now - _nextConnectAttempt) < 0) return false;
         _nextConnectAttempt = now + 2000;
         Disconnect();
-        var candidate = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.WriteThrough);
+        var candidate = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut,
+            PipeOptions.Asynchronous | PipeOptions.WriteThrough);
         try
         {
             candidate.Connect(150);
             candidate.ReadMode = PipeTransmissionMode.Byte;
-            candidate.ReadTimeout = 2000;
-            candidate.WriteTimeout = 2000;
             _pipe = candidate;
             _unavailableLogged = false;
             AppDiagnostics.Write("Privileged SessionHelper input IPC connected.");
@@ -96,7 +95,18 @@ internal sealed class SessionHelperInputClient : IDisposable
         var offset = 0;
         while (offset < buffer.Length)
         {
-            var read = stream.Read(buffer, offset, buffer.Length - offset);
+            var pending = stream.BeginRead(buffer, offset, buffer.Length - offset, null, null);
+            int read;
+            try
+            {
+                if (!pending.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(2)))
+                    throw new TimeoutException("Session helper acknowledgement timed out after 2 seconds.");
+                read = stream.EndRead(pending);
+            }
+            finally
+            {
+                pending.AsyncWaitHandle.Dispose();
+            }
             if (read == 0) throw new EndOfStreamException();
             offset += read;
         }

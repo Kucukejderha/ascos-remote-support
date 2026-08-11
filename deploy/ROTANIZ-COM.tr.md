@@ -13,16 +13,18 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 3. Ana sayfadaki düğmenin `/downloads/RotaLink.exe` adresini gösterdiğini doğrulayın.
 4. Yayınlanan dosyanın boyutunu ve SHA-256 özetini sürüm notuna ekleyin.
 
-## 1.1.0-alpha.9
+## 1.1.0-alpha.10
 
 Windows Service Control Manager kayıt adı ile gömülü servis dispatch adı arasındaki uyuşmazlık giderildi. Servis artık gerçekten `SERVICE_RUNNING` durumuna ulaşmadan başarılı sayılmıyor. Bu düzeltme SYSTEM oturum helper'ının başlamasını ve kontrol paketlerinin UIPI tarafından engellenen ana süreç yerine yetkili helper üzerinden uygulanmasını sağlar.
 
 `alpha.9`, yüksek DPI/ekran ölçeklemesinde kesilen sürüm etiketini esnek alt bilgi yerleşimiyle düzeltir. İstemci penceresi SYSTEM kontrol motorunun başlangıç sonucunu gösterir. “Tanılama günlüğü (tümü)” bağlantısı kullanıcı uygulaması, SYSTEM servisi ve oturum helper günlüklerini tek dosyada birleştirir. SYSTEM servisi çalışırken helper IPC kurulamıyorsa uygulama artık yerel UIPI yoluna düşmez ve `system-helper-ipc-unavailable` sonucunu verir.
 
+`alpha.10`, named pipe üzerinde desteklenmeyen `ReadTimeout`/`WriteTimeout` özelliklerinin ilk input paketinde uzak oturumu kapatmasını düzeltir. Acknowledgement okuması asynchronous pipe üzerinde iki saniyelik deadline kullanır ve IPC hatası oturum çökmesi yerine açık kontrol sonucu olarak raporlanır.
+
 - Kontrol sunucusu sabit bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
-- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.9.exe`
-- Dosya boyutu: `187.392` bayt
-- SHA-256: `6dedce53e9897cc52dce1066767081260525bde8c5ba3121e1ef98f63f92b690`
+- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.10.exe`
+- Dosya boyutu: `187.904` bayt
+- SHA-256: `37ca4ff6270afdead8f8e25da8fcf308d8d8359ece4364b7b2ed978e0574817a`
 
 `rotaniz.com` üzerindeki sabit dosya, cPanel/hosting aktarımı tamamlandıktan sonra aynı SHA-256 değerini vermelidir.
 
