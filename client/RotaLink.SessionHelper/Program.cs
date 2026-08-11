@@ -18,6 +18,9 @@ internal static class Program
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name + ".");
             if (!identity.IsSystem) log.Write("WARNING: helper is not running as LocalSystem; secure-desktop input will be unavailable.");
 
+            using var windowStation = InteractiveWindowStation.Attach();
+            log.Write("Session helper attached to interactive window station WinSta0.");
+
             using var stop = new EventWaitHandle(false, EventResetMode.ManualReset,
                 "Global\\RotaLink.SessionHelper.Stop." + sessionId);
             using var engine = new InputEngine(log);

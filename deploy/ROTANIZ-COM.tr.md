@@ -13,6 +13,14 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 3. Ana sayfadaki düğmenin `/downloads/RotaLink.exe` adresini gösterdiğini doğrulayın.
 4. Yayınlanan dosyanın boyutunu ve SHA-256 özetini sürüm notuna ekleyin.
 
+## 1.1.0-alpha.11
+
+`alpha.11`, SYSTEM SessionHelper sürecini input iş parçacığı başlamadan önce etkileşimli `WinSta0` pencere istasyonuna bağlar. Named-pipe tekrar bağlantılarında sıra numarası yeniden başlayabildiği için geçerli girdileri reddeden süreç-geneli replay kontrolü bağlantı kapsamına alınmıştır. Helper cevap protokolü gerçek hata aşamasını ve Win32 hata kodunu operatöre taşır.
+
+- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.11.exe`
+- Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
+- Beklenen başarılı kontrol durumu: `system-helper-ok`
+
 ## 1.1.0-alpha.10
 
 Windows Service Control Manager kayıt adı ile gömülü servis dispatch adı arasındaki uyuşmazlık giderildi. Servis artık gerçekten `SERVICE_RUNNING` durumuna ulaşmadan başarılı sayılmıyor. Bu düzeltme SYSTEM oturum helper'ının başlamasını ve kontrol paketlerinin UIPI tarafından engellenen ana süreç yerine yetkili helper üzerinden uygulanmasını sağlar.

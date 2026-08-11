@@ -38,6 +38,15 @@ Yüksek DPI ölçeklemesinde sürüm bilgisinin kesilmesi esnek alt bilgi yerle�
 
 `alpha.9` birleşik günlüğü SYSTEM servisinin çalıştığını, ancak ilk input paketinde `NamedPipeClientStream.ReadTimeout` özelliğinin desteklenmemesi nedeniyle istemcinin `InvalidOperationException` ile oturumu kapattığını kanıtladı. Desteklenmeyen stream timeout özellikleri kaldırıldı. Helper acknowledgement okuması asynchronous named pipe üzerinde iki saniyelik açık deadline ile uygulanarak pipe arızasının tüm uzak oturumu düşürmesi engellendi.
 
+### alpha.11 düzeltmesi
+
+`alpha.10` günlüğü kontrol paketlerinin named pipe üzerinden SYSTEM helper'a ulaştığını, ancak helper'ın tüm olaylara ayrıntısız `false` döndürdüğünü gösterdi. Kod incelemesinde iki bağımsız hata bulundu:
+
+1. Tekrarlı paket korumasındaki sıra numarası helper süreci boyunca global tutuluyordu. Pipe yeniden bağlandığında istemci sıra numarasını yeniden `1` ile başlattığı için geçerli girdiler `sequence-rejected` olarak sessizce reddedilebiliyordu. Sıra denetimi pipe bağlantısı kapsamına taşındı.
+2. Helper `winsta0\\default` başlangıç bilgisiyle oluşturulsa da süreç pencere istasyonunu açıkça etkileşimli `WinSta0` istasyonuna bağlamıyordu. `OpenWindowStation("WinSta0")` ve `SetProcessWindowStation` başlangıçta, input iş parçacığı oluşturulmadan önce uygulanıyor; her olayda mevcut input desktop yine `OpenInputDesktop` ve `SetThreadDesktop` ile yenileniyor.
+
+Helper cevap protokolü `v2` oldu. Artık sonuçla birlikte `sequence-rejected`, `open-input-desktop-failed`, `set-thread-desktop-failed`, `sendinput-failed` gibi kesin aşama ve Win32 hata kodu operatör ekranına taşınır. Böylece `system-helper-rejected / Error=0` biçimindeki tanısız sonuç kaldırıldı.
+
 ## Değiştirilmeyen teknoloji için gerekçe
 
 WebSocket veya signaling teknolojisi kök neden değildir. Görüntü ve kontrol olayları hedefe ulaştığı için WebRTC, UDP ya da başka bir taşıma katmanına geçmek `ERROR_ACCESS_DENIED/UIPI` sorununu çözmezdi. Video ve kontrol kanalları zaten ayrıdır. Düzeltme Windows servis/oturum sınırında yapılmıştır.

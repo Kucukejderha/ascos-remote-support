@@ -6,6 +6,8 @@ namespace RemoteSupport.SessionAgent;
 internal sealed class SessionHelperInputClient : IDisposable
 {
     private const int PacketBytes = 40;
+    private const int AcknowledgementBytes = 24;
+    private const uint AcknowledgementMagic = 0x4F4C5452;
     private readonly object _gate = new();
     private readonly string _pipeName;
     private NamedPipeClientStream? _pipe;
@@ -19,7 +21,7 @@ internal sealed class SessionHelperInputClient : IDisposable
         _pipeName = "RotaLink.SessionHelper." + process.SessionId + ".Input.v1";
     }
 
-    public bool? TrySend(InputMessage message)
+    public SessionHelperInputResult? TrySend(InputMessage message)
     {
         lock (_gate)
         {
@@ -30,9 +32,16 @@ internal sealed class SessionHelperInputClient : IDisposable
                 var packet = Encode(message, sequence);
                 _pipe!.Write(packet, 0, packet.Length);
                 _pipe.Flush();
-                var acknowledgement = new byte[9];
+                var acknowledgement = new byte[AcknowledgementBytes];
                 ReadExactly(_pipe, acknowledgement);
-                return BitConverter.ToInt64(acknowledgement, 0) == sequence && acknowledgement[8] == 1;
+                if (BitConverter.ToUInt32(acknowledgement, 0) != AcknowledgementMagic ||
+                    BitConverter.ToUInt16(acknowledgement, 4) != 2 ||
+                    BitConverter.ToInt64(acknowledgement, 8) != sequence)
+                    throw new InvalidDataException("Session helper returned an invalid acknowledgement.");
+                return new SessionHelperInputResult(
+                    acknowledgement[6] == 1,
+                    MapStage(acknowledgement[7]),
+                    BitConverter.ToInt32(acknowledgement, 16));
             }
             catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
             {
@@ -42,6 +51,20 @@ internal sealed class SessionHelperInputClient : IDisposable
             }
         }
     }
+
+    private static string MapStage(byte stage) => stage switch
+    {
+        0 => "sendinput-ok",
+        1 => "sequence-rejected",
+        2 => "queue-full",
+        3 => "open-input-desktop-failed",
+        4 => "set-thread-desktop-failed",
+        5 => "sendinput-failed",
+        6 => "packet-invalid",
+        7 => "helper-exception",
+        8 => "helper-cancelled",
+        _ => "helper-stage-unknown"
+    };
 
     private bool EnsureConnected()
     {
@@ -136,4 +159,18 @@ internal sealed class SessionHelperInputClient : IDisposable
     {
         lock (_gate) Disconnect();
     }
+}
+
+internal readonly struct SessionHelperInputResult
+{
+    public SessionHelperInputResult(bool accepted, string stage, int errorCode)
+    {
+        Accepted = accepted;
+        Stage = stage;
+        ErrorCode = errorCode;
+    }
+
+    public bool Accepted { get; }
+    public string Stage { get; }
+    public int ErrorCode { get; }
 }

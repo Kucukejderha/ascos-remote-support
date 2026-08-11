@@ -10,6 +10,8 @@ namespace RotaLink.SessionHelper;
 internal sealed class InputPipeServer
 {
     private const int PacketBytes = 40;
+    private const int AcknowledgementBytes = 24;
+    private const uint AcknowledgementMagic = 0x4F4C5452;
     private readonly uint _sessionId;
     private readonly InputEngine _engine;
     private readonly HelperLog _log;
@@ -40,17 +42,31 @@ internal sealed class InputPipeServer
     private void ProcessClient(Stream stream, EventWaitHandle stop)
     {
         var packetBytes = new byte[PacketBytes];
-        var acknowledgement = new byte[9];
+        var acknowledgement = new byte[AcknowledgementBytes];
+        long lastSequence = 0;
         while (!stop.WaitOne(0))
         {
             ReadExactly(stream, packetBytes);
             if (!TryDecode(packetBytes, out var packet)) throw new InvalidDataException("Malformed RotaLink input packet.");
-            var accepted = _engine.InjectAsync(packet, CancellationToken.None).GetAwaiter().GetResult();
-            Buffer.BlockCopy(BitConverter.GetBytes(packet.Sequence), 0, acknowledgement, 0, 8);
-            acknowledgement[8] = accepted ? (byte)1 : (byte)0;
+            var result = packet.Sequence <= lastSequence
+                ? InputInjectionResult.Failure(InputFailureStage.SequenceRejected)
+                : _engine.InjectAsync(packet, CancellationToken.None).GetAwaiter().GetResult();
+            if (result.Accepted) lastSequence = packet.Sequence;
+            EncodeAcknowledgement(acknowledgement, packet.Sequence, result);
             stream.Write(acknowledgement, 0, acknowledgement.Length);
             stream.Flush();
         }
+    }
+
+    private static void EncodeAcknowledgement(byte[] target, long sequence, InputInjectionResult result)
+    {
+        Array.Clear(target, 0, target.Length);
+        Buffer.BlockCopy(BitConverter.GetBytes(AcknowledgementMagic), 0, target, 0, 4);
+        Buffer.BlockCopy(BitConverter.GetBytes((ushort)2), 0, target, 4, 2);
+        target[6] = result.Accepted ? (byte)1 : (byte)0;
+        target[7] = (byte)result.Stage;
+        Buffer.BlockCopy(BitConverter.GetBytes(sequence), 0, target, 8, 8);
+        Buffer.BlockCopy(BitConverter.GetBytes(result.ErrorCode), 0, target, 16, 4);
     }
 
     private static bool TryDecode(byte[] source, out InputPacket packet)

@@ -23,7 +23,6 @@ internal sealed class InputEngine : IDisposable
     private readonly BlockingCollection<WorkItem> _queue = new(new ConcurrentQueue<WorkItem>(), 512);
     private readonly Thread _thread;
     private readonly HelperLog _log;
-    private long _lastSequence;
 
     public InputEngine(HelperLog log)
     {
@@ -32,11 +31,10 @@ internal sealed class InputEngine : IDisposable
         _thread.Start();
     }
 
-    public Task<bool> InjectAsync(InputPacket packet, CancellationToken cancellationToken)
+    public Task<InputInjectionResult> InjectAsync(InputPacket packet, CancellationToken cancellationToken)
     {
-        if (packet.Sequence <= Interlocked.Read(ref _lastSequence)) return Task.FromResult(false);
         var item = new WorkItem(packet, cancellationToken);
-        if (!_queue.TryAdd(item)) return Task.FromResult(false);
+        if (!_queue.TryAdd(item)) return Task.FromResult(InputInjectionResult.Failure(InputFailureStage.QueueFull));
         return item.Completion.Task;
     }
 
@@ -50,14 +48,28 @@ internal sealed class InputEngine : IDisposable
                 item.CancellationToken.ThrowIfCancellationRequested();
                 desktop.Refresh();
                 var accepted = Inject(item.Packet);
-                if (accepted) Interlocked.Exchange(ref _lastSequence, item.Packet.Sequence);
-                item.Completion.TrySetResult(accepted);
+                item.Completion.TrySetResult(accepted
+                    ? InputInjectionResult.Success()
+                    : InputInjectionResult.Failure(InputFailureStage.PacketInvalid));
             }
-            catch (OperationCanceledException) { item.Completion.TrySetCanceled(item.CancellationToken); }
+            catch (OperationCanceledException)
+            {
+                item.Completion.TrySetResult(InputInjectionResult.Failure(InputFailureStage.Cancelled));
+            }
+            catch (Win32Exception exception)
+            {
+                var stage = exception.Message.StartsWith("OpenInputDesktop", StringComparison.Ordinal)
+                    ? InputFailureStage.OpenInputDesktop
+                    : exception.Message.StartsWith("SetThreadDesktop", StringComparison.Ordinal)
+                        ? InputFailureStage.SetThreadDesktop
+                        : InputFailureStage.SendInput;
+                _log.Write("Input injection failed. Stage=" + stage + ", Win32Error=" + exception.NativeErrorCode + ". " + exception);
+                item.Completion.TrySetResult(InputInjectionResult.Failure(stage, exception.NativeErrorCode));
+            }
             catch (Exception exception)
             {
                 _log.Write("Input injection failed: " + exception);
-                item.Completion.TrySetResult(false);
+                item.Completion.TrySetResult(InputInjectionResult.Failure(InputFailureStage.HelperException, exception.HResult));
             }
         }
     }
@@ -146,7 +158,7 @@ internal sealed class InputEngine : IDisposable
 
         public InputPacket Packet { get; }
         public CancellationToken CancellationToken { get; }
-        public TaskCompletionSource<bool> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<InputInjectionResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     [StructLayout(LayoutKind.Sequential)] private struct NativeInput { public uint Type; public InputUnion Data; }
@@ -155,6 +167,36 @@ internal sealed class InputEngine : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
     [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
+}
+
+internal enum InputFailureStage : byte
+{
+    None = 0,
+    SequenceRejected = 1,
+    QueueFull = 2,
+    OpenInputDesktop = 3,
+    SetThreadDesktop = 4,
+    SendInput = 5,
+    PacketInvalid = 6,
+    HelperException = 7,
+    Cancelled = 8
+}
+
+internal readonly struct InputInjectionResult
+{
+    private InputInjectionResult(bool accepted, InputFailureStage stage, int errorCode)
+    {
+        Accepted = accepted;
+        Stage = stage;
+        ErrorCode = errorCode;
+    }
+
+    public bool Accepted { get; }
+    public InputFailureStage Stage { get; }
+    public int ErrorCode { get; }
+
+    public static InputInjectionResult Success() => new(true, InputFailureStage.None, 0);
+    public static InputInjectionResult Failure(InputFailureStage stage, int errorCode = 0) => new(false, stage, errorCode);
 }
 
 internal enum InputEventKind : byte { Move = 1, Button = 2, Wheel = 3, Key = 4 }
