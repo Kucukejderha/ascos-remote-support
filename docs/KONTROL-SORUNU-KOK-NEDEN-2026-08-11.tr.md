@@ -47,6 +47,17 @@ Yüksek DPI ölçeklemesinde sürüm bilgisinin kesilmesi esnek alt bilgi yerle�
 
 Helper cevap protokolü `v2` oldu. Artık sonuçla birlikte `sequence-rejected`, `open-input-desktop-failed`, `set-thread-desktop-failed`, `sendinput-failed` gibi kesin aşama ve Win32 hata kodu operatör ekranına taşınır. Böylece `system-helper-rejected / Error=0` biçimindeki tanısız sonuç kaldırıldı.
 
+### alpha.12 düzeltmesi
+
+`alpha.11` birleşik günlüğü aşağıdaki zinciri kesin olarak doğruladı:
+
+- helper `NT AUTHORITY\\SYSTEM` kimliğiyle etkileşimli `Session 1` içinde çalışıyor;
+- süreç `WinSta0` pencere istasyonuna bağlanıyor;
+- named pipe ve aktif input desktop geçişi başarılı;
+- reddetme yalnızca `SendInput` çağrısında `ERROR_ACCESS_DENIED (5)` olarak gerçekleşiyor.
+
+Bu bulgu taşıma, koordinat ve masaüstü seçim sorunlarını dışladı. Eksik kalan token özelliği UIAccess'ti. SYSTEM servis artık `SeTcbPrivilege` yetkisini etkinleştiriyor, oluşturduğu primary helper tokenına `SetTokenInformation(TokenUIAccess, 1)` uyguluyor ve değeri `GetTokenInformation` ile doğruluyor. Helper da kendi tokenındaki bayrağı okuyarak başlangıç günlüğüne `UIAccess=True` yazıyor. UIAccess oluşmadan helper başlatılmıyor; başarısızlık sessizce normal input yoluna düşmüyor.
+
 ## Değiştirilmeyen teknoloji için gerekçe
 
 WebSocket veya signaling teknolojisi kök neden değildir. Görüntü ve kontrol olayları hedefe ulaştığı için WebRTC, UDP ya da başka bir taşıma katmanına geçmek `ERROR_ACCESS_DENIED/UIPI` sorununu çözmezdi. Video ve kontrol kanalları zaten ayrıdır. Düzeltme Windows servis/oturum sınırında yapılmıştır.

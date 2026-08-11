@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using Microsoft.Win32.SafeHandles;
 
 namespace RotaLink.SessionHelper;
 
@@ -15,7 +16,8 @@ internal static class Program
         try
         {
             using var identity = WindowsIdentity.GetCurrent();
-            log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name + ".");
+            log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
+                ", UIAccess=" + ReadCurrentUiAccess() + ".");
             if (!identity.IsSystem) log.Write("WARNING: helper is not running as LocalSystem; secure-desktop input will be unavailable.");
 
             using var windowStation = InteractiveWindowStation.Attach();
@@ -43,9 +45,31 @@ internal static class Program
         return sessionId;
     }
 
+    private static bool ReadCurrentUiAccess()
+    {
+        if (!OpenProcessToken(GetCurrentProcess(), 0x0008, out var token))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "OpenProcessToken for UIAccess diagnostics failed.");
+        using (token)
+        {
+            if (!GetTokenInformation(token, 26, out var uiAccess, sizeof(int), out var returnedLength))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "GetTokenInformation(TokenUIAccess) failed.");
+            if (returnedLength != sizeof(int))
+                throw new InvalidDataException("GetTokenInformation(TokenUIAccess) returned " + returnedLength + " bytes.");
+            return uiAccess != 0;
+        }
+    }
+
+    [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ProcessIdToSessionId(uint processId, out uint sessionId);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenProcessToken(IntPtr process, uint desiredAccess, out SafeAccessTokenHandle token);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass,
+        out int information, int informationLength, out int returnLength);
 }
 
 internal sealed class HelperLog

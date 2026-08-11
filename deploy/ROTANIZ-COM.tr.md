@@ -13,6 +13,15 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 3. Ana sayfadaki düğmenin `/downloads/RotaLink.exe` adresini gösterdiğini doğrulayın.
 4. Yayınlanan dosyanın boyutunu ve SHA-256 özetini sürüm notuna ekleyin.
 
+## 1.1.0-alpha.12
+
+`alpha.12`, SYSTEM servisinin etkileşimli SessionHelper tokenına `TokenUIAccess=1` atamasını ve başlatılan helper içinde bu bayrağın tekrar doğrulanmasını ekler. Amaç, `alpha.11` birleşik günlüğünde SYSTEM/Session 1/WinSta0/aktif desktop zinciri doğru olduğu hâlde `SendInput` çağrısının UIPI tarafından `ERROR_ACCESS_DENIED (5)` ile reddedilmesini gidermektir.
+
+- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.12.exe`
+- Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
+- Beklenen helper başlangıcı: `Identity=NT AUTHORITY\\SYSTEM, UIAccess=True`
+- Beklenen başarılı kontrol durumu: `system-helper-ok`
+
 ## 1.1.0-alpha.11
 
 `alpha.11`, SYSTEM SessionHelper sürecini input iş parçacığı başlamadan önce etkileşimli `WinSta0` pencere istasyonuna bağlar. Named-pipe tekrar bağlantılarında sıra numarası yeniden başlayabildiği için geçerli girdileri reddeden süreç-geneli replay kontrolü bağlantı kapsamına alınmıştır. Helper cevap protokolü gerçek hata aşamasını ve Win32 hata kodunu operatöre taşır.
