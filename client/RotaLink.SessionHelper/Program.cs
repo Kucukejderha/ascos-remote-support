@@ -16,9 +16,10 @@ internal static class Program
         try
         {
             using var identity = WindowsIdentity.GetCurrent();
+            var uiAccess = ReadCurrentUiAccess();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
-                ", UIAccess=" + ReadCurrentUiAccess() + ".");
-            if (!identity.IsSystem) log.Write("WARNING: helper is not running as LocalSystem; secure-desktop input will be unavailable.");
+                ", UIAccess=" + uiAccess + ".");
+            if (!uiAccess) throw new InvalidOperationException("Interactive helper token is missing UIAccess.");
 
             using var windowStation = InteractiveWindowStation.Attach();
             log.Write("Session helper attached to interactive window station WinSta0.");

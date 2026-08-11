@@ -44,7 +44,8 @@ internal sealed class SessionHelperSupervisor : IDisposable
             await StopHelperCoreAsync(cancellationToken).ConfigureAwait(false);
             _helperProcess = LaunchHelper(activeSession, out var processId);
             _helperSessionId = activeSession;
-            _logger.Write("RotaLink.SessionHelper started as SYSTEM in interactive session " + activeSession + ", process " + processId + ".");
+            _logger.Write("RotaLink.SessionHelper started with the interactive user's UIAccess token in session " +
+                activeSession + ", process " + processId + ".");
         }
         finally
         {
@@ -69,13 +70,12 @@ internal sealed class SessionHelperSupervisor : IDisposable
         EnablePrivilege("SeIncreaseQuotaPrivilege");
         EnablePrivilege("SeTcbPrivilege");
 
-        if (!OpenProcessToken(GetCurrentProcess(), TokenAssignPrimary | TokenDuplicate | TokenQuery |
-                TokenAdjustPrivileges | TokenAdjustDefault | TokenAdjustSessionId, out var serviceToken))
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenProcessToken failed.");
-        using (serviceToken)
+        if (!WTSQueryUserToken(sessionId, out var interactiveToken))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "WTSQueryUserToken failed for session " + sessionId + ".");
+        using (interactiveToken)
         {
-            if (!DuplicateTokenEx(serviceToken, 0x000F01FF, IntPtr.Zero, 2, 1, out var sessionToken))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "DuplicateTokenEx failed.");
+            if (!DuplicateTokenEx(interactiveToken, 0x000F01FF, IntPtr.Zero, 2, 1, out var sessionToken))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "DuplicateTokenEx for interactive token failed.");
             using (sessionToken)
             {
                 SetTokenUInt32(sessionToken, TokenSessionId, sessionId, "TokenSessionId");
@@ -83,7 +83,7 @@ internal sealed class SessionHelperSupervisor : IDisposable
                 var uiAccess = GetTokenUInt32(sessionToken, TokenUiAccess, "TokenUIAccess");
                 if (uiAccess != 1)
                     throw new InvalidOperationException("Session helper token did not retain the UIAccess flag.");
-                _logger.Write("Session helper token prepared. Session=" + sessionId + ", UIAccess=True.");
+                _logger.Write("Interactive user helper token prepared. Session=" + sessionId + ", UIAccess=True.");
 
                 var environment = IntPtr.Zero;
                 try
@@ -237,5 +237,8 @@ internal sealed class SessionHelperSupervisor : IDisposable
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool CreateEnvironmentBlock(out IntPtr environment, SafeKernelHandle token, bool inherit);
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool DestroyEnvironmentBlock(IntPtr environment);
     [DllImport("kernel32.dll")] private static extern uint WTSGetActiveConsoleSessionId();
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WTSQueryUserToken(uint sessionId, out SafeKernelHandle token);
     [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
 }

@@ -58,6 +58,12 @@ Helper cevap protokolü `v2` oldu. Artık sonuçla birlikte `sequence-rejected`,
 
 Bu bulgu taşıma, koordinat ve masaüstü seçim sorunlarını dışladı. Eksik kalan token özelliği UIAccess'ti. SYSTEM servis artık `SeTcbPrivilege` yetkisini etkinleştiriyor, oluşturduğu primary helper tokenına `SetTokenInformation(TokenUIAccess, 1)` uyguluyor ve değeri `GetTokenInformation` ile doğruluyor. Helper da kendi tokenındaki bayrağı okuyarak başlangıç günlüğüne `UIAccess=True` yazıyor. UIAccess oluşmadan helper başlatılmıyor; başarısızlık sessizce normal input yoluna düşmüyor.
 
+### alpha.13 düzeltmesi
+
+`alpha.12` içinde `TokenUIAccess=True` oluşturulmasına rağmen SYSTEM servis logon tokenından türetilen helper yine `SendInput / ERROR_ACCESS_DENIED (5)` aldı. SYSTEM tokenını yalnızca başka bir session kimliğine taşımak, aktif kullanıcının interaktif logon SID'sini tokena kazandırmıyordu.
+
+`alpha.13` helper tokenını `WTSQueryUserToken(activeSession)` ile gerçek etkileşimli kullanıcı tokenından üretir. SYSTEM servis `SeTcbPrivilege` ile bu kopyaya `TokenUIAccess=1` ekler ve `CreateProcessAsUser` kullanır. Böylece helper aynı anda üç gerekli özelliğe sahiptir: doğru kullanıcı/logon SID, doğru session ve UIAccess. SYSTEM yalnızca güvenilir servis başlatıcısı olarak Session 0'da kalır.
+
 ## Değiştirilmeyen teknoloji için gerekçe
 
 WebSocket veya signaling teknolojisi kök neden değildir. Görüntü ve kontrol olayları hedefe ulaştığı için WebRTC, UDP ya da başka bir taşıma katmanına geçmek `ERROR_ACCESS_DENIED/UIPI` sorununu çözmezdi. Video ve kontrol kanalları zaten ayrıdır. Düzeltme Windows servis/oturum sınırında yapılmıştır.
