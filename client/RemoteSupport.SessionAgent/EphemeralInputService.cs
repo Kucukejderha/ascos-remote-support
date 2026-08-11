@@ -49,7 +49,7 @@ internal sealed class EphemeralInputService : IDisposable
             }
 
             var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "RotaLink", "SessionRuntime", "1.1.0-alpha.13");
+                "RotaLink", "SessionRuntime", "1.1.0-alpha.14");
             Directory.CreateDirectory(directory);
             var servicePath = Path.Combine(directory, "RotaLink.Service.exe");
             var helperPath = Path.Combine(directory, "RotaLink.SessionHelper.exe");

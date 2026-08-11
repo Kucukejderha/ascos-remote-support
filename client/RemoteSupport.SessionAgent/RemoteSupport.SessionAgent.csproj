@@ -14,7 +14,7 @@
     <Version>1.1.0</Version>
     <AssemblyVersion>1.1.0.0</AssemblyVersion>
     <FileVersion>1.1.0.0</FileVersion>
-    <InformationalVersion>1.1.0-alpha.13</InformationalVersion>
+    <InformationalVersion>1.1.0-alpha.14</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>Assets\RotaLink.ico</ApplicationIcon>
   </PropertyGroup>

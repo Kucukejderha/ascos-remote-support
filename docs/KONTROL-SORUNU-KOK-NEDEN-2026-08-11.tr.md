@@ -64,6 +64,15 @@ Bu bulgu taşıma, koordinat ve masaüstü seçim sorunlarını dışladı. Eksi
 
 `alpha.13` helper tokenını `WTSQueryUserToken(activeSession)` ile gerçek etkileşimli kullanıcı tokenından üretir. SYSTEM servis `SeTcbPrivilege` ile bu kopyaya `TokenUIAccess=1` ekler ve `CreateProcessAsUser` kullanır. Böylece helper aynı anda üç gerekli özelliğe sahiptir: doğru kullanıcı/logon SID, doğru session ve UIAccess. SYSTEM yalnızca güvenilir servis başlatıcısı olarak Session 0'da kalır.
 
+### alpha.14 düzeltmesi
+
+`alpha.13` birleşik kaydı helper sürecinin yaklaşık beş saniyede bir yeniden başlatıldığını ve yeni kimlikle tek satır günlük üretemeden kapandığını gösterdi. İki SYSTEM-varsayımı kullanıcı helperına taşınmıştı:
+
+1. Helper, SYSTEM tarafından oluşturulan `%ProgramData%\\RotaLink\\Logs` dosyasına yazmaya çalışıyordu. Kullanıcı tokenı bu dosyaya ekleme yapamayınca süreç pipe kurulmadan kapanıyordu.
+2. Named-pipe ACL hazırlanırken kullanıcı helperı yalnız LocalSystem tarafından kullanılabilen `WTSQueryUserToken` çağrısını yapıyordu.
+
+Helper günlüğü kullanıcının `%LOCALAPPDATA%\\RotaLink` dizinine taşındı ve günlükleme hatalarının helper'ı sonlandırması engellendi. Kullanıcı helperı pipe ACL'sinde doğrudan kendi token SID'sini kullanır; yalnız SYSTEM modunda `WTSQueryUserToken` çağrılır. Birleşik tanılama paketi yeni kullanıcı-helper günlüğünü de toplar.
+
 ## Değiştirilmeyen teknoloji için gerekçe
 
 WebSocket veya signaling teknolojisi kök neden değildir. Görüntü ve kontrol olayları hedefe ulaştığı için WebRTC, UDP ya da başka bir taşıma katmanına geçmek `ERROR_ACCESS_DENIED/UIPI` sorununu çözmezdi. Video ve kontrol kanalları zaten ayrıdır. Düzeltme Windows servis/oturum sınırında yapılmıştır.

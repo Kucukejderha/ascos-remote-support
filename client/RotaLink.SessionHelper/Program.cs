@@ -80,14 +80,21 @@ internal sealed class HelperLog
 
     public HelperLog(uint sessionId)
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RotaLink", "Logs");
+        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RotaLink");
         Directory.CreateDirectory(directory);
         _path = Path.Combine(directory, "SessionHelper-" + sessionId + ".log");
     }
 
     public void Write(string message)
     {
-        lock (_gate)
-            File.AppendAllText(_path, DateTimeOffset.Now.ToString("O") + " " + message + Environment.NewLine);
+        try
+        {
+            lock (_gate)
+                File.AppendAllText(_path, DateTimeOffset.Now.ToString("O") + " " + message + Environment.NewLine);
+        }
+        catch
+        {
+            // Diagnostics must never terminate the interactive input helper.
+        }
     }
 }

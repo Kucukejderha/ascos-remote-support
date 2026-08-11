@@ -13,6 +13,15 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 3. Ana sayfadaki düğmenin `/downloads/RotaLink.exe` adresini gösterdiğini doğrulayın.
 4. Yayınlanan dosyanın boyutunu ve SHA-256 özetini sürüm notuna ekleyin.
 
+## 1.1.0-alpha.14
+
+`alpha.14`, kullanıcı-tokenlı SessionHelper'ın SYSTEM sahipli günlük dosyasına erişemediği ve pipe ACL'sinde LocalSystem'e özel `WTSQueryUserToken` kullandığı için sürekli kapanmasını düzeltir. Helper günlüğü `%LOCALAPPDATA%` altındadır ve birleşik tanılamaya eklenir.
+
+- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.14.exe`
+- Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
+- Beklenen helper başlangıcı: `Identity=<etkileşimli kullanıcı>, UIAccess=True`
+- Beklenen IPC kaydı: `Privileged SessionHelper input IPC connected`
+
 ## 1.1.0-alpha.13
 
 `alpha.13`, SessionHelper'ı SYSTEM servis tokenından değil `WTSQueryUserToken` ile aktif kullanıcının gerçek etkileşimli logon tokenından üretir. SYSTEM servis bu tokena doğrulanmış `TokenUIAccess=1` ekleyerek helper'ı `WinSta0` üzerinde başlatır.

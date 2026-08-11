@@ -21,6 +21,9 @@ internal static class AppDiagnostics
             writer.WriteLine("Oluşturulma: " + DateTimeOffset.Now.ToString("O"));
             writer.WriteLine();
             AppendFile(writer, "Kullanıcı uygulaması", LogPath);
+            using (var process = System.Diagnostics.Process.GetCurrentProcess())
+                AppendFile(writer, "Etkileşimli oturum yardımcısı",
+                    Path.Combine(DirectoryPath, "SessionHelper-" + process.SessionId + ".log"));
 
             var systemLogDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RotaLink", "Logs");

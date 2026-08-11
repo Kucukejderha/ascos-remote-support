@@ -108,6 +108,10 @@ internal sealed class InputPipeServer
 
     private SecurityIdentifier GetInteractiveUserSid()
     {
+        using var currentIdentity = WindowsIdentity.GetCurrent();
+        if (!currentIdentity.IsSystem)
+            return currentIdentity.User ?? throw new InvalidOperationException("Interactive helper token has no user SID.");
+
         if (!WTSQueryUserToken(_sessionId, out var token)) throw new Win32Exception(Marshal.GetLastWin32Error(), "WTSQueryUserToken failed.");
         using (token)
         using (var identity = new WindowsIdentity(token.DangerousGetHandle()))
