@@ -30,6 +30,7 @@ internal sealed class InputEngine : IDisposable
         _log = log;
         _clickTargets = new ClickTargetDiagnostics(log);
         _thread = new Thread(Worker) { IsBackground = true, Name = "RotaLink secure input", Priority = ThreadPriority.AboveNormal };
+        _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
     }
 
@@ -104,7 +105,15 @@ internal sealed class InputEngine : IDisposable
                 };
                 if (clickFlags.Down == 0) return false;
                 var target = _clickTargets.Observe(point);
-                if (_clickTargets.TryDispatchExplorerShellClick(target, packet.Data)) return true;
+                var shellResult = packet.Data == 0
+                    ? _clickTargets.HandleExplorerShellLeftClick(target)
+                    : ShellClickResult.FallBackToSendInput;
+                if (shellResult == ShellClickResult.Handled) return true;
+                if (shellResult == ShellClickResult.PhysicalDoubleClick)
+                    return SendInputs(
+                        Mouse(point, MouseMove, 0),
+                        Mouse(point, clickFlags.Down, 0), Mouse(point, clickFlags.Up, 0),
+                        Mouse(point, clickFlags.Down, 0), Mouse(point, clickFlags.Up, 0));
                 return SendInputs(
                     Mouse(point, MouseMove, 0),
                     Mouse(point, clickFlags.Down, 0),

@@ -1,22 +1,24 @@
 # rotaniz.com dağıtımı
 
-## 1.1.0-alpha.24 Explorer kabuğu için hedefli tıklama
+## 1.1.0-alpha.25 Explorer kabuğu için UI Automation
 
 Alpha.23 gerçek cihaz kaydı uzak koordinatların doğru pencerelere ulaştığını kesin
 olarak gösterdi: görev çubuğu `MSTaskListWClass`, Explorer `CabinetWClass`, masaüstü
 `SysListView32`. İlk komutlar çalıştıktan sonra kabuk eylemleri tekrar etkisiz kaldı;
 istemci ve helper günlüklerinde bağlantı, IPC veya Win32 hatası bulunmadı.
 
-Alpha.24 normal uygulamalar için atomik `SendInput` yolunu korur. Yalnız
-`MSTaskListWClass`, `SysListView32` ve `Shell_TrayWnd` hedeflerinde tıklamayı
-`SendMessageTimeout` ile 250 ms sınırında senkron işler. Masaüstünde Windows'un doğal
-çift tıklama süresi ve dört piksellik konum toleransı izlenir. Kabuk yanıt vermezse
-helper kilitlenmez ve atomik `SendInput` yoluna geri döner.
+Alpha.25 normal uygulamalar için atomik `SendInput` yolunu korur. Görev çubuğu
+düğmeleri Windows UI Automation `InvokePattern`, masaüstü simgeleri ise
+`SelectionItemPattern` ile işlenir. Masaüstü simgesinin otomasyon yoluyla çalıştırılması
+desteklenmiyorsa ikinci tıklamada gerçek çift tıklama dizisi gönderilir. Masaüstü
+boşluğu, sağ tık ve diğer hedefler Windows'un doğal seçim ve menü davranışını korumak
+için atomik `SendInput` yolunda kalır.
 
-- Beklenen günlük: `Explorer shell click delivered synchronously`
-- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.24-UNSIGNED-DEVELOPMENT.exe`
-- Dosya boyutu: `207.872` bayt
-- SHA-256: `bf79658088613a570d0f377b9d89bdc0e63c42dc25e8d46d5f5af50613602af3`
+- Beklenen günlükler: `Desktop item selected through UI Automation` ve
+  `Taskbar control invoked through UI Automation`
+- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.25-UNSIGNED-DEVELOPMENT.exe`
+- Dosya boyutu: `209.920` bayt
+- SHA-256: `109648e008e7e7acbc7918b1ea046a5c935406ba0f0b0e788bc99766f416506f`
 - Test paketi imzasızdır ve yalnız kontrollü doğrulama içindir.
 
 ## 1.1.0-alpha.23 Explorer kabuğu tıklamaları

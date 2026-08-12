@@ -1,14 +1,20 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows.Automation;
 
 namespace RotaLink.SessionHelper;
 
+/// <summary>
+/// Resolves the native window below a remote click and uses Windows UI Automation
+/// only for shell controls whose behaviour cannot be reproduced with window messages.
+/// All other clicks remain real, atomic SendInput sequences in InputEngine.
+/// </summary>
 internal sealed class ClickTargetDiagnostics
 {
     private readonly HelperLog _log;
     private IntPtr _lastTarget;
-    private ClickTarget _lastShellClick;
-    private int _lastShellClickTicks;
+    private string? _lastDesktopElement;
+    private int _lastDesktopClickTicks;
 
     public ClickTargetDiagnostics(HelperLog log) => _log = log;
 
@@ -24,53 +30,115 @@ internal sealed class ClickTargetDiagnostics
         {
             _lastTarget = hit;
             _log.Write("Natural click target observed. Window=0x" + hit.ToInt64().ToString("X") +
-                ", Class=" + resolvedClassName + ", ProcessId=" + processId +
-                ". Foreground manipulation is intentionally disabled.");
+                ", Class=" + resolvedClassName + ", ProcessId=" + processId + ".");
         }
         return new ClickTarget(hit, resolvedClassName, point.PixelX, point.PixelY);
     }
 
-    public bool TryDispatchExplorerShellClick(ClickTarget target, int button)
+    public ShellClickResult HandleExplorerShellLeftClick(ClickTarget target)
     {
-        if (!target.IsExplorerShellControl || target.Window == IntPtr.Zero) return false;
-        var clientPoint = new Point(target.ScreenX, target.ScreenY);
-        if (!ScreenToClient(target.Window, ref clientPoint)) return false;
+        if (!target.IsExplorerShellControl || target.Window == IntPtr.Zero) return ShellClickResult.FallBackToSendInput;
 
-        var messages = button switch
+        try
         {
-            0 => (Down: 0x0201u, Up: 0x0202u, Double: 0x0203u, State: 0x0001u),
-            1 => (Down: 0x0207u, Up: 0x0208u, Double: 0x0209u, State: 0x0010u),
-            2 => (Down: 0x0204u, Up: 0x0205u, Double: 0x0206u, State: 0x0002u),
-            _ => default
-        };
-        if (messages.Down == 0) return false;
+            var element = AutomationElement.FromPoint(new System.Windows.Point(target.ScreenX, target.ScreenY));
+            if (element is null) return ShellClickResult.FallBackToSendInput;
 
+            if (target.ClassName == "SysListView32")
+                return TrySelectOrOpenDesktopItem(element);
+
+            return TryInvokeTaskbarElement(element)
+                ? ShellClickResult.Handled
+                : ShellClickResult.FallBackToSendInput;
+        }
+        catch (ElementNotAvailableException exception)
+        {
+            _log.Write("Shell automation target disappeared; falling back to SendInput. " + exception.Message);
+            return ShellClickResult.FallBackToSendInput;
+        }
+        catch (InvalidOperationException exception)
+        {
+            _log.Write("Shell automation was unavailable; falling back to SendInput. " + exception.Message);
+            return ShellClickResult.FallBackToSendInput;
+        }
+        catch (COMException exception)
+        {
+            _log.Write("Shell automation COM call failed; falling back to SendInput. HRESULT=0x" +
+                exception.HResult.ToString("X8") + ".");
+            return ShellClickResult.FallBackToSendInput;
+        }
+    }
+
+    private ShellClickResult TrySelectOrOpenDesktopItem(AutomationElement element)
+    {
+        // Empty desktop space resolves to the list itself and has no SelectionItem
+        // pattern. Returning false deliberately sends a real click, which clears an
+        // icon selection and dismisses an open context menu exactly like local input.
+        if (!element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var selectionObject))
+            return ShellClickResult.FallBackToSendInput;
+
+        var identity = GetElementIdentity(element);
         var now = Environment.TickCount;
-        var isDesktopDoubleClick = target.ClassName == "SysListView32" &&
-            target.Window == _lastShellClick.Window && button == _lastShellClick.Button &&
-            Math.Abs(target.ScreenX - _lastShellClick.ScreenX) <= 4 &&
-            Math.Abs(target.ScreenY - _lastShellClick.ScreenY) <= 4 &&
-            unchecked(now - _lastShellClickTicks) >= 0 &&
-            unchecked(now - _lastShellClickTicks) <= GetDoubleClickTime();
-        _lastShellClick = new ClickTarget(target.Window, target.ClassName, target.ScreenX, target.ScreenY, button);
-        _lastShellClickTicks = now;
+        var elapsed = unchecked(now - _lastDesktopClickTicks);
+        var isDoubleClick = identity == _lastDesktopElement && elapsed >= 0 && elapsed <= GetDoubleClickTime();
+        _lastDesktopElement = identity;
+        _lastDesktopClickTicks = now;
 
-        var parameter = new IntPtr(unchecked((clientPoint.Y << 16) | (clientPoint.X & 0xFFFF)));
-        if (!Send(target.Window, 0x0200, 0, parameter)) return false; // WM_MOUSEMOVE
-        var downMessage = isDesktopDoubleClick ? messages.Double : messages.Down;
-        if (!Send(target.Window, downMessage, messages.State, parameter)) return false;
-        if (!Send(target.Window, messages.Up, 0, parameter)) return false;
-        _log.Write("Explorer shell click delivered synchronously. Class=" + target.ClassName +
-            ", Button=" + button + ", DoubleClick=" + isDesktopDoubleClick + ".");
+        if (isDoubleClick && TryInvokeElement(element, allowParentSearch: false))
+        {
+            _lastDesktopElement = null;
+            _log.Write("Desktop item opened through UI Automation. Name=" + SafeName(element) + ".");
+            return ShellClickResult.Handled;
+        }
+
+        if (isDoubleClick)
+        {
+            _lastDesktopElement = null;
+            _log.Write("Desktop item has no automation invoke pattern; using a real double-click. Name=" + SafeName(element) + ".");
+            return ShellClickResult.PhysicalDoubleClick;
+        }
+
+        ((SelectionItemPattern)selectionObject).Select();
+        element.SetFocus();
+        _log.Write("Desktop item selected through UI Automation. Name=" + SafeName(element) + ".");
+        return ShellClickResult.Handled;
+    }
+
+    private bool TryInvokeTaskbarElement(AutomationElement element)
+    {
+        if (!TryInvokeElement(element, allowParentSearch: true)) return false;
+        _log.Write("Taskbar control invoked through UI Automation. Name=" + SafeName(element) + ".");
         return true;
     }
 
-    private static bool Send(IntPtr window, uint message, uint state, IntPtr parameter)
+    private static bool TryInvokeElement(AutomationElement start, bool allowParentSearch)
     {
-        const uint smtoBlock = 0x0001;
-        const uint smtoAbortIfHung = 0x0002;
-        return SendMessageTimeout(window, message, new IntPtr(state), parameter,
-            smtoBlock | smtoAbortIfHung, 250, out _) != IntPtr.Zero;
+        var current = start;
+        for (var depth = 0; current is not null && depth < (allowParentSearch ? 6 : 1); depth++)
+        {
+            if (current.TryGetCurrentPattern(InvokePattern.Pattern, out var invokeObject))
+            {
+                ((InvokePattern)invokeObject).Invoke();
+                return true;
+            }
+
+            current = allowParentSearch ? TreeWalker.ControlViewWalker.GetParent(current) : null;
+        }
+        return false;
+    }
+
+    private static string GetElementIdentity(AutomationElement element)
+    {
+        var runtimeId = element.GetRuntimeId();
+        return runtimeId is { Length: > 0 }
+            ? string.Join(".", runtimeId)
+            : element.Current.NativeWindowHandle + ":" + element.Current.AutomationId + ":" + SafeName(element);
+    }
+
+    private static string SafeName(AutomationElement element)
+    {
+        try { return element.Current.Name ?? string.Empty; }
+        catch (ElementNotAvailableException) { return "<unavailable>"; }
     }
 
     [StructLayout(LayoutKind.Sequential)] private readonly struct Point
@@ -83,27 +151,29 @@ internal sealed class ClickTargetDiagnostics
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(Point point);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr window, StringBuilder className, int maximumCount);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ScreenToClient(IntPtr window, ref Point point);
     [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
-    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr window, uint message,
-        IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
 }
 
 internal readonly struct ClickTarget
 {
-    public ClickTarget(IntPtr window, string? className, int screenX, int screenY, int button = -1)
+    public ClickTarget(IntPtr window, string? className, int screenX, int screenY)
     {
         Window = window;
         ClassName = className;
         ScreenX = screenX;
         ScreenY = screenY;
-        Button = button;
     }
 
     public IntPtr Window { get; }
     public string? ClassName { get; }
     public int ScreenX { get; }
     public int ScreenY { get; }
-    public int Button { get; }
     public bool IsExplorerShellControl => ClassName is "MSTaskListWClass" or "SysListView32" or "Shell_TrayWnd";
+}
+
+internal enum ShellClickResult
+{
+    FallBackToSendInput,
+    Handled,
+    PhysicalDoubleClick
 }

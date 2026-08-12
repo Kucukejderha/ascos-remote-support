@@ -4,12 +4,12 @@ Güncelleme tarihi: 12 Ağustos 2026
 
 ## Güncel sürüm
 
-- Sürüm: `1.1.0-alpha.24`
+- Sürüm: `1.1.0-alpha.25`
 - Kanal: İmzasız kontrollü geliştirme testi
-- Paket: `RotaLink-v1.1.0-alpha.24-UNSIGNED-DEVELOPMENT.exe`
+- Paket: `RotaLink-v1.1.0-alpha.25-UNSIGNED-DEVELOPMENT.exe`
 - Boyut: `207.872` bayt
 - SHA-256: `bf79658088613a570d0f377b9d89bdc0e63c42dc25e8d46d5f5af50613602af3`
-- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.24-UNSIGNED-DEVELOPMENT.exe
+- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.25-UNSIGNED-DEVELOPMENT.exe
 
 ## Sürüm doğrulama özeti
 
@@ -19,9 +19,10 @@ Güncelleme tarihi: 12 Ağustos 2026
 - `alpha.21`: SessionHelper, yalnız oturum numarası değiştirilmiş SYSTEM tokenı yerine yükseltilmiş RotaLink istemcisinin gerçek etkileşimli tokenıyla başlatılır.
 - `alpha.22`: Normal tıklamalar tek protokol komutu ve tek atomik `SendInput(move + down + up)` çağrısı olarak uygulanır. `AttachThreadInput` bağlantısı enjeksiyon tamamlanana kadar korunur; sürükleme ayrı `down/move/up` akışında devam eder.
 - `alpha.23`: Alpha.22 gerçek cihaz günlüğünde Explorer masaüstü ve görev çubuğu hedeflerinde görülen `AttachThreadInput · Win32 5` hatası giderildi. Helper artık fiziksel fare gibi doğrudan sistem input akışına tıklama ekler; hedef pencereyi zorla foreground/active/focus yapmaz.
-- `alpha.24`: Alpha.23 günlüğünde doğru hit-test edilen ancak bir süre sonra işlemeyen Explorer kabuk denetimleri için hedefe özgü senkron tıklama yolu eklendi. `MSTaskListWClass`, `SysListView32` ve `Shell_TrayWnd` mesajları 250 ms zaman aşımıyla işlenir; başarısız olursa atomik `SendInput` kullanılır.
+- `alpha.24`: Alpha.23 günlüğünde doğru hit-test edilen ancak bir süre sonra işlemeyen Explorer kabuk denetimleri için hedefe özgü senkron pencere mesajı yolu eklendi. Gerçek cihaz testi, mesaj tesliminin gerçek seçim/odak ve görev çubuğu etkinleştirme davranışını üretmediğini gösterdi.
+- `alpha.25`: Explorer'a doğrudan `WM_LBUTTONDOWN/UP` gönderme kaldırıldı. Görev çubuğu için UI Automation `InvokePattern`, masaüstü simgesi için `SelectionItemPattern` ve çift tıklamada `InvokePattern` kullanılır. Boş masaüstü ve sağ tık gerçek, atomik `SendInput` olarak kalır.
 
-`alpha.23` gerçek cihaz kaydı doğru hit-test hedeflerini doğruladı: görev çubuğu `MSTaskListWClass`, Explorer pencereleri `CabinetWClass` ve masaüstü `SysListView32`. İlk komutlar çalıştıktan sonra görev çubuğu ve masaüstü kabuk eylemleri tekrar etkisiz kaldı; paketler ve `SendInput` sonuçları başarılıydı. `alpha.24`, yalnız bu klasik Explorer kabuk sınıflarına senkron pencere mesajı gönderir. Beklenen günlük `Explorer shell click delivered synchronously` satırıdır.
+`alpha.24` gerçek cihaz kaydı, senkron pencere mesajlarının API seviyesinde başarılı dönmesine rağmen masaüstü seçimini, bağlam menüsünün kapanmasını ve bazı görev çubuğu düğmelerinin etkinleşmesini sağlamadığını doğruladı. `alpha.25` bu sahte başarı yolunu kaldırır. Beklenen günlükler `Desktop item selected through UI Automation` ve `Taskbar control invoked through UI Automation` satırlarıdır; boş alanda bu satırlar oluşmaz ve gerçek `SendInput` çalışır.
 
 ## Canlı hizmet
 
