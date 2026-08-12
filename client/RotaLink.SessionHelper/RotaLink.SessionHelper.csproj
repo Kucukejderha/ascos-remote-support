@@ -17,6 +17,7 @@
     <Compile Include="InteractiveWindowStation.cs" />
     <Compile Include="InputDesktop.cs" />
     <Compile Include="CoordinateTransformationEngine.cs" />
+    <Compile Include="ForegroundActivation.cs" />
     <Compile Include="InputEngine.cs" />
     <Compile Include="InputPipeServer.cs" />
   </ItemGroup>

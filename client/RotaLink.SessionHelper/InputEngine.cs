@@ -23,10 +23,12 @@ internal sealed class InputEngine : IDisposable
     private readonly BlockingCollection<WorkItem> _queue = new(new ConcurrentQueue<WorkItem>(), 512);
     private readonly Thread _thread;
     private readonly HelperLog _log;
+    private readonly ForegroundActivation _foreground;
 
     public InputEngine(HelperLog log)
     {
         _log = log;
+        _foreground = new ForegroundActivation(log);
         _thread = new Thread(Worker) { IsBackground = true, Name = "RotaLink secure input", Priority = ThreadPriority.AboveNormal };
         _thread.Start();
     }
@@ -74,7 +76,7 @@ internal sealed class InputEngine : IDisposable
         }
     }
 
-    private static bool Inject(InputPacket packet)
+    private bool Inject(InputPacket packet)
     {
         var point = new CoordinateTransformationEngine().Transform(packet.NormalizedX, packet.NormalizedY);
         NativeInput input;
@@ -92,6 +94,7 @@ internal sealed class InputEngine : IDisposable
                     _ => 0u
                 };
                 if (buttonFlag == 0) return false;
+                if (packet.Down) _foreground.PrepareForClick(point);
                 input = Mouse(point, MouseMove | buttonFlag, 0);
                 break;
             case InputEventKind.Wheel:

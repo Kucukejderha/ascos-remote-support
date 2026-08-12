@@ -18,7 +18,7 @@ internal static class Program
             using var identity = WindowsIdentity.GetCurrent();
             var uiAccess = ReadCurrentUiAccess();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
-                ", UIAccess=" + uiAccess + ".");
+                ", UIAccess=" + uiAccess + ", WTSState=" + ReadSessionState(sessionId) + ".");
             if (!identity.IsSystem)
                 throw new InvalidOperationException("Session helper must run with the LocalSystem identity.");
 
@@ -72,6 +72,16 @@ internal static class Program
         }
     }
 
+    private static string ReadSessionState(uint sessionId)
+    {
+        if (!WTSQuerySessionInformation(IntPtr.Zero, sessionId, 8, out var buffer, out var bytes) || bytes < sizeof(int))
+            return "Unknown(" + Marshal.GetLastWin32Error() + ")";
+        try { return ((WtsConnectState)Marshal.ReadInt32(buffer)).ToString(); }
+        finally { WTSFreeMemory(buffer); }
+    }
+
+    private enum WtsConnectState { Active, Connected, ConnectQuery, Shadow, Disconnected, Idle, Listen, Reset, Down, Init }
+
     [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -83,6 +93,10 @@ internal static class Program
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass,
         out int information, int informationLength, out int returnLength);
+    [DllImport("wtsapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WTSQuerySessionInformation(IntPtr server, uint sessionId, int infoClass, out IntPtr buffer, out int bytesReturned);
+    [DllImport("wtsapi32.dll")] private static extern void WTSFreeMemory(IntPtr memory);
 }
 
 internal sealed class HelperLog

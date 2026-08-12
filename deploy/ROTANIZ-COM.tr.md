@@ -1,5 +1,21 @@
 # rotaniz.com dağıtımı
 
+## 1.1.0-alpha.20 oturum ve foreground aktivasyonu
+
+Alpha.19 tanılamasında başarısız ilk deneme `Session=2`, Alpemix bağlantısından
+sonra çalışan deneme ise `Session=5` içinde gerçekleşti. `SendInput` her iki
+durumda da başarılı olsa da Windows bağlantısı kesilmiş/etkin olmayan RDP
+oturumunda olayı işleme koymayabilir. Alpha.20, helper başlangıcında gerçek WTS
+oturum durumunu günlükler. İlk fare basımından önce tıklanan kök pencereyi hedef
+input kuyruğuna `AttachThreadInput` ile bağlayıp foreground/active/focus
+hazırlığını yapar; fazladan tıklama üretmez.
+
+- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.20-UNSIGNED-DEVELOPMENT.exe`
+- Dosya boyutu: `204.288` bayt
+- SHA-256: `94cf9b65f5d5b8f5a9da692bb3da08e24f5bc6e87e4e6f07d610513f0e01e3f8`
+- Beklenen helper kaydı: `WTSState=Active`
+- İlk hedefte beklenen kayıt: `Prepared foreground input target`
+
 ## Alpha.19 operatör koordinat düzeltmesi
 
 4:3 gibi 16:9 dışındaki masaüstleri için operatör tuvali artık sabit 16:9
