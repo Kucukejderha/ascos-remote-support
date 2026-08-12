@@ -118,7 +118,7 @@ internal static class RemoteSession
     private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, CancellationToken token)
     {
         var buffer = new byte[4096];
-        string? lastReportedResult = null;
+        string? lastReportedLogKey = null;
         var serializer = new JavaScriptSerializer();
         while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
         {
@@ -140,12 +140,13 @@ internal static class RemoteSession
                 // move in flight and releases its newest coalesced move on ACK.
                 var acknowledgement = Encoding.UTF8.GetBytes(acknowledgementText);
                 await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
-                if (!report.Accepted || !string.Equals(acknowledgementText, lastReportedResult, StringComparison.Ordinal))
+                var logKey = report.Accepted + "|" + report.Stage + "|" + report.ErrorCode + "|" + report.Desktop + "|" + report.EventType;
+                if (!report.Accepted || !string.Equals(logKey, lastReportedLogKey, StringComparison.Ordinal))
                 {
                     AppDiagnostics.Write("Remote input result reported. Accepted=" + report.Accepted +
                         ", Stage=" + report.Stage + ", Error=" + report.ErrorCode +
                         ", Desktop=" + report.Desktop + ", Event=" + report.EventType);
-                    lastReportedResult = acknowledgementText;
+                    lastReportedLogKey = logKey;
                 }
             }
         }

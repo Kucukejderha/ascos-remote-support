@@ -1,5 +1,26 @@
 # rotaniz.com dağıtımı
 
+## 1.1.0-alpha.22 atomik ilk tıklama
+
+Alpha.21 gerçek cihaz günlükleri helper'ın doğru kullanıcı kimliği, yükseltilmiş token,
+aktif WTS oturumu ve `WinSta0` üzerinde çalıştığını doğruladı. `SendInput` başarılı
+dönmesine rağmen ilk tıklama, Alpemix üzerinden bir kez tıklanana kadar hedefte etki
+oluşturmuyordu. Kalan sorun yetki değil, tıklama aktivasyonu ve düğme basma/bırakma
+olaylarının iki ayrı taşıma/IPC işlemi arasında bölünmesiydi.
+
+Alpha.22'de normal tıklama tek `click` protokol komutu olarak taşınır ve helper içinde
+tek bir `SendInput` çağrısında `move + button-down + button-up` dizisiyle uygulanır.
+Hedef ve foreground giriş kuyrukları `AttachThreadInput` ile gerçek enjeksiyon
+tamamlanana kadar bağlı tutulur. Dört pikselden fazla hareket edilen işlemler gerçek
+sürükleme kabul edilir ve ayrı `down/move/up` akışını kullanır.
+
+- Beklenen operatör durumu/günlüğü: `Event=click`
+- Sürükleme günlükleri: `Event=button-down` ve `Event=button-up`
+- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.22-UNSIGNED-DEVELOPMENT.exe`
+- Dosya boyutu: `207.360` bayt
+- SHA-256: `d6b94d5a7b1064a83413018b803fe57bcc1cdb0f0faba0a7a77a9c2cfa672cb0`
+- Test paketi imzasızdır ve yalnız kontrollü doğrulama içindir.
+
 ## 1.1.0-alpha.21 etkileşimli kullanıcı tokenı
 
 Alpha.20 birleşik günlüğü input paketinin sunucu, istemci IPC ve SessionHelper

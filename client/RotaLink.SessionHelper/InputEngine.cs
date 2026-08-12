@@ -79,12 +79,10 @@ internal sealed class InputEngine : IDisposable
     private bool Inject(InputPacket packet)
     {
         var point = new CoordinateTransformationEngine().Transform(packet.NormalizedX, packet.NormalizedY);
-        NativeInput input;
         switch (packet.Kind)
         {
             case InputEventKind.Move:
-                input = Mouse(point, MouseMove, 0);
-                break;
+                return SendInputs(Mouse(point, MouseMove, 0));
             case InputEventKind.Button:
                 var buttonFlag = (packet.Data, packet.Down) switch
                 {
@@ -94,17 +92,29 @@ internal sealed class InputEngine : IDisposable
                     _ => 0u
                 };
                 if (buttonFlag == 0) return false;
-                if (packet.Down) _foreground.PrepareForClick(point);
-                input = Mouse(point, MouseMove | buttonFlag, 0);
-                break;
+                using (packet.Down ? _foreground.PrepareForClick(point) : null)
+                    return SendInputs(Mouse(point, MouseMove | buttonFlag, 0));
+            case InputEventKind.Click:
+                var clickFlags = packet.Data switch
+                {
+                    0 => (Down: MouseLeftDown, Up: MouseLeftUp),
+                    1 => (Down: MouseMiddleDown, Up: MouseMiddleUp),
+                    2 => (Down: MouseRightDown, Up: MouseRightUp),
+                    _ => (Down: 0u, Up: 0u)
+                };
+                if (clickFlags.Down == 0) return false;
+                using (_foreground.PrepareForClick(point))
+                    return SendInputs(
+                        Mouse(point, MouseMove, 0),
+                        Mouse(point, clickFlags.Down, 0),
+                        Mouse(point, clickFlags.Up, 0));
             case InputEventKind.Wheel:
                 if (packet.Data is < -1200 or > 1200) return false;
-                input = Mouse(point, MouseMove | MouseWheel, unchecked((uint)packet.Data));
-                break;
+                return SendInputs(Mouse(point, MouseMove | MouseWheel, unchecked((uint)packet.Data)));
             case InputEventKind.Key:
                 if (packet.KeyCode is 0 or > 0xFF) return false;
                 var extended = IsExtendedKey(packet.KeyCode) ? KeyExtended : 0u;
-                input = new NativeInput
+                return SendInputs(new NativeInput
                 {
                     Type = InputKeyboard,
                     Data = new InputUnion
@@ -115,14 +125,16 @@ internal sealed class InputEngine : IDisposable
                             Flags = extended | (packet.Down ? 0u : KeyUp)
                         }
                     }
-                };
-                break;
+                });
             default: return false;
         }
+    }
 
+    private static bool SendInputs(params NativeInput[] inputs)
+    {
         SetLastError(0);
-        var sent = SendInput(1, new[] { input }, Marshal.SizeOf<NativeInput>());
-        if (sent == 1) return true;
+        var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeInput>());
+        if (sent == inputs.Length) return true;
         throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
     }
 
@@ -202,7 +214,7 @@ internal readonly struct InputInjectionResult
     public static InputInjectionResult Failure(InputFailureStage stage, int errorCode = 0) => new(false, stage, errorCode);
 }
 
-internal enum InputEventKind : byte { Move = 1, Button = 2, Wheel = 3, Key = 4 }
+internal enum InputEventKind : byte { Move = 1, Button = 2, Wheel = 3, Key = 4, Click = 5 }
 
 internal sealed class InputPacket
 {

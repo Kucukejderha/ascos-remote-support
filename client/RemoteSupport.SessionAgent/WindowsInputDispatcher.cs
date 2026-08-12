@@ -39,7 +39,8 @@ public sealed class WindowsInputDispatcher : IDisposable
         try { message = new JavaScriptSerializer().Deserialize<InputMessage>(Encoding.UTF8.GetString(json, 0, length)); }
         catch (ArgumentException) { return new InputDispatchReport(false, "json-invalid", 0, null, null); }
         if (message is null) return new InputDispatchReport(false, "message-empty", 0, null, null);
-        if (!TryAcquireRatePermit(message)) return new InputDispatchReport(false, "rate-limited", 0, null, message.Type);
+        var eventType = DescribeEvent(message);
+        if (!TryAcquireRatePermit(message)) return new InputDispatchReport(false, "rate-limited", 0, null, eventType);
 
         if (!_inputLogged)
         {
@@ -53,17 +54,17 @@ public sealed class WindowsInputDispatcher : IDisposable
             var result = helperResult.Value;
             return new InputDispatchReport(result.Accepted,
                 result.Accepted ? "system-helper-ok" : "system-helper-" + result.Stage,
-                result.ErrorCode, "SYSTEM helper / WinSta0", message.Type);
+                result.ErrorCode, "interactive helper / WinSta0", eventType);
         }
         if (InstalledInputRuntime.IsRunning)
-            return new InputDispatchReport(false, "system-helper-ipc-unavailable", 0, "SYSTEM helper", message.Type);
+            return new InputDispatchReport(false, "system-helper-ipc-unavailable", 0, "interactive helper", eventType);
 
         var work = new InputWorkItem(message);
         try { _queue.Add(work); }
-        catch (InvalidOperationException) { return new InputDispatchReport(false, "input-worker-stopped", 0, null, message.Type); }
+        catch (InvalidOperationException) { return new InputDispatchReport(false, "input-worker-stopped", 0, null, eventType); }
         if (!work.Completed.Wait(TimeSpan.FromSeconds(2)))
-            return new InputDispatchReport(false, "input-worker-timeout", 0, null, message.Type);
-        return new InputDispatchReport(work.Accepted, work.Stage, work.ErrorCode, work.Desktop, message.Type);
+            return new InputDispatchReport(false, "input-worker-timeout", 0, null, eventType);
+        return new InputDispatchReport(work.Accepted, work.Stage, work.ErrorCode, work.Desktop, eventType);
     }
 
     private void DesktopThreadMain()
@@ -116,6 +117,7 @@ public sealed class WindowsInputDispatcher : IDisposable
         {
             "move" => MoveCursor(ResolvePoint(message)),
             "button" => SendButton(message),
+            "click" => SendClick(message),
             "wheel" when message.Delta is >= -1200 and <= 1200 => SendWheel(message),
             "key" => SendKey(message.Code, message.Down),
             _ => false
@@ -162,6 +164,29 @@ public sealed class WindowsInputDispatcher : IDisposable
             Union = new InputUnion { Mouse = new MouseInput { Flags = flag } }
         });
     }
+
+    private bool SendClick(InputMessage message)
+    {
+        var flags = message.Button switch
+        {
+            0 => (Down: 0x0002u, Up: 0x0004u),
+            1 => (Down: 0x0020u, Up: 0x0040u),
+            2 => (Down: 0x0008u, Up: 0x0010u),
+            _ => (Down: 0u, Up: 0u)
+        };
+        if (flags.Down == 0) return false;
+        var point = ResolvePoint(message);
+        return SendInputs(MouseMoveInput(point),
+            new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { Flags = flags.Down } } },
+            new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { Flags = flags.Up } } });
+    }
+
+    private static string? DescribeEvent(InputMessage message) => message.Type switch
+    {
+        "button" => "button-" + (message.Down ? "down" : "up"),
+        "key" => "key-" + (message.Down ? "down" : "up"),
+        _ => message.Type
+    };
 
     private bool SendWheel(InputMessage message)
     {

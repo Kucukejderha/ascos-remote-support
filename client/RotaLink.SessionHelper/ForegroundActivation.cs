@@ -11,13 +11,13 @@ internal sealed class ForegroundActivation
 
     public ForegroundActivation(HelperLog log) => _log = log;
 
-    public void PrepareForClick(AbsolutePoint point)
+    public IDisposable PrepareForClick(AbsolutePoint point)
     {
         var hit = WindowFromPoint(new Point(point.PixelX, point.PixelY));
-        if (hit == IntPtr.Zero) return;
+        if (hit == IntPtr.Zero) return EmptyAttachment.Instance;
         var root = GetAncestor(hit, GaRoot);
         if (root == IntPtr.Zero) root = hit;
-        if (!IsWindow(root) || !IsWindowVisible(root)) return;
+        if (!IsWindow(root) || !IsWindowVisible(root)) return EmptyAttachment.Instance;
 
         var currentThread = GetCurrentThreadId();
         var targetThread = GetWindowThreadProcessId(root, out _);
@@ -53,17 +53,55 @@ internal sealed class ForegroundActivation
                     ", Hit=0x" + hit.ToInt64().ToString("X") + ", Foreground=" + foregrounded +
                     ", Active=" + activated + ", Focus=" + focused + ".");
             }
+
+            // Keep the input queues attached until the caller has completed the
+            // matching SendInput call. Detaching here resets the shared queue's
+            // key state before the click reaches the target on some RDP sessions.
+            return new InputQueueAttachment(currentThread, targetThread, foregroundThread,
+                attachedTarget, attachedForeground);
         }
         catch (Win32Exception exception)
         {
             _log.Write("Foreground input preparation failed; SendInput will still be attempted. Win32Error=" +
                 exception.NativeErrorCode + ". " + exception.Message);
-        }
-        finally
-        {
             if (attachedForeground) AttachThreadInput(currentThread, foregroundThread, false);
             if (attachedTarget) AttachThreadInput(currentThread, targetThread, false);
+            return EmptyAttachment.Instance;
         }
+
+    }
+
+    private sealed class InputQueueAttachment : IDisposable
+    {
+        private readonly uint _currentThread;
+        private readonly uint _targetThread;
+        private readonly uint _foregroundThread;
+        private readonly bool _attachedTarget;
+        private readonly bool _attachedForeground;
+        private int _disposed;
+
+        public InputQueueAttachment(uint currentThread, uint targetThread, uint foregroundThread,
+            bool attachedTarget, bool attachedForeground)
+        {
+            _currentThread = currentThread;
+            _targetThread = targetThread;
+            _foregroundThread = foregroundThread;
+            _attachedTarget = attachedTarget;
+            _attachedForeground = attachedForeground;
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            if (_attachedForeground) AttachThreadInput(_currentThread, _foregroundThread, false);
+            if (_attachedTarget) AttachThreadInput(_currentThread, _targetThread, false);
+        }
+    }
+
+    private sealed class EmptyAttachment : IDisposable
+    {
+        public static readonly EmptyAttachment Instance = new();
+        public void Dispose() { }
     }
 
     [StructLayout(LayoutKind.Sequential)] private readonly struct Point

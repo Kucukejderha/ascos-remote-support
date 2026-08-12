@@ -4,12 +4,12 @@ Güncelleme tarihi: 12 Ağustos 2026
 
 ## Güncel sürüm
 
-- Sürüm: `1.1.0-alpha.21`
+- Sürüm: `1.1.0-alpha.22`
 - Kanal: İmzasız kontrollü geliştirme testi
-- Paket: `RotaLink-v1.1.0-alpha.21-UNSIGNED-DEVELOPMENT.exe`
-- Boyut: `205.312` bayt
-- SHA-256: `aed2f408088915f61db9fafe2e5771b92741f0e567f27e8dc195a0e3c9eee40c`
-- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.21-UNSIGNED-DEVELOPMENT.exe
+- Paket: `RotaLink-v1.1.0-alpha.22-UNSIGNED-DEVELOPMENT.exe`
+- Boyut: `207.360` bayt
+- SHA-256: `d6b94d5a7b1064a83413018b803fe57bcc1cdb0f0faba0a7a77a9c2cfa672cb0`
+- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.22-UNSIGNED-DEVELOPMENT.exe
 
 ## Sürüm doğrulama özeti
 
@@ -17,8 +17,9 @@ Güncelleme tarihi: 12 Ağustos 2026
 - `alpha.19`: Kaynak ekranın en-boy oranını koruyan dinamik yakalama ve operatör tuvali koordinat düzeltmesi eklendi. Bazı RDP oturumlarında input API çağrısı başarılı dönmesine rağmen giriş etkin olmayan oturuma yönlenebildi.
 - `alpha.20`: SessionHelper WTS oturum durumunu günlüğe ekler. Fare basımından hemen önce tıklanan kök pencereyi hedef input kuyruğuna bağlar ve foreground/active/focus hazırlığı yapar.
 - `alpha.21`: SessionHelper, yalnız oturum numarası değiştirilmiş SYSTEM tokenı yerine yükseltilmiş RotaLink istemcisinin gerçek etkileşimli tokenıyla başlatılır.
+- `alpha.22`: Normal tıklamalar tek protokol komutu ve tek atomik `SendInput(move + down + up)` çağrısı olarak uygulanır. `AttachThreadInput` bağlantısı enjeksiyon tamamlanana kadar korunur; sürükleme ayrı `down/move/up` akışında devam eder.
 
-`alpha.21` için gerçek cihaz testi henüz tamamlanmamıştır. Beklenen tanılama kayıtları `Elevated interactive client helper token prepared`, `Elevated=True`, `WTSState=Active` ve `Prepared foreground input target` satırlarıdır.
+`alpha.21` gerçek cihaz kaydı doğru etkileşimli tokenı, aktif WTS oturumunu ve başarılı Win32 çağrılarını doğruladı. Buna rağmen ilk tıklama, başka bir uzak destek uygulaması Windows giriş kuyruğunu etkinleştirene kadar görünür etki oluşturmuyordu. `alpha.22` bu ilk tıklama yarışını atomik hale getirir. Başarılı normal tıklamada istemci günlüğünde `Event=click` görülmelidir.
 
 ## Canlı hizmet
 
@@ -34,7 +35,7 @@ Güncelleme tarihi: 12 Ağustos 2026
 - Kontrol ve görüntü için ayrı WebSocket kanalları kullanılmaktadır.
 - GDI uyumluluk yakalaması kaynak en-boy oranını korur ve en fazla `1440×900` sınırına orantılı küçültür.
 - Operatör tuvali gelen karenin gerçek en-boy oranına göre boyutlandırılır.
-- Input, aktif kullanıcı oturumundaki SYSTEM SessionHelper üzerinden uygulanır.
+- Input, aktif kullanıcı oturumunda gerçek yükseltilmiş kullanıcı tokenıyla çalışan SessionHelper üzerinden uygulanır.
 - Başarısız input çağrıları yedek API ile sahte başarıya çevrilmez.
 - DXGI/H.264/paylaşımlı bellek hattı kaynak kodda bulunur; üretim ana akışının tüm cihaz matrisindeki doğrulaması henüz tamamlanmamıştır.
 

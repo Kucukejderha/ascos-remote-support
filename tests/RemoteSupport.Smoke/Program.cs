@@ -156,6 +156,10 @@ static void VerifyBinaryTransportProtocol()
     InputPacketCodec.Write(inputBytes, input);
     if (!InputPacketCodec.TryRead(inputBytes, out var decodedInput) || decodedInput != input)
         throw new InvalidOperationException("Binary input protocol round-trip failed.");
+    var click = new InputPacket(InputEventKind.Click, false, 43, 0.5, 0.5, 2, 0);
+    InputPacketCodec.Write(inputBytes, click);
+    if (!InputPacketCodec.TryRead(inputBytes, out decodedInput) || decodedInput != click)
+        throw new InvalidOperationException("Atomic click protocol round-trip failed.");
 
     var video = new VideoPacketHeader(VideoCodec.H264AnnexB, true, 44, 1234567, 1920, 1080, 2048);
     var videoBytes = new byte[VideoPacketCodec.HeaderBytes];

@@ -102,14 +102,14 @@ internal sealed class SessionHelperInputClient : IDisposable
         var packet = new byte[PacketBytes];
         WriteUInt32(packet, 0, 0x494C5452);
         WriteUInt16(packet, 4, 1);
-        packet[6] = message.Type switch { "move" => 1, "button" => 2, "wheel" => 3, "key" => 4, _ => (byte)0 };
+        packet[6] = message.Type switch { "move" => 1, "button" => 2, "wheel" => 3, "key" => 4, "click" => 5, _ => (byte)0 };
         packet[7] = message.Down ? (byte)1 : (byte)0;
         Buffer.BlockCopy(BitConverter.GetBytes(sequence), 0, packet, 8, 8);
         var x = message.NormalizedX ?? Math.Max(0d, Math.Min(1d, message.X / 65535d));
         var y = message.NormalizedY ?? Math.Max(0d, Math.Min(1d, message.Y / 65535d));
         Buffer.BlockCopy(BitConverter.GetBytes(x), 0, packet, 16, 8);
         Buffer.BlockCopy(BitConverter.GetBytes(y), 0, packet, 24, 8);
-        var data = message.Type == "button" ? message.Button : message.Delta;
+        var data = message.Type is "button" or "click" ? message.Button : message.Delta;
         Buffer.BlockCopy(BitConverter.GetBytes(data), 0, packet, 32, 4);
         WriteUInt32(packet, 36, WindowsInputDispatcher.MapKey(message.Code));
         return packet;
