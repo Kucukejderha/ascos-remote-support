@@ -41,7 +41,10 @@ public sealed class ScreenFrameEncoder
 
         using var jpeg = new MemoryStream(96 * 1024);
         using var parameters = new EncoderParameters(1);
-        parameters.Param[0] = new EncoderParameter(Encoder.Quality, 68L);
+        // Desktop text and thin grid lines degrade quickly at low JPEG quality.
+        // Video uses a depth-one queue, so a modest quality increase does not add
+        // head-of-line latency to the independent control channel.
+        parameters.Param[0] = new EncoderParameter(Encoder.Quality, 78L);
         bitmap.Save(jpeg, JpegCodec, parameters);
         var image = jpeg.ToArray();
         var packet = new byte[5 + image.Length];

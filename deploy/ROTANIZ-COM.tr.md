@@ -1,5 +1,20 @@
 # rotaniz.com dağıtımı
 
+## 1.1.0-alpha.19 görüntü iyileştirmesi
+
+`alpha.19`, GDI görüntüyü sabit `960×540` boyutuna germek yerine kaynak
+masaüstünün en-boy oranını korur. 1440×900 sınırının altındaki ekranlar doğal
+çözünürlüklerinde aktarılır; daha büyük ekranlar kırpılmadan orantılı küçültülür.
+RDP yeniden bağlantısı, ekran çözünürlüğü değişimi veya monitör değişikliği her
+karede algılanarak yakalama yüzeyleri yeniden oluşturulur. DPI manifesti
+Per-Monitor V2 olarak tanımlanmış, masaüstü metinleri için JPEG kalitesi
+yükseltilmiştir.
+
+- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.19-UNSIGNED-DEVELOPMENT.exe`
+- Dosya boyutu: `201.216` bayt
+- SHA-256: `30e92a4e2887403e44356ad67f012d7065df6b32694e68c67890e666e82b3f14`
+- İmzalı kararlı müşteri dosyası bu test sürümüyle değiştirilmez.
+
 ## 1.1.0-alpha.18 test sürümü
 
 `alpha.17` tanılama kayıtları SYSTEM helper ve `SendInput` zincirinin artık

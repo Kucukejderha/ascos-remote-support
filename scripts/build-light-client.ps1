@@ -26,7 +26,7 @@ if ($LASTEXITCODE -ne 0) { throw 'RotaLink build failed.' }
 
 $bin = Join-Path $root "client\RemoteSupport.SessionAgent\bin\$Configuration\net48"
 $artifactDir = Join-Path $root 'artifacts'
-$output = Join-Path $artifactDir 'RotaLink-v1.1.0-alpha.18-UNSIGNED-DEVELOPMENT.exe'
+$output = Join-Path $artifactDir 'RotaLink-v1.1.0-alpha.19-UNSIGNED-DEVELOPMENT.exe'
 New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
 Copy-Item -LiteralPath (Join-Path $bin 'RotaLink.exe') -Destination $output -Force
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $output).Hash.ToLowerInvariant()

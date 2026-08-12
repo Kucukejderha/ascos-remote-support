@@ -82,10 +82,11 @@ internal static class RemoteSession
         {
             try
             {
-                capture ??= new GdiScreenCapture(960, 540);
-                if (firstFrame) AppDiagnostics.Write("Screen capture initialized at 960x540.");
+                capture ??= new GdiScreenCapture(1440, 900);
                 await Task.Delay(70, token);
                 var frame = capture.Capture();
+                if (firstFrame) AppDiagnostics.Write("Screen capture initialized at " + frame.Width + "x" + frame.Height +
+                    " with aspect-ratio preservation.");
                 accessDeniedLogged = false;
                 var now = Environment.TickCount;
                 var forceKeyFrame = unchecked(now - nextKeyFrame) >= 0;
