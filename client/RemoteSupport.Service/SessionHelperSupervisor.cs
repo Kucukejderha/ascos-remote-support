@@ -37,7 +37,7 @@ internal sealed class SessionHelperSupervisor : IDisposable
         try
         {
             ThrowIfDisposed();
-            var activeSession = WTSGetActiveConsoleSessionId();
+            var activeSession = ResolveClientSessionId();
             if (activeSession == InvalidSessionId)
             {
                 await StopHelperCoreAsync(cancellationToken).ConfigureAwait(false);
@@ -57,6 +57,14 @@ internal sealed class SessionHelperSupervisor : IDisposable
         {
             _gate.Release();
         }
+    }
+
+    private uint ResolveClientSessionId()
+    {
+        if (!ProcessIdToSessionId(_allowedClientProcessId, out var sessionId))
+            throw new Win32Exception(Marshal.GetLastWin32Error(),
+                "ProcessIdToSessionId failed for RotaLink client " + _allowedClientProcessId + ".");
+        return sessionId;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -225,6 +233,8 @@ internal sealed class SessionHelperSupervisor : IDisposable
         string currentDirectory, ref StartupInfo startupInfo, out ProcessInformation processInformation);
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool CreateEnvironmentBlock(out IntPtr environment, SafeKernelHandle token, bool inherit);
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool DestroyEnvironmentBlock(IntPtr environment);
-    [DllImport("kernel32.dll")] private static extern uint WTSGetActiveConsoleSessionId();
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ProcessIdToSessionId(uint processId, out uint sessionId);
     [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
 }

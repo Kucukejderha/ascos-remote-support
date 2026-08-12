@@ -35,4 +35,4 @@ Betik sırasıyla SessionHelper, Service ve bunları içeren ana RotaLink dosyas
 
 ## Dağıtım kapısı
 
-`build-light-client.ps1` yalnızca `RotaLink-v1.1.0-alpha.16-UNSIGNED-DEVELOPMENT.exe` üretir. Kontrollü test için LocalSystem kontrol motorunu çalıştırır; imzasız olduğu için müşteri dağıtımına uygun değildir. Web sitesi ve genel GitHub sürümü yalnızca `build-signed-client.ps1` başarıyla tamamlandıktan sonra güncellenmelidir.
+`build-light-client.ps1` yalnızca `RotaLink-v1.1.0-alpha.17-UNSIGNED-DEVELOPMENT.exe` üretir. Kontrollü test için LocalSystem kontrol motorunu çalıştırır; imzasız olduğu için müşteri dağıtımına uygun değildir. Alpha.17, RDP/Windows Server sistemlerinde fiziksel konsol yerine RotaLink işleminin gerçek oturumunu hedefler ve input desktop'ı tam masaüstü erişimiyle açar. Web sitesi ve genel GitHub sürümü yalnızca `build-signed-client.ps1` başarıyla tamamlandıktan sonra güncellenmelidir.
