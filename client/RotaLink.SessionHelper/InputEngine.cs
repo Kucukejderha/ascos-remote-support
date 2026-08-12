@@ -23,12 +23,12 @@ internal sealed class InputEngine : IDisposable
     private readonly BlockingCollection<WorkItem> _queue = new(new ConcurrentQueue<WorkItem>(), 512);
     private readonly Thread _thread;
     private readonly HelperLog _log;
-    private readonly ForegroundActivation _foreground;
+    private readonly ClickTargetDiagnostics _clickTargets;
 
     public InputEngine(HelperLog log)
     {
         _log = log;
-        _foreground = new ForegroundActivation(log);
+        _clickTargets = new ClickTargetDiagnostics(log);
         _thread = new Thread(Worker) { IsBackground = true, Name = "RotaLink secure input", Priority = ThreadPriority.AboveNormal };
         _thread.Start();
     }
@@ -92,8 +92,8 @@ internal sealed class InputEngine : IDisposable
                     _ => 0u
                 };
                 if (buttonFlag == 0) return false;
-                using (packet.Down ? _foreground.PrepareForClick(point) : null)
-                    return SendInputs(Mouse(point, MouseMove | buttonFlag, 0));
+                if (packet.Down) _clickTargets.Observe(point);
+                return SendInputs(Mouse(point, MouseMove | buttonFlag, 0));
             case InputEventKind.Click:
                 var clickFlags = packet.Data switch
                 {
@@ -103,11 +103,11 @@ internal sealed class InputEngine : IDisposable
                     _ => (Down: 0u, Up: 0u)
                 };
                 if (clickFlags.Down == 0) return false;
-                using (_foreground.PrepareForClick(point))
-                    return SendInputs(
-                        Mouse(point, MouseMove, 0),
-                        Mouse(point, clickFlags.Down, 0),
-                        Mouse(point, clickFlags.Up, 0));
+                _clickTargets.Observe(point);
+                return SendInputs(
+                    Mouse(point, MouseMove, 0),
+                    Mouse(point, clickFlags.Down, 0),
+                    Mouse(point, clickFlags.Up, 0));
             case InputEventKind.Wheel:
                 if (packet.Data is < -1200 or > 1200) return false;
                 return SendInputs(Mouse(point, MouseMove | MouseWheel, unchecked((uint)packet.Data)));

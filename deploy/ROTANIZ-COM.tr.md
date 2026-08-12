@@ -1,5 +1,26 @@
 # rotaniz.com dağıtımı
 
+## 1.1.0-alpha.23 Explorer kabuğu tıklamaları
+
+Alpha.22 günlükleri tüm tıklamaların atomik `Event=click` olarak helper'a ulaştığını
+gösterdi. Normal pencere hedeflerinde foreground hazırlığı başarılı olurken masaüstü,
+görev çubuğu ve simge durumuna küçültülmüş pencere düğmelerinde
+`AttachThreadInput(target/foreground) failed · Win32Error=5` oluştu. Yapay foreground
+işlemi fiziksel farenin doğal aktivasyonundan farklı davranarak Explorer kabuğunu
+engelliyordu.
+
+Alpha.23 tıklama yolundan `AttachThreadInput`, `SetForegroundWindow`, `SetActiveWindow`
+ve `SetFocus` çağrılarını kaldırır. Atomik `SendInput(move + down + up)` doğrudan sistem
+input akışına eklenir; Windows masaüstü, görev çubuğu ve normal pencerelerde kendi
+hit-test/aktivasyon sürecini yürütür. Hedef pencere sınıfı yalnız tanılama için kaydedilir.
+
+- Beklenen günlük: `Natural click target observed`
+- Artık görülmemesi gereken günlük: `Foreground input preparation failed`
+- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.23-UNSIGNED-DEVELOPMENT.exe`
+- Dosya boyutu: `205.824` bayt
+- SHA-256: `20ae90c536149c94230afa4224ca7ac4ec6a54277f2cb36b7a508717c9520dea`
+- Test paketi imzasızdır ve yalnız kontrollü doğrulama içindir.
+
 ## 1.1.0-alpha.22 atomik ilk tıklama
 
 Alpha.21 gerçek cihaz günlükleri helper'ın doğru kullanıcı kimliği, yükseltilmiş token,

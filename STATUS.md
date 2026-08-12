@@ -4,12 +4,12 @@ Güncelleme tarihi: 12 Ağustos 2026
 
 ## Güncel sürüm
 
-- Sürüm: `1.1.0-alpha.22`
+- Sürüm: `1.1.0-alpha.23`
 - Kanal: İmzasız kontrollü geliştirme testi
-- Paket: `RotaLink-v1.1.0-alpha.22-UNSIGNED-DEVELOPMENT.exe`
-- Boyut: `207.360` bayt
-- SHA-256: `d6b94d5a7b1064a83413018b803fe57bcc1cdb0f0faba0a7a77a9c2cfa672cb0`
-- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.22-UNSIGNED-DEVELOPMENT.exe
+- Paket: `RotaLink-v1.1.0-alpha.23-UNSIGNED-DEVELOPMENT.exe`
+- Boyut: `205.824` bayt
+- SHA-256: `20ae90c536149c94230afa4224ca7ac4ec6a54277f2cb36b7a508717c9520dea`
+- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.23-UNSIGNED-DEVELOPMENT.exe
 
 ## Sürüm doğrulama özeti
 
@@ -18,8 +18,9 @@ Güncelleme tarihi: 12 Ağustos 2026
 - `alpha.20`: SessionHelper WTS oturum durumunu günlüğe ekler. Fare basımından hemen önce tıklanan kök pencereyi hedef input kuyruğuna bağlar ve foreground/active/focus hazırlığı yapar.
 - `alpha.21`: SessionHelper, yalnız oturum numarası değiştirilmiş SYSTEM tokenı yerine yükseltilmiş RotaLink istemcisinin gerçek etkileşimli tokenıyla başlatılır.
 - `alpha.22`: Normal tıklamalar tek protokol komutu ve tek atomik `SendInput(move + down + up)` çağrısı olarak uygulanır. `AttachThreadInput` bağlantısı enjeksiyon tamamlanana kadar korunur; sürükleme ayrı `down/move/up` akışında devam eder.
+- `alpha.23`: Alpha.22 gerçek cihaz günlüğünde Explorer masaüstü ve görev çubuğu hedeflerinde görülen `AttachThreadInput · Win32 5` hatası giderildi. Helper artık fiziksel fare gibi doğrudan sistem input akışına tıklama ekler; hedef pencereyi zorla foreground/active/focus yapmaz.
 
-`alpha.21` gerçek cihaz kaydı doğru etkileşimli tokenı, aktif WTS oturumunu ve başarılı Win32 çağrılarını doğruladı. Buna rağmen ilk tıklama, başka bir uzak destek uygulaması Windows giriş kuyruğunu etkinleştirene kadar görünür etki oluşturmuyordu. `alpha.22` bu ilk tıklama yarışını atomik hale getirir. Başarılı normal tıklamada istemci günlüğünde `Event=click` görülmelidir.
+`alpha.22` gerçek cihaz kaydı atomik `Event=click` paketlerinin helper'a ulaştığını doğruladı. İlk iki normal pencere hedefi hazırlanırken Explorer kabuğuna geçildiğinde `AttachThreadInput(target/foreground) failed · Win32Error=5` tekrarlandı; masaüstü simgeleri ve görev çubuğu çalışmadı. `alpha.23` bu yapay foreground katmanını kaldırır. Beklenen günlük `Natural click target observed` satırıdır; `Foreground input preparation failed` artık görülmemelidir.
 
 ## Canlı hizmet
 
