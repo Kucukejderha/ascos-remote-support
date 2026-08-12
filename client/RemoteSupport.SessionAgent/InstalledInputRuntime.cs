@@ -8,7 +8,7 @@ namespace RemoteSupport.SessionAgent;
 internal sealed class InstalledInputRuntime : IDisposable
 {
     private const string ServiceName = "RotaLinkInputRuntime";
-    private const string RuntimeVersion = "1.1.0-alpha.23";
+    private const string RuntimeVersion = "1.1.0-alpha.24";
     private const uint ScManagerConnect = 0x0001;
     private const uint ScManagerCreateService = 0x0002;
     private const uint ServiceChangeConfig = 0x0002;

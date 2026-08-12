@@ -103,7 +103,8 @@ internal sealed class InputEngine : IDisposable
                     _ => (Down: 0u, Up: 0u)
                 };
                 if (clickFlags.Down == 0) return false;
-                _clickTargets.Observe(point);
+                var target = _clickTargets.Observe(point);
+                if (_clickTargets.TryDispatchExplorerShellClick(target, packet.Data)) return true;
                 return SendInputs(
                     Mouse(point, MouseMove, 0),
                     Mouse(point, clickFlags.Down, 0),

@@ -1,5 +1,24 @@
 # rotaniz.com dağıtımı
 
+## 1.1.0-alpha.24 Explorer kabuğu için hedefli tıklama
+
+Alpha.23 gerçek cihaz kaydı uzak koordinatların doğru pencerelere ulaştığını kesin
+olarak gösterdi: görev çubuğu `MSTaskListWClass`, Explorer `CabinetWClass`, masaüstü
+`SysListView32`. İlk komutlar çalıştıktan sonra kabuk eylemleri tekrar etkisiz kaldı;
+istemci ve helper günlüklerinde bağlantı, IPC veya Win32 hatası bulunmadı.
+
+Alpha.24 normal uygulamalar için atomik `SendInput` yolunu korur. Yalnız
+`MSTaskListWClass`, `SysListView32` ve `Shell_TrayWnd` hedeflerinde tıklamayı
+`SendMessageTimeout` ile 250 ms sınırında senkron işler. Masaüstünde Windows'un doğal
+çift tıklama süresi ve dört piksellik konum toleransı izlenir. Kabuk yanıt vermezse
+helper kilitlenmez ve atomik `SendInput` yoluna geri döner.
+
+- Beklenen günlük: `Explorer shell click delivered synchronously`
+- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.24-UNSIGNED-DEVELOPMENT.exe`
+- Dosya boyutu: `207.872` bayt
+- SHA-256: `bf79658088613a570d0f377b9d89bdc0e63c42dc25e8d46d5f5af50613602af3`
+- Test paketi imzasızdır ve yalnız kontrollü doğrulama içindir.
+
 ## 1.1.0-alpha.23 Explorer kabuğu tıklamaları
 
 Alpha.22 günlükleri tüm tıklamaların atomik `Event=click` olarak helper'a ulaştığını
