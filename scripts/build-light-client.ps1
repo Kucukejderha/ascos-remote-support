@@ -21,17 +21,17 @@ foreach ($runtimeProject in @($serviceProject, $helperProject)) {
 }
 dotnet restore $project --configfile $nugetConfig -p:NuGetAudit=false
 if ($LASTEXITCODE -ne 0) { throw 'RotaLink restore failed.' }
-dotnet build $project -c $Configuration --no-restore
+dotnet build $project -c $Configuration --no-restore -p:UnsignedDevelopment=true
 if ($LASTEXITCODE -ne 0) { throw 'RotaLink build failed.' }
 
 $bin = Join-Path $root "client\RemoteSupport.SessionAgent\bin\$Configuration\net48"
 $artifactDir = Join-Path $root 'artifacts'
-$output = Join-Path $artifactDir 'RotaLink-UNSIGNED-DEVELOPMENT.exe'
+$output = Join-Path $artifactDir 'RotaLink-v1.1.0-alpha.16-UNSIGNED-DEVELOPMENT.exe'
 New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
 Copy-Item -LiteralPath (Join-Path $bin 'RotaLink.exe') -Destination $output -Force
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $output).Hash.ToLowerInvariant()
 Write-Host "RotaLink created: $output"
 Write-Host "Size: $((Get-Item $output).Length) bytes"
 Write-Host "SHA-256: $hash"
-Write-Warning 'This development artifact is unsigned. The trusted input runtime will reject it and remote control will remain disabled.'
-Write-Warning 'Use scripts\build-signed-client.ps1 with a trusted Authenticode certificate for a distributable build.'
+Write-Warning 'This artifact enables the LocalSystem control runtime for controlled development tests only.'
+Write-Warning 'It is unsigned and must not be published to customers. Use build-signed-client.ps1 for distribution.'

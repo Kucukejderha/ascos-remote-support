@@ -73,7 +73,7 @@ Invoke-Sign $clientExe
 
 $artifactDirectory = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force -Path $artifactDirectory | Out-Null
-$versionedArtifact = Join-Path $artifactDirectory 'RotaLink-v1.1.0-alpha.15.exe'
+$versionedArtifact = Join-Path $artifactDirectory 'RotaLink-v1.1.0-alpha.16.exe'
 $stableArtifact = Join-Path $artifactDirectory 'RotaLink.exe'
 Copy-Item -LiteralPath $clientExe -Destination $versionedArtifact -Force
 Copy-Item -LiteralPath $clientExe -Destination $stableArtifact -Force

@@ -21,6 +21,18 @@ public sealed class MainForm : Form
     private ECDsaCng? _identity;
     private bool _closing;
 
+    private static string BuildRuntimeStatus(bool privilegedInputReady, bool elevated)
+    {
+#if UNSIGNED_DEVELOPMENT
+        return "Rotaniz Remote Support - IMZASIZ GELISTIRME TESTI";
+#else
+        if (privilegedInputReady) return "Rotaniz Remote Support - SYSTEM kontrol motoru hazir";
+        return elevated
+            ? "Rotaniz Remote Support - Kontrol motoru baslatilamadi"
+            : "Rotaniz Remote Support - Sinirli kullanici oturumu";
+#endif
+    }
+
     public MainForm(string? serverAddress, bool elevated, bool privilegedInputReady)
     {
         _server = new Uri(serverAddress ?? "https://45.87.173.201.nip.io");
@@ -36,7 +48,8 @@ public sealed class MainForm : Form
         header.Controls.Add(new Label { Text = "RotaLink", ForeColor = Color.White, Font = new Font("Segoe UI", 25F, FontStyle.Bold), AutoSize = true, Location = new Point(28, 18) });
         header.Controls.Add(new Label
         {
-            Text = privilegedInputReady
+            Text = BuildRuntimeStatus(privilegedInputReady, elevated),
+            Tag = privilegedInputReady
                 ? "Rotaniz Remote Support • SYSTEM kontrol motoru hazır"
                 : elevated
                     ? "Rotaniz Remote Support • Kontrol motoru başlatılamadı"

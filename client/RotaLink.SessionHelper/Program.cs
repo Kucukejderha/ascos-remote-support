@@ -19,7 +19,11 @@ internal static class Program
             var uiAccess = ReadCurrentUiAccess();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
                 ", UIAccess=" + uiAccess + ".");
-            if (!uiAccess) throw new InvalidOperationException("Interactive helper token is missing UIAccess.");
+            if (!identity.IsSystem)
+                throw new InvalidOperationException("Session helper must run with the LocalSystem identity.");
+
+            var clientProcessId = ParseClientProcessId(args);
+            log.Write("Session helper is restricted to RotaLink client process " + clientProcessId + ".");
 
             using var windowStation = InteractiveWindowStation.Attach();
             log.Write("Session helper attached to interactive window station WinSta0.");
@@ -27,7 +31,7 @@ internal static class Program
             using var stop = new EventWaitHandle(false, EventResetMode.ManualReset,
                 "Global\\RotaLink.SessionHelper.Stop." + sessionId);
             using var engine = new InputEngine(log);
-            var server = new InputPipeServer(sessionId, engine, log);
+            var server = new InputPipeServer(sessionId, clientProcessId, engine, log);
             server.Run(stop);
             return 0;
         }
@@ -44,6 +48,14 @@ internal static class Program
         if (index < 0 || index + 1 >= args.Length || !uint.TryParse(args[index + 1], out var sessionId))
             throw new ArgumentException("--session <id> is required.");
         return sessionId;
+    }
+
+    private static uint ParseClientProcessId(string[] args)
+    {
+        var index = Array.FindIndex(args, value => string.Equals(value, "--client-pid", StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || index + 1 >= args.Length || !uint.TryParse(args[index + 1], out var processId) || processId == 0)
+            throw new ArgumentException("--client-pid <id> is required.");
+        return processId;
     }
 
     private static bool ReadCurrentUiAccess()
@@ -80,7 +92,10 @@ internal sealed class HelperLog
 
     public HelperLog(uint sessionId)
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RotaLink");
+        using var identity = WindowsIdentity.GetCurrent();
+        var directory = identity.IsSystem
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RotaLink", "Logs")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RotaLink");
         Directory.CreateDirectory(directory);
         _path = Path.Combine(directory, "SessionHelper-" + sessionId + ".log");
     }

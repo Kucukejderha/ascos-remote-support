@@ -13,12 +13,14 @@ internal sealed class InputPipeServer
     private const int AcknowledgementBytes = 24;
     private const uint AcknowledgementMagic = 0x4F4C5452;
     private readonly uint _sessionId;
+    private readonly uint _allowedClientProcessId;
     private readonly InputEngine _engine;
     private readonly HelperLog _log;
 
-    public InputPipeServer(uint sessionId, InputEngine engine, HelperLog log)
+    public InputPipeServer(uint sessionId, uint allowedClientProcessId, InputEngine engine, HelperLog log)
     {
         _sessionId = sessionId;
+        _allowedClientProcessId = allowedClientProcessId;
         _engine = engine;
         _log = log;
     }
@@ -32,6 +34,15 @@ internal sealed class InputPipeServer
             var pending = pipe.BeginWaitForConnection(null, null);
             if (WaitHandle.WaitAny(new[] { pending.AsyncWaitHandle, stop }) == 1) return;
             pipe.EndWaitForConnection(pending);
+            if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var clientProcessId))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "GetNamedPipeClientProcessId failed.");
+            if (clientProcessId != _allowedClientProcessId)
+            {
+                _log.Write("Rejected input IPC client process " + clientProcessId +
+                    "; expected " + _allowedClientProcessId + ".");
+                pipe.Disconnect();
+                continue;
+            }
             _log.Write("Input IPC client connected.");
             try { ProcessClient(pipe, stop); }
             catch (EndOfStreamException) { }
@@ -123,4 +134,7 @@ internal sealed class InputPipeServer
     [DllImport("wtsapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WTSQueryUserToken(uint sessionId, out SafeAccessTokenHandle token);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetNamedPipeClientProcessId(SafePipeHandle pipe, out uint clientProcessId);
 }

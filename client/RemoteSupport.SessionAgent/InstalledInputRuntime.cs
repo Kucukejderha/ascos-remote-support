@@ -8,7 +8,7 @@ namespace RemoteSupport.SessionAgent;
 internal sealed class InstalledInputRuntime : IDisposable
 {
     private const string ServiceName = "RotaLinkInputRuntime";
-    private const string RuntimeVersion = "1.1.0-alpha.15";
+    private const string RuntimeVersion = "1.1.0-alpha.16";
     private const uint ScManagerConnect = 0x0001;
     private const uint ScManagerCreateService = 0x0002;
     private const uint ServiceChangeConfig = 0x0002;
@@ -43,7 +43,9 @@ internal sealed class InstalledInputRuntime : IDisposable
         {
             var assembly = Assembly.GetExecutingAssembly();
             EnsureRuntimeResources(assembly);
+#if !UNSIGNED_DEVELOPMENT
             AuthenticodeTrust.VerifyTrusted(Application.ExecutablePath);
+#endif
             var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             if (string.IsNullOrWhiteSpace(programFiles))
                 throw new InvalidOperationException("Windows Program Files directory could not be resolved.");
@@ -84,7 +86,9 @@ internal sealed class InstalledInputRuntime : IDisposable
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "ChangeServiceConfig failed.");
                 }
 
-                if (!StartService(service, 0, null))
+                using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+                var serviceArguments = new[] { "--client-pid", currentProcess.Id.ToString() };
+                if (!StartService(service, serviceArguments.Length, serviceArguments))
                 {
                     var error = Marshal.GetLastWin32Error();
                     if (error != ErrorServiceAlreadyRunning)
@@ -96,7 +100,11 @@ internal sealed class InstalledInputRuntime : IDisposable
 
                 WaitUntilRunning(service);
                 Volatile.Write(ref _isRunning, 1);
+#if UNSIGNED_DEVELOPMENT
+                AppDiagnostics.Write("UNSIGNED DEVELOPMENT SYSTEM input runtime is running from Program Files; do not distribute this test build.");
+#else
                 AppDiagnostics.Write("Signed SYSTEM input runtime is running from Program Files; SessionHelper IPC will become available shortly.");
+#endif
                 return new InstalledInputRuntime(manager, service);
             }
             catch
@@ -108,7 +116,7 @@ internal sealed class InstalledInputRuntime : IDisposable
         }
         catch (Exception exception)
         {
-            AppDiagnostics.Write("Trusted input runtime could not be started. Unsigned helpers are deliberately rejected.", exception);
+            AppDiagnostics.Write("SYSTEM input runtime could not be started.", exception);
             return null;
         }
     }
@@ -132,7 +140,9 @@ internal sealed class InstalledInputRuntime : IDisposable
                 source.CopyTo(output);
                 output.Flush(true);
             }
+#if !UNSIGNED_DEVELOPMENT
             AuthenticodeTrust.VerifyTrusted(temporary);
+#endif
             if (File.Exists(destination)) File.Replace(temporary, destination, null, true);
             else File.Move(temporary, destination);
         }
