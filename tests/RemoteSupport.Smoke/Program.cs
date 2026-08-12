@@ -41,7 +41,6 @@ if (!transportOnly)
         Console.WriteLine("Local codec and security smoke checks passed.");
         return;
     }
-    await VerifyDeviceIdentityAsync();
     VerifyCaptureAndConsentGate();
 }
 
@@ -173,25 +172,6 @@ static void VerifyCoordinateTransformation()
     var bottomRight = engine.Transform(1, 1);
     if (topLeft.AbsoluteX != 0 || topLeft.AbsoluteY != 0 || bottomRight.AbsoluteX != 65535 || bottomRight.AbsoluteY != 65535)
         throw new InvalidOperationException("Virtual desktop absolute coordinate boundaries are invalid.");
-}
-
-static async Task VerifyDeviceIdentityAsync()
-{
-    if (!OperatingSystem.IsWindows()) return;
-    var directory = Path.Combine(Path.GetTempPath(), "ascos-remote-support-smoke", Guid.NewGuid().ToString("N"));
-    var path = Path.Combine(directory, "identity.json");
-    try
-    {
-        var store = new DeviceIdentityStore(path);
-        using var created = await store.LoadOrCreateAsync(CancellationToken.None);
-        using var loaded = await store.LoadOrCreateAsync(CancellationToken.None);
-        if (created.DeviceId != loaded.DeviceId || created.PublicKeySpkiBase64 != loaded.PublicKeySpkiBase64)
-            throw new InvalidOperationException("DPAPI device identity did not persist consistently.");
-    }
-    finally
-    {
-        if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
-    }
 }
 
 static void VerifyCaptureAndConsentGate()

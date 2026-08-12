@@ -25,6 +25,8 @@ internal sealed class SessionHelperInputClient : IDisposable
     {
         lock (_gate)
         {
+            if (message.Type == "key" && WindowsInputDispatcher.MapKey(message.Code) == 0)
+                return new SessionHelperInputResult(false, "unsupported-key", 0);
             if (!EnsureConnected()) return null;
             try
             {

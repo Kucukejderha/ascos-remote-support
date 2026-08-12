@@ -69,6 +69,12 @@ Bu bulgu taşıma, koordinat ve masaüstü seçim sorunlarını dışladı. Eksi
 `alpha.13` birleşik kaydı helper sürecinin yaklaşık beş saniyede bir yeniden başlatıldığını ve yeni kimlikle tek satır günlük üretemeden kapandığını gösterdi. İki SYSTEM-varsayımı kullanıcı helperına taşınmıştı:
 
 1. Helper, SYSTEM tarafından oluşturulan `%ProgramData%\\RotaLink\\Logs` dosyasına yazmaya çalışıyordu. Kullanıcı tokenı bu dosyaya ekleme yapamayınca süreç pipe kurulmadan kapanıyordu.
+
+### alpha.15 güven sınırı
+
+alpha.14 günlükleri Session 1, kullanıcı tokenı, `UIAccess=True`, `WinSta0`, aktif input desktop ve IPC aşamalarının başarılı olduğunu; reddin doğrudan `SendInput` içinde kaldığını kanıtladı. Token bayrağını programatik olarak açmak Windows'un UIAccess güven zincirini tek başına sağlamaz.
+
+alpha.15 ile geçici `%ProgramData%` çalışma zamanı kaldırıldı. Service ve `uiAccess="true"` manifestli SessionHelper `%ProgramFiles%\\RotaLink\\Runtime\\1.1.0-alpha.15` altına yerleştiriliyor ve çalıştırılmadan önce `WinVerifyTrust` ile doğrulanıyor. Ana istemci dahil üç EXE güvenilir Authenticode sertifikasıyla imzalanmadan kontrol motoru bilinçli olarak başlatılmıyor.
 2. Named-pipe ACL hazırlanırken kullanıcı helperı yalnız LocalSystem tarafından kullanılabilen `WTSQueryUserToken` çağrısını yapıyordu.
 
 Helper günlüğü kullanıcının `%LOCALAPPDATA%\\RotaLink` dizinine taşındı ve günlükleme hatalarının helper'ı sonlandırması engellendi. Kullanıcı helperı pipe ACL'sinde doğrudan kendi token SID'sini kullanır; yalnız SYSTEM modunda `WTSQueryUserToken` çağrılır. Birleşik tanılama paketi yeni kullanıcı-helper günlüğünü de toplar.
