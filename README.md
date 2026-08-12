@@ -1,70 +1,50 @@
-# Rotaniz Remote Support — Phase 1
+# RotaLink — Rotanız Uzaktan Destek
 
-[Türkçe belge](README.tr.md)
+RotaLink; Windows 10, Windows 11 ve Windows Server 2019 üzerinde kullanıcı tarafından başlatılan, görünür uzaktan destek oturumları için geliştirilen modüler bir uygulamadır.
 
-Current release status and live endpoints are recorded in `STATUS.md`.
+Güncel geliştirme sürümü `1.1.0-alpha.20`dir. Sürüm ve canlı ortam ayrıntıları için [STATUS.md](STATUS.md), mimari için [docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md](docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md) belgesine bakın.
 
-Consent-first remote support foundation for Windows 10/11 and the Rotaniz server.
+## Bileşenler
 
-## Components
+- `server/RemoteSupport.Signaling`: Cihaz kaydı, 9 haneli destek kodu, kimlik doğrulama ve ayrı kontrol/görüntü WebSocket aktarımı.
+- `client/RemoteSupport.SessionAgent`: RotaLink kullanıcı arayüzü, oturum yaşam döngüsü ve görüntü gönderimi.
+- `client/RemoteSupport.Service`: LocalSystem yetkili Windows servis katmanı ve aktif WTS oturumu yönetimi.
+- `client/RotaLink.SessionHelper`: Aktif kullanıcı oturumunda çalışan, masaüstü bağlamını izleyen ve `SendInput` uygulayan yardımcı süreç.
+- `client/RemoteSupport.Protocol`: Sürümlü IPC ve ikili taşıma protokolleri.
+- `native`: DXGI Desktop Duplication, H.264 ve paylaşımlı bellek tabanlı yeni görüntü hattı kaynakları.
 
-- `server/RemoteSupport.Signaling`: ASP.NET Core signaling API, device registration, signed challenge authentication, short-lived support codes, IP rate limiting, and authenticated host/guest WebSocket relay.
-- `client/RemoteSupport.Protocol`: versioned, length-prefixed IPC envelopes with strict size limits, HMAC authentication, and replay protection.
-- `client/RemoteSupport.SessionAgent`: per-user process boundary for capture and approved input handling.
-- `client/RemoteSupport.Service`: Windows Service boundary (lifecycle/device identity; Session 0 never captures the desktop).
+## Kullanım akışı
 
-Phase 1 deliberately does **not** enable unattended access, silent operation, file transfer, UAC secure-desktop control, or persistent remote input. Every remote-control session must be visible and locally approved.
+1. Destek isteyen kişi RotaLink istemcisini açar.
+2. Uygulama ekran paylaşımını otomatik başlatır ve 9 haneli destek kodunu gösterir.
+3. Destek veren kişi [operatör ekranına](https://45.87.173.201.nip.io/operator) kodu girer.
+4. Görüntü ve kontrol kanalları ayrı bağlantılar üzerinden çalışır.
+5. İstemci penceresi kapatıldığında destek oturumu ve geçici kontrol çalışma zamanı durdurulur.
 
-## Usable MVP flow
-
-1. Run the signaling server.
-2. On the Windows computer receiving support, run `dotnet run --project client/RemoteSupport.SessionAgent -- https://your-ascos-host`.
-3. Share the displayed 9-digit code and explicitly press `E` to approve.
-4. The operator opens `/operator`, enters the code, and controls the visible desktop.
-5. The local user can press Enter at any time to terminate the session.
-
-The current transport captures at 960×540 and targets 10 FPS. It skips unchanged frames, sends XOR delta frames between two-second lossless keyframes, and gzip-compresses every transmitted frame. The browser decodes frames in order before rendering, substantially reducing relay bandwidth while improving text clarity. A future DXGI/H.264/WebRTC transport can replace this codec without changing the authenticated session boundary.
-
-The protocol provides both a `CurrentUserOnly` development pipe and a Windows service pipe whose protected ACL allows only `LocalSystem` plus the selected interactive user SID. The service device private key is P-256 and is persisted with Windows DPAPI `CurrentUser` scope; under the installed service this binds decryption to the service account.
-
-## Run locally
+## Derleme ve doğrulama
 
 ```powershell
 dotnet build AscosRemoteSupport.sln
-dotnet test tests/RemoteSupport.Signaling.Tests/RemoteSupport.Signaling.Tests.csproj
-dotnet run --project server/RemoteSupport.Signaling
+dotnet run --project tests/RemoteSupport.Smoke/RemoteSupport.Smoke.csproj -- http://127.0.0.1:5188
+powershell -ExecutionPolicy Bypass -File scripts/build-light-client.ps1
 ```
 
-The API listens on the URL configured by ASP.NET Core. `GET /health` returns service status.
-
-With the server running locally, verify signed device registration, one-time code redemption, and bidirectional session pairing:
+İmzalı üretim paketi için:
 
 ```powershell
-dotnet run --project tests/RemoteSupport.Smoke -- http://127.0.0.1:5188
+powershell -ExecutionPolicy Bypass -File scripts/build-signed-client.ps1
 ```
 
-The smoke test also verifies authenticated Named Pipe framing, replay rejection, and DPAPI device-key persistence on Windows.
+`build-light-client.ps1` yalnız kontrollü testlerde kullanılabilecek, açıkça `UNSIGNED-DEVELOPMENT` olarak adlandırılan imzasız paket üretir. Müşteri dağıtımı için RotaLink istemcisi, servis ve SessionHelper güvenilir Authenticode sertifikasıyla imzalanmalıdır.
 
-## Build the Windows package
+## Canlı adresler
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
-```
+- Operatör: https://45.87.173.201.nip.io/operator
+- Sağlık kontrolü: https://45.87.173.201.nip.io/health
+- Test istemcisi: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.20-UNSIGNED-DEVELOPMENT.exe
 
-For end users, distribute only `artifacts/RotaLink-Kurulum.exe`. It is a self-contained, double-click installer with the Rotaniz server address embedded; it requires no PowerShell or preinstalled .NET runtime.
+## Ürün sınırı
 
-For zero-install support, distribute `artifacts/RotaLink.exe`. It is a self-contained single executable: double-clicking it immediately opens the support-code and consent flow without copying files or creating shortcuts.
+Mevcut sürüm kullanıcı tarafından başlatılan anlık destek içindir. Gözetimsiz erişim, gizli çalışma, kimlik bilgisi toplama, pano aktarımı ve dosya aktarımı etkin değildir. İmzasız geliştirme paketi üretim veya geniş müşteri dağıtımı için uygun değildir.
 
-Extract `artifacts/Rotaniz-Remote-Support-Windows.zip` and run:
-
-```powershell
-.\Install-ASCOS-RemoteSupport.ps1 -ServerUrl https://45.87.173.201.nip.io
-```
-
-The installer is per-user, creates a visible desktop shortcut, and does not install hidden persistence or unattended access.
-
-Before starting the Linux compose deployment, make `deploy/data` writable by the ASP.NET container user (`1654:1654`). Audit records are then retained in `deploy/data/audit.jsonl`.
-
-## ASCOS deployment
-
-Build `server/RemoteSupport.Signaling/Dockerfile` on the ASCOS host and expose it behind HTTPS. Do not expose the development HTTP endpoint publicly. Persistent device and session state is intentionally deferred until PostgreSQL migrations and key-rotation policy are approved.
+Güvenlik ayrıntıları için [SECURITY.md](SECURITY.md), dağıtım geçmişi için [deploy/ROTANIZ-COM.tr.md](deploy/ROTANIZ-COM.tr.md) dosyasına bakın.

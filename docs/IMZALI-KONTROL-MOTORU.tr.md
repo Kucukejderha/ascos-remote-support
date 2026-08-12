@@ -6,10 +6,10 @@
 
 Windows, `uiAccess=true` isteyen uygulamalarda güvenilir Authenticode imzası ve güvenli kurulum konumu ister. Alpha.16 bu bağımlılığı kontrol motorundan kaldırdı: SessionHelper aktif kullanıcı oturumunda LocalSystem kimliğiyle çalışır ve `uiAccess` istemez. Üretim dağıtımında bütünlük ve yayıncı doğrulaması için Authenticode imzası yine zorunlu tutulur.
 
-## alpha.15 mimarisi
+## Güncel mimari
 
 - Müşteri tek `RotaLink.exe` dosyasını açar.
-- Ana uygulama imzalı Service ve SessionHelper dosyalarını `%ProgramFiles%\RotaLink\Runtime\1.1.0-alpha.16` altına çıkarır.
+- Ana uygulama imzalı Service ve SessionHelper dosyalarını `%ProgramFiles%\RotaLink\Runtime\<sürüm>` altına çıkarır.
 - Her iki dosyanın Authenticode güven zinciri `WinVerifyTrust` ile doğrulanır.
 - İmzasız veya güvenilmeyen dosyalar çalıştırılmaz; görüntü paylaşımı devam edebilir ancak kontrol motoru hazır gösterilmez.
 - SYSTEM servisi, aktif kullanıcı oturumunda LocalSystem tokenıyla imzalı SessionHelper'ı başlatır.
@@ -35,4 +35,4 @@ Betik sırasıyla SessionHelper, Service ve bunları içeren ana RotaLink dosyas
 
 ## Dağıtım kapısı
 
-`build-light-client.ps1` yalnızca `RotaLink-v1.1.0-alpha.17-UNSIGNED-DEVELOPMENT.exe` üretir. Kontrollü test için LocalSystem kontrol motorunu çalıştırır; imzasız olduğu için müşteri dağıtımına uygun değildir. Alpha.17, RDP/Windows Server sistemlerinde fiziksel konsol yerine RotaLink işleminin gerçek oturumunu hedefler ve input desktop'ı tam masaüstü erişimiyle açar. Web sitesi ve genel GitHub sürümü yalnızca `build-signed-client.ps1` başarıyla tamamlandıktan sonra güncellenmelidir.
+`build-light-client.ps1` sürüm numarası taşıyan `UNSIGNED-DEVELOPMENT` paketi üretir. Kontrollü test için LocalSystem kontrol motorunu çalıştırır; imzasız olduğu için müşteri dağıtımına uygun değildir. Güncel `alpha.20`, RDP/Windows Server sistemlerinde RotaLink işleminin gerçek oturumunu hedefler, WTS durumunu kaydeder ve ilk tıklama öncesinde hedef pencerenin foreground/input hazırlığını yapar. Web sitesindeki imzasız dosya yalnız sınırlı test için tutulmalı; kararlı GitHub sürümü ve genel müşteri dağıtımı yalnız `build-signed-client.ps1` başarıyla tamamlandıktan sonra güncellenmelidir.
