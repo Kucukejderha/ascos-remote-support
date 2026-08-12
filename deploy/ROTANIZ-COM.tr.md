@@ -1,5 +1,12 @@
 # rotaniz.com dağıtımı
 
+## Alpha.19 operatör koordinat düzeltmesi
+
+4:3 gibi 16:9 dışındaki masaüstleri için operatör tuvali artık sabit 16:9
+kutuda tutulmaz. Görünen tuval, gelen karenin gerçek en-boy oranıyla çalışma
+alanına sığdırılır ve koordinatlar doğrudan bu görünür dikdörtgenden normalize
+edilir. Bu sunucu taraflı düzeltme Alpha.19 EXE bağlantısını değiştirmez.
+
 ## 1.1.0-alpha.19 görüntü iyileştirmesi
 
 `alpha.19`, GDI görüntüyü sabit `960×540` boyutuna germek yerine kaynak
