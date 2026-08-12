@@ -1,5 +1,21 @@
 # rotaniz.com dağıtımı
 
+## 1.1.0-alpha.18 test sürümü
+
+`alpha.17` tanılama kayıtları SYSTEM helper ve `SendInput` zincirinin artık
+başarıyla çalıştığını (`system-helper-ok`) doğruladı. Kalan gecikmenin nedeni,
+operatör tarayıcısının fare hareketlerini IPC yanıt hızından daha hızlı üretmesi
+ve tıklama paketlerinin biriken hareket paketleri arkasında kalmasıydı.
+
+`alpha.18`, aynı anda yalnızca bir fare hareketi gönderir; bekleyen hareketleri
+biriktirmek yerine sadece en güncel konumu saklar. Her input paketine ACK
+dönülür. Fare/klavye bırakma olayları hız sınırına takılmaz; böylece sürükleme
+veya basılı tuş durumunda kalma engellenir.
+
+- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.18-UNSIGNED-DEVELOPMENT.exe`
+- Beklenen kontrol durumu: `system-helper-ok`
+- İmzalı kararlı müşteri dosyası bu test sürümüyle değiştirilmez.
+
 Müşterinin kurulum gerektirmeden çalıştırdığı Windows istemcisi aşağıdaki sabit adreste yayınlanır:
 
 `https://rotaniz.com/downloads/RotaLink.exe`

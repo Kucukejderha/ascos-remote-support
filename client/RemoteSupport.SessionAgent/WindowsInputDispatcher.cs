@@ -35,11 +35,11 @@ public sealed class WindowsInputDispatcher : IDisposable
     {
         if (!_consent.IsControlAllowed(_sessionId)) return new InputDispatchReport(false, "consent-denied", 0, null, null);
         if (length <= 0 || length > 4096) return new InputDispatchReport(false, "packet-size-invalid", 0, null, null);
-        if (!TryAcquireRatePermit()) return new InputDispatchReport(false, "rate-limited", 0, null, null);
         InputMessage? message;
         try { message = new JavaScriptSerializer().Deserialize<InputMessage>(Encoding.UTF8.GetString(json, 0, length)); }
         catch (ArgumentException) { return new InputDispatchReport(false, "json-invalid", 0, null, null); }
         if (message is null) return new InputDispatchReport(false, "message-empty", 0, null, null);
+        if (!TryAcquireRatePermit(message)) return new InputDispatchReport(false, "rate-limited", 0, null, message.Type);
 
         if (!_inputLogged)
         {
@@ -129,13 +129,19 @@ public sealed class WindowsInputDispatcher : IDisposable
         _helperInput.Dispose();
     }
 
-    private bool TryAcquireRatePermit()
+    private bool TryAcquireRatePermit(InputMessage message)
     {
         lock (_rateGate)
         {
             var now = Environment.TickCount;
             if (unchecked(now - _rateWindow) >= 1000) { _rateWindow = now; _eventsInWindow = 0; }
-            return ++_eventsInWindow <= 240;
+            // Never discard a release after its matching press. A lost mouse-up
+            // or key-up leaves the remote desktop in a stuck drag/key state.
+            if ((message.Type is "button" or "key") && !message.Down) return true;
+            // Pointer movement is coalesced by the operator page. This defensive
+            // ceiling protects stale clients without starving clicks or keys.
+            if (message.Type == "move") return ++_eventsInWindow <= 120;
+            return true;
         }
     }
 

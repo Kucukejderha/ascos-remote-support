@@ -135,10 +135,12 @@ internal static class RemoteSession
                     desktop = report.Desktop,
                     eventType = report.EventType
                 });
+                // Acknowledge every event. The operator allows only one pointer
+                // move in flight and releases its newest coalesced move on ACK.
+                var acknowledgement = Encoding.UTF8.GetBytes(acknowledgementText);
+                await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
                 if (!report.Accepted || !string.Equals(acknowledgementText, lastReportedResult, StringComparison.Ordinal))
                 {
-                    var acknowledgement = Encoding.UTF8.GetBytes(acknowledgementText);
-                    await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
                     AppDiagnostics.Write("Remote input result reported. Accepted=" + report.Accepted +
                         ", Stage=" + report.Stage + ", Error=" + report.ErrorCode +
                         ", Desktop=" + report.Desktop + ", Event=" + report.EventType);
