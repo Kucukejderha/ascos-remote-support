@@ -17,10 +17,12 @@ internal static class Program
         {
             using var identity = WindowsIdentity.GetCurrent();
             var uiAccess = ReadCurrentUiAccess();
+            var elevated = ReadCurrentElevation();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
-                ", UIAccess=" + uiAccess + ", WTSState=" + ReadSessionState(sessionId) + ".");
-            if (!identity.IsSystem)
-                throw new InvalidOperationException("Session helper must run with the LocalSystem identity.");
+                ", Elevated=" + elevated + ", UIAccess=" + uiAccess +
+                ", WTSState=" + ReadSessionState(sessionId) + ".");
+            if (identity.IsSystem || !elevated)
+                throw new InvalidOperationException("Session helper must use the elevated interactive RotaLink client token.");
 
             var clientProcessId = ParseClientProcessId(args);
             log.Write("Session helper is restricted to RotaLink client process " + clientProcessId + ".");
@@ -69,6 +71,20 @@ internal static class Program
             if (returnedLength != sizeof(int))
                 throw new InvalidDataException("GetTokenInformation(TokenUIAccess) returned " + returnedLength + " bytes.");
             return uiAccess != 0;
+        }
+    }
+
+    private static bool ReadCurrentElevation()
+    {
+        if (!OpenProcessToken(GetCurrentProcess(), 0x0008, out var token))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "OpenProcessToken for elevation diagnostics failed.");
+        using (token)
+        {
+            if (!GetTokenInformation(token, 20, out var elevation, sizeof(int), out var returnedLength))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "GetTokenInformation(TokenElevation) failed.");
+            if (returnedLength != sizeof(int))
+                throw new InvalidDataException("GetTokenInformation(TokenElevation) returned " + returnedLength + " bytes.");
+            return elevation != 0;
         }
     }
 

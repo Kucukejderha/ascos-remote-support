@@ -1,5 +1,28 @@
 # rotaniz.com dağıtımı
 
+## 1.1.0-alpha.21 etkileşimli kullanıcı tokenı
+
+Alpha.20 birleşik günlüğü input paketinin sunucu, istemci IPC ve SessionHelper
+zincirini geçtiğini; helper'ın `Session=1`, `WTSState=Active`, `WinSta0` ve doğru
+foreground/focus hedefinde çalıştığını gösterdi. `SendInput` her olay için bir
+girdi kabul etmesine rağmen hedef Windows Server 2019/RDP oturumunda görünür bir
+etki oluşmadı. Kök fark, helper'ın gerçek etkileşimli oturum tokenı yerine yalnız
+`TokenSessionId` alanı değiştirilmiş bir LocalSystem tokenıyla çalışmasıdır.
+
+Alpha.21'de servis, yükseltilmiş RotaLink istemcisinin gerçek süreç tokenını
+`DuplicateTokenEx` ile primary token olarak çoğaltır ve helper'ı bu tokenla
+`winsta0\\default` üzerinde başlatır. Böylece helper, RDP input kuyruğunun sahibi
+olan kullanıcı logon bağlamına geri döner. Servis güvenilir başlatıcı olarak kalır;
+named pipe yalnız servis başlangıcında bildirilen aynı istemci PID'sini kabul eder.
+
+- Beklenen servis kaydı: `Elevated interactive client helper token prepared`
+- Beklenen helper kaydı: `Elevated=True`, `UIAccess=False`, `WTSState=Active`
+- Eski `Identity=NT AUTHORITY\\SYSTEM` kaydı Alpha.21 testinde görülmemelidir.
+- Test paketi imzasızdır ve yalnız kontrollü doğrulama içindir.
+- Test bağlantısı: `https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.21-UNSIGNED-DEVELOPMENT.exe`
+- Dosya boyutu: `205.312` bayt
+- SHA-256: `aed2f408088915f61db9fafe2e5771b92741f0e567f27e8dc195a0e3c9eee40c`
+
 ## 1.1.0-alpha.20 oturum ve foreground aktivasyonu
 
 Alpha.19 tanılamasında başarısız ilk deneme `Session=2`, Alpemix bağlantısından

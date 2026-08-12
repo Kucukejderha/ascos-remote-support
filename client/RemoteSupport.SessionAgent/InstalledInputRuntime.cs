@@ -8,7 +8,7 @@ namespace RemoteSupport.SessionAgent;
 internal sealed class InstalledInputRuntime : IDisposable
 {
     private const string ServiceName = "RotaLinkInputRuntime";
-    private const string RuntimeVersion = "1.1.0-alpha.20";
+    private const string RuntimeVersion = "1.1.0-alpha.21";
     private const uint ScManagerConnect = 0x0001;
     private const uint ScManagerCreateService = 0x0002;
     private const uint ServiceChangeConfig = 0x0002;
@@ -101,9 +101,9 @@ internal sealed class InstalledInputRuntime : IDisposable
                 WaitUntilRunning(service);
                 Volatile.Write(ref _isRunning, 1);
 #if UNSIGNED_DEVELOPMENT
-                AppDiagnostics.Write("UNSIGNED DEVELOPMENT SYSTEM input runtime is running from Program Files; do not distribute this test build.");
+                AppDiagnostics.Write("UNSIGNED DEVELOPMENT interactive-token input runtime is running from Program Files; do not distribute this test build.");
 #else
-                AppDiagnostics.Write("Signed SYSTEM input runtime is running from Program Files; SessionHelper IPC will become available shortly.");
+                AppDiagnostics.Write("Signed interactive-token input runtime is running from Program Files; SessionHelper IPC will become available shortly.");
 #endif
                 return new InstalledInputRuntime(manager, service);
             }

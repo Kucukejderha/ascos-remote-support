@@ -4,20 +4,21 @@ Güncelleme tarihi: 12 Ağustos 2026
 
 ## Güncel sürüm
 
-- Sürüm: `1.1.0-alpha.20`
+- Sürüm: `1.1.0-alpha.21`
 - Kanal: İmzasız kontrollü geliştirme testi
-- Paket: `RotaLink-v1.1.0-alpha.20-UNSIGNED-DEVELOPMENT.exe`
-- Boyut: `204.288` bayt
-- SHA-256: `94cf9b65f5d5b8f5a9da692bb3da08e24f5bc6e87e4e6f07d610513f0e01e3f8`
-- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.20-UNSIGNED-DEVELOPMENT.exe
+- Paket: `RotaLink-v1.1.0-alpha.21-UNSIGNED-DEVELOPMENT.exe`
+- Boyut: `205.312` bayt
+- SHA-256: `aed2f408088915f61db9fafe2e5771b92741f0e567f27e8dc195a0e3c9eee40c`
+- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.21-UNSIGNED-DEVELOPMENT.exe
 
 ## Sürüm doğrulama özeti
 
 - `alpha.18`: Windows Server 2019 üzerinde SYSTEM SessionHelper yoluyla fare ve klavye kontrolü gerçek cihazda doğrulandı.
 - `alpha.19`: Kaynak ekranın en-boy oranını koruyan dinamik yakalama ve operatör tuvali koordinat düzeltmesi eklendi. Bazı RDP oturumlarında input API çağrısı başarılı dönmesine rağmen giriş etkin olmayan oturuma yönlenebildi.
 - `alpha.20`: SessionHelper WTS oturum durumunu günlüğe ekler. Fare basımından hemen önce tıklanan kök pencereyi hedef input kuyruğuna bağlar ve foreground/active/focus hazırlığı yapar.
+- `alpha.21`: SessionHelper, yalnız oturum numarası değiştirilmiş SYSTEM tokenı yerine yükseltilmiş RotaLink istemcisinin gerçek etkileşimli tokenıyla başlatılır.
 
-`alpha.20` için gerçek cihaz testi henüz tamamlanmamıştır. Beklenen tanılama kayıtları `WTSState=Active` ve `Prepared foreground input target` satırlarıdır.
+`alpha.21` için gerçek cihaz testi henüz tamamlanmamıştır. Beklenen tanılama kayıtları `Elevated interactive client helper token prepared`, `Elevated=True`, `WTSState=Active` ve `Prepared foreground input target` satırlarıdır.
 
 ## Canlı hizmet
 
