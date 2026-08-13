@@ -130,7 +130,7 @@ GDI geri dönüş nedenleri sınıflandırılmış; güvenlik incelemesi tamamla
 
 ## 5. Uygulama sırası
 
-1. Faz 0 tamamlanır ve Alpha.25 tabanı dondurulur.
+1. Alpha.25 çalışan kontrol tabanı olarak dondurulur; Faz 0 platform denetimli Alpha.26 test adayı olarak üretilir.
 2. Faz 1 VM matrisi kurulmadan yeni input yaklaşımı “çözüldü” sayılmaz.
 3. Faz 2 girdi doğrulanır; ardından Faz 3 ve Faz 4 paralel geliştirilebilir.
 4. Authenticode sertifikası Faz 2 sonuna kadar temin edilir; imzasız paket yalnız
@@ -147,4 +147,3 @@ GDI geri dönüş nedenleri sınıflandırılmış; güvenlik incelemesi tamamla
   https://learn.microsoft.com/windows-server/administration/server-core/what-is-server-core
 - Windows Server 2012/R2 ESU:
   https://learn.microsoft.com/windows-server/get-started/extended-security-updates-overview
-

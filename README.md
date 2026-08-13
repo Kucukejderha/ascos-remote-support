@@ -5,6 +5,7 @@ RotaLink; Windows 10, Windows 11 ve Windows Server 2012–2025 Desktop Experienc
 Güncel geliştirme sürümü `1.1.0-alpha.26`dır. Sürüm ve canlı ortam ayrıntıları için [STATUS.md](STATUS.md), mimari için [docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md](docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md) belgesine bakın.
 
 Geliştirme sırası: [Windows 10/11 ve Server 2012+ uyumluluk yol haritası](docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md).
+Temiz VM testinin uygulanışı: [Windows test laboratuvarı](docs/WINDOWS-TEST-LABORATUVARI.tr.md).
 
 ## Bileşenler
 

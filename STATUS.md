@@ -8,8 +8,10 @@ Güncelleme tarihi: 13 Ağustos 2026
 - Kanal: İmzasız kontrollü geliştirme testi
 - Paket: `RotaLink-v1.1.0-alpha.26-UNSIGNED-DEVELOPMENT.exe`
 - Boyut: `215.040` bayt
-- SHA-256: `b89b768920169a4d0605852293ae3c01d541503394aa25eef18a5a5809c7edd9`
+- SHA-256: `231ad5e60f1723b059c38afdd9fae5767aa0ac8ad7e1f10a18aeeb6707206a24`
 - İndirme: Henüz yayınlanmadı; Alpha.25 web testi korunuyor.
+- Uyumluluk test kiti: `RotaLink-Alpha26-Uyumluluk-Test-Kiti.zip`, `144.278` bayt,
+  SHA-256 `762048ca72ac3180e5c743b4847767e131c19c9e5e548df6dd19623cca5abfce`
 
 ## Sürüm doğrulama özeti
 
@@ -22,6 +24,7 @@ Güncelleme tarihi: 13 Ağustos 2026
 - `alpha.24`: Alpha.23 günlüğünde doğru hit-test edilen ancak bir süre sonra işlemeyen Explorer kabuk denetimleri için hedefe özgü senkron pencere mesajı yolu eklendi. Gerçek cihaz testi, mesaj tesliminin gerçek seçim/odak ve görev çubuğu etkinleştirme davranışını üretmediğini gösterdi.
 - `alpha.25`: Explorer'a doğrudan `WM_LBUTTONDOWN/UP` gönderme kaldırıldı. Görev çubuğu için UI Automation `InvokePattern`, masaüstü simgesi için `SelectionItemPattern` ve çift tıklamada `InvokePattern` kullanılır. Boş masaüstü ve sağ tık gerçek, atomik `SendInput` olarak kalır.
 - `alpha.26` Faz 0 uyumluluk başlangıcı: Uygulama gerçek Windows sürümünü `RtlGetVersion` ile, istemci/sunucu türünü, Server Core/Desktop Experience bilgisini, mimariyi ve .NET 4.8 release değerini günlüğe yazar. Destek dışı Server Core ve x86 sistemleri servis kurulmadan önce açık hata ile durdurur. Windows uyumluluk matrisi ve ürünleştirme sırası `docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md` belgesindedir.
+- Faz 1 laboratuvar başlangıcı: PowerShell 3 uyumlu, WMI zorunluluğu olmayan makine probu; sekiz hedefli sürüm matrisi; eksik/P0 hatalı raporda yayını kapatan sonuç birleştirici ve Windows Server 2022 CI tabanı eklendi. Alpha.26 gerçek VM matrisi tamamlanmadan webde yayınlanmaz.
 
 `alpha.24` gerçek cihaz kaydı, senkron pencere mesajlarının API seviyesinde başarılı dönmesine rağmen masaüstü seçimini, bağlam menüsünün kapanmasını ve bazı görev çubuğu düğmelerinin etkinleşmesini sağlamadığını doğruladı. `alpha.25` bu sahte başarı yolunu kaldırır. Beklenen günlükler `Desktop item selected through UI Automation` ve `Taskbar control invoked through UI Automation` satırlarıdır; boş alanda bu satırlar oluşmaz ve gerçek `SendInput` çalışır.
 
