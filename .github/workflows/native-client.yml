@@ -30,7 +30,14 @@ jobs:
       - name: Verify static CRT dependency set
         shell: powershell
         run: |
-          $dependencies = & dumpbin.exe /DEPENDENTS native\out\Release\RotaLink.exe 2>&1
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $visualStudio = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($visualStudio)) { throw "Visual Studio C++ tools were not found." }
+          $dumpbin = Get-ChildItem -LiteralPath "$visualStudio\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe |
+            Where-Object { $_.FullName -match '\\bin\\Hostx64\\x64\\dumpbin\.exe$' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $dumpbin) { throw "x64 dumpbin.exe was not found." }
+          $dependencies = & $dumpbin.FullName /DEPENDENTS native\out\Release\RotaLink.exe 2>&1
           if ($LASTEXITCODE -ne 0) { throw "dumpbin failed with exit code $LASTEXITCODE" }
           $dependencies | Set-Content -LiteralPath native-dependencies.txt -Encoding utf8
           if ((Get-Item -LiteralPath native-dependencies.txt).Length -eq 0) { throw "Dependency evidence is empty." }
