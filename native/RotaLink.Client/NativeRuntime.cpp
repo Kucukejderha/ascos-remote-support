@@ -1,6 +1,7 @@
 #include "NativeRuntime.h"
 #include "Diagnostics.h"
 #include "InputPipe.h"
+#include <sddl.h>
 #include <userenv.h>
 #include <wtsapi32.h>
 #include <array>
