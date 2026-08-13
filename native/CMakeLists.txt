@@ -54,7 +54,9 @@ if(MSVC)
   target_compile_options(RotaLink.Client PRIVATE /W4 /WX /permissive- /EHsc /utf-8 /guard:cf
     $<$<CONFIG:Release>:/O1> $<$<CONFIG:Release>:/GL> $<$<CONFIG:Release>:/Gy>
     $<$<CONFIG:Release>:/Gw> $<$<CONFIG:Release>:/Zc:inline>)
-  target_link_options(RotaLink.Client PRIVATE /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /CETCOMPAT
+  # app.manifest is already embedded as RT_MANIFEST in resources.rc.in.
+  # Disable MSVC's second generated manifest to avoid duplicate resource ID 1.
+  target_link_options(RotaLink.Client PRIVATE /MANIFEST:NO /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /CETCOMPAT
     $<$<CONFIG:Release>:/LTCG> $<$<CONFIG:Release>:/OPT:REF>
     $<$<CONFIG:Release>:/OPT:ICF> $<$<CONFIG:Release>:/DEBUG:NONE>)
 endif()
