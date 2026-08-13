@@ -1,5 +1,6 @@
 #include "H264Encoder.h"
 #include <codecapi.h>
+#include <icodecapi.h>
 #include <mfapi.h>
 #include <mferror.h>
 #include <mfidl.h>
