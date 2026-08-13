@@ -7,5 +7,6 @@ Projenin ana belgesi artık doğrudan Türkçedir: [README.md](README.md).
 - Yeniden yapılandırma mimarisi: [docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md](docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md)
 - Windows uyumluluk ve ürünleştirme yol haritası: [docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md](docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md)
 - Windows test laboratuvarı: [docs/WINDOWS-TEST-LABORATUVARI.tr.md](docs/WINDOWS-TEST-LABORATUVARI.tr.md)
+- Native tek-EXE müşteri istemcisi: [docs/NATIVE-ISTEMCI-MIMARISI.tr.md](docs/NATIVE-ISTEMCI-MIMARISI.tr.md)
 - İmzalı kontrol motoru: [docs/IMZALI-KONTROL-MOTORU.tr.md](docs/IMZALI-KONTROL-MOTORU.tr.md)
 - rotaniz.com dağıtım kayıtları: [deploy/ROTANIZ-COM.tr.md](deploy/ROTANIZ-COM.tr.md)

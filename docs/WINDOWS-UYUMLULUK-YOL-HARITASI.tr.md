@@ -14,25 +14,26 @@ bağlantı testlerinin tamamını geçmelidir.
 | Windows 11 | İstemci masaüstü | x64 | Güncel güvenlik yamaları | Birincil |
 | Windows 10 22H2 / destekli LTSC veya ESU | İstemci masaüstü | x64 | Güncel güvenlik yamaları | Uyumlu |
 | Windows Server 2025 / 2022 | Desktop Experience | x64 | Güncel güvenlik yamaları | Birincil |
-| Windows Server 2019 | Desktop Experience | x64 | .NET Framework 4.8 | Uyumlu |
-| Windows Server 2016 | Desktop Experience | x64 | .NET Framework 4.8 | Uyumlu |
-| Windows Server 2012 / 2012 R2 | Desktop Experience | x64 | .NET Framework 4.8 ve ESU | Eski sistem / sınırlı |
+| Windows Server 2019 | Desktop Experience | x64 | Ek çalışma zamanı kurulumu yok | Uyumlu |
+| Windows Server 2016 | Desktop Experience | x64 | Ek çalışma zamanı kurulumu yok | Uyumlu |
+| Windows Server 2012 / 2012 R2 | Desktop Experience | x64 | ESU; ek çalışma zamanı kurulumu yok | Eski sistem / sınırlı |
 
 Windows Server Core geleneksel etkileşimli masaüstü içermediği için bu ürünün uzaktan
 masaüstü hedefi değildir. Çok oturumlu RDS sistemlerinde yalnız kullanıcının açıkça
 başlattığı aktif oturum kontrol edilir; başka bir oturuma sessiz geçiş yapılmaz.
 
-Microsoft'un dağıtım tablosuna göre Server 2012'de 4.5, 2012 R2'de 4.5.1,
-Server 2016'da 4.6.2 ve Server 2019'da 4.7.2 hazır gelir. Bu sistemlerin tümü 4.8'e
-yükseltilebilir. Mevcut Alpha hattı `net48` olduğundan eski sunucularda 4.8 önkoşuldur.
-Güvenlik güncellemesi almayan 4.5'e geri hedefleme yapılmayacaktır.
+Müşteri bilgisayarında RotaLink dışında .NET, Visual C++ Redistributable veya başka bir
+çalışma zamanı kurulması istenmez. Mevcut `net48` Alpha hattı geçiş dönemi referansıdır ve
+genel müşteri dağıtımına çıkarılmaz. Ürün istemcisi, statik CRT ile derlenen x64 Win32/C++
+tek EXE olarak teslim edilir. Güvenlik güncellemesi almayan .NET 4.5'e geri hedefleme
+yapılmayacak; .NET bağımlılığı müşteri paketinden tamamen kaldırılacaktır.
 
 ## 2. Destek seviyeleri
 
 - **Doğrulandı:** Gerçek veya temiz sanal makinede tüm P0/P1 testleri geçti.
 - **Uyumluluk adayı:** API ve derleme düzeyinde destekleniyor, gerçek sistem matrisi
   henüz tamamlanmadı.
-- **Eski sistem / sınırlı:** Yalnız güncel ESU ve 4.8 bulunan Desktop Experience
+- **Eski sistem / sınırlı:** Yalnız güncel ESU bulunan Desktop Experience
   kurulumunda test edilir; platform üreticisinin yaşam döngüsü ayrıca geçerlidir.
 - **Destek dışı:** Server Core, Windows 8/8.1, Windows 7, ARM64 ve güvenlik güncellemesi
   almayan yapılandırmalar.
@@ -107,16 +108,14 @@ relay; adaptif bit hızı ve kalite profilleri; bağlantı telemetrisi.
 **Bitiş ölçütü:** Video doygunluğunda input bloke olmuyor; ağ kesintisinde oturum ve
 basılı tuş/fare durumu güvenli biçimde toparlanıyor.
 
-### Faz 5 — Dağıtım, imza ve .NET bağımsız taşınabilir istemci
-
-**Kısa vade:** Küçük yerel bootstrapper .NET 4.8, x64, Desktop Experience, TLS ve
-sertifika zincirini uygulama açılmadan denetler; eksik önkoşulu Türkçe açıklar.
+### Faz 5 — Dağıtım ve imza
 
 **Ürün hedefi:** UI, servis, helper ve yakalama motoru statik CRT kullanan Win32/C++
-paketine taşınır. Böylece Server 2012–2025 ve Windows 10–11 için .NET kurulumu veya
-self-contained .NET gömme zorunluluğu kalmaz.
+paketine taşınır. Böylece Server 2012–2025 ve Windows 10–11 için .NET kurulumu,
+self-contained .NET gömme veya VC++ Redistributable zorunluluğu kalmaz. Native dönüşüm
+dağıtım sonuna bırakılmayacak; Faz 2–4 geliştirmelerinin uygulanacağı ana istemci tabanıdır.
 
-**Bitiş ölçütü:** İmzalı tek EXE, 10 MB altı hedef boyut, SmartScreen itibarı, atomik
+**Bitiş ölçütü:** İmzalı tek EXE, 10 MB kesin üst sınır (daha küçük olması tercih edilir), SmartScreen itibarı, atomik
 güncelleme ve geri alma; paket içeriği SBOM ve SHA-256 ile yayınlanır.
 
 ### Faz 6 — Pilot ve kararlı sürüm
@@ -130,9 +129,10 @@ GDI geri dönüş nedenleri sınıflandırılmış; güvenlik incelemesi tamamla
 
 ## 5. Uygulama sırası
 
-1. Alpha.25 çalışan kontrol tabanı olarak dondurulur; Faz 0 platform denetimli Alpha.26 test adayı olarak üretilir.
-2. Faz 1 VM matrisi kurulmadan yeni input yaklaşımı “çözüldü” sayılmaz.
-3. Faz 2 girdi doğrulanır; ardından Faz 3 ve Faz 4 paralel geliştirilebilir.
+1. Alpha.25 çalışan kontrol tabanı olarak dondurulur; Alpha.26 `net48` laboratuvar deneyi müşteri dağıtımından çekilir.
+2. Native Win32 istemci tabanı oluşturulur; `.NET` ve dinamik CRT bağımlılığı otomatik PE denetimiyle yasaklanır.
+3. Faz 1 VM matrisi native istemciyle çalıştırılmadan yeni input yaklaşımı “çözüldü” sayılmaz.
+4. Faz 2 girdi doğrulanır; ardından Faz 3 ve Faz 4 paralel geliştirilebilir.
 4. Authenticode sertifikası Faz 2 sonuna kadar temin edilir; imzasız paket yalnız
    kontrollü geliştirme testinde kalır.
 5. Kararlı müşteri bağlantısı yalnız Faz 5 dağıtım kapısı geçildiğinde güncellenir.

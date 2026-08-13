@@ -7,8 +7,8 @@ sözleşmesinin tamamını kanıtlamak için kullanılır.
 
 - Her hedef için temiz x64 VM ve geri dönülebilir snapshot kullanın.
 - Sunucu kurulumlarında **Desktop Experience** seçin. Server Core destek dışıdır.
-- Server 2012/R2 imajında geçerli ESU, bütün sistemlerde güncel güvenlik yamaları ve
-  .NET Framework 4.8 bulunmalıdır.
+- Server 2012/R2 imajında geçerli ESU ve bütün sistemlerde güncel güvenlik yamaları
+  bulunmalıdır. Native müşteri istemcisi için .NET veya VC++ Runtime kurulmaz.
 - Konsol ve RDP testlerini ayrı snapshot/rapor olarak saklayın. Matris kapısına aktif
   etkileşimli oturum raporu verilir.
 - Alpha paketi yalnız kontrollü laboratuvarda ve yönetici onayıyla çalıştırılır.
@@ -21,8 +21,9 @@ Geliştirici, tek dosyalık laboratuvar paketini şu komutla üretir:
 powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1
 ```
 
-Oluşan `artifacts/RotaLink-Alpha26-Uyumluluk-Test-Kiti.zip` hedef VM'ye kopyalanıp
-açılır. Depo kurmadan ön kontrol başlatmak için örneğin:
+`Alpha.26` kiti eski `net48` laboratuvar hattına aittir ve müşteri kabul kanıtı olarak
+kullanılmaz. Native önizleme paketi üretildiğinde hedef VM'ye kopyalanıp açılır.
+Depo kurmadan ön kontrol başlatmak için örneğin:
 
 ```cmd
 RotaLink-Uyumluluk-Testi.cmd server-2019
@@ -39,8 +40,9 @@ powershell -ExecutionPolicy Bypass -File scripts\Test-RotaLinkCompatibility.ps1 
 ```
 
 Geçerli hedef kimlikleri `tests/windows-compatibility-matrix.json` dosyasındadır.
-Prob makineyi değiştirmez; OS/.NET/oturum/ekran/GPU bilgilerini ve RotaLink sunucusu
-sağlık erişimini kaydeder. Çıkış kodu `0` uygun, `2` en az bir P0 engeli demektir.
+Prob makineyi değiştirmez; OS/oturum/ekran/GPU bilgilerini, yüklü .NET sürümünü yalnız
+bilgi amaçlı ve RotaLink sunucusu sağlık erişimini kaydeder. Native istemci için .NET
+kontrolü yayın engeli değildir. Çıkış kodu `0` uygun, `2` en az bir P0 engeli demektir.
 
 Her VM'deki JSON raporunu tek bir `compatibility-results` klasöründe toplayın:
 

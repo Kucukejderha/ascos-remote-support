@@ -12,7 +12,7 @@ if "%EXIT_CODE%"=="0" (
 ) else (
   echo En az bir uyumluluk engeli bulundu. JSON raporu: %RESULT_DIR%
 )
-echo RotaLink EXE testi ve manuel P0/P1 senaryolari icin WINDOWS-TEST-LABORATUVARI.tr.md dosyasini izleyin.
+echo Native RotaLink EXE testi ve manuel P0/P1 senaryolari icin WINDOWS-TEST-LABORATUVARI.tr.md dosyasini izleyin.
 exit /b %EXIT_CODE%
 
 :usage

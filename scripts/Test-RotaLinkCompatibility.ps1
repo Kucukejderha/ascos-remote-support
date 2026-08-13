@@ -165,7 +165,7 @@ $elevationMessage = if ($elevated) { "Administrator token" } else { "UAC elevati
 Add-Check "os-family" "P0" $supportedFamily ("Windows version " + $version)
 Add-Check "x64-os" "P0" $is64Bit $architectureMessage
 Add-Check "desktop-experience" "P0" (-not $isCore) ([string]$installationType)
-Add-Check "dotnet-48" "P0" ($frameworkRelease -ge 528040) (".NET Framework release " + $frameworkRelease)
+Add-Check "native-runtime" "P0" $true ("Native Win32 client; installed .NET release " + $frameworkRelease + " is informational only")
 Add-Check "interactive-session" "P0" ($interactive -and $sessionId -ne 0) ("Session " + $sessionId + ", " + $env:SESSIONNAME)
 Add-Check "display" "P0" ($screens.Count -gt 0) $displayMessage
 Add-Check "server-health" "P0" ([bool]$endpoint.reachable) $endpointMessage

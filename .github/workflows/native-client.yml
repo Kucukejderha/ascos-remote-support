@@ -1,0 +1,40 @@
+name: Native customer client
+on:
+  push:
+    paths:
+      - 'native/**'
+      - 'scripts/Test-NativeClientArtifact.ps1'
+      - '.github/workflows/native-client.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'scripts/Test-NativeClientArtifact.ps1'
+      - '.github/workflows/native-client.yml'
+  workflow_dispatch:
+jobs:
+  build-native-x64:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source compatibility gates
+        shell: powershell
+        run: ./tests/Test-NativeClientSource.ps1
+      - name: Configure static Win32 client
+        run: cmake -S native -B native/out -A x64
+      - name: Build native client
+        run: cmake --build native/out --config Release --target RotaLink.Client
+      - name: Verify no CLR and enforce 10 MB limit
+        shell: powershell
+        run: ./scripts/Test-NativeClientArtifact.ps1 -Path native/out/Release/RotaLink-Native.exe -OutputPath artifacts/native-client-report.json
+      - name: Verify static CRT dependency set
+        shell: cmd
+        run: |
+          dumpbin /DEPENDENTS native\out\Release\RotaLink-Native.exe > native-dependencies.txt
+          findstr /I /C:"VCRUNTIME" /C:"MSVCP" /C:"UCRTBASE" native-dependencies.txt && exit /b 2 || exit /b 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RotaLink-native-preview
+          path: |
+            native/out/Release/RotaLink-Native.exe
+            artifacts/native-client-report.json
+            native-dependencies.txt

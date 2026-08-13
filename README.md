@@ -2,19 +2,24 @@
 
 RotaLink; Windows 10, Windows 11 ve Windows Server 2012–2025 Desktop Experience üzerinde kullanıcı tarafından başlatılan, görünür uzaktan destek oturumları için geliştirilen modüler bir uygulamadır. Platformların güncel doğrulama durumu ve önkoşulları [Windows uyumluluk yol haritasında](docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md) tanımlanır; bu ifade tüm matrisin henüz doğrulandığı anlamına gelmez.
 
-Güncel geliştirme sürümü `1.1.0-alpha.26`dır. Sürüm ve canlı ortam ayrıntıları için [STATUS.md](STATUS.md), mimari için [docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md](docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md) belgesine bakın.
+Mevcut `1.1.0-alpha.26` yalnızca eski `net48` laboratuvar hattıdır. Müşteri dağıtımı için
+ek çalışma zamanı gerektirmeyen, statik CRT kullanan `1.2.0-native` istemci geliştirilmektedir.
+Sürüm ve canlı ortam ayrıntıları için [STATUS.md](STATUS.md), mimari için
+[docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md](docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md) belgesine bakın.
 
 Geliştirme sırası: [Windows 10/11 ve Server 2012+ uyumluluk yol haritası](docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md).
 Temiz VM testinin uygulanışı: [Windows test laboratuvarı](docs/WINDOWS-TEST-LABORATUVARI.tr.md).
+Native tek-EXE tasarımı: [Native müşteri istemcisi mimarisi](docs/NATIVE-ISTEMCI-MIMARISI.tr.md).
 
 ## Bileşenler
 
 - `server/RemoteSupport.Signaling`: Cihaz kaydı, 9 haneli destek kodu, kimlik doğrulama ve ayrı kontrol/görüntü WebSocket aktarımı.
-- `client/RemoteSupport.SessionAgent`: RotaLink kullanıcı arayüzü, oturum yaşam döngüsü ve görüntü gönderimi.
+- `client/RemoteSupport.SessionAgent`: Geçiş dönemi `net48` kullanıcı arayüzü ve davranış referansı; müşteri paketi değildir.
 - `client/RemoteSupport.Service`: LocalSystem yetkili Windows servis katmanı ve aktif WTS oturumu yönetimi.
 - `client/RotaLink.SessionHelper`: Aktif kullanıcı oturumunda çalışan, masaüstü bağlamını izleyen ve `SendInput` uygulayan yardımcı süreç.
 - `client/RemoteSupport.Protocol`: Sürümlü IPC ve ikili taşıma protokolleri.
-- `native`: DXGI Desktop Duplication, H.264 ve paylaşımlı bellek tabanlı yeni görüntü hattı kaynakları.
+- `native/RotaLink.Client`: .NET/VC++ Runtime gerektirmeyen statik Win32 müşteri istemcisi.
+- `native/RotaLink.NativeHost`: DXGI Desktop Duplication, H.264 ve paylaşımlı bellek görüntü motoru.
 
 ## Kullanım akışı
 
@@ -30,7 +35,15 @@ Temiz VM testinin uygulanışı: [Windows test laboratuvarı](docs/WINDOWS-TEST-
 dotnet build AscosRemoteSupport.sln
 dotnet run --project tests/RemoteSupport.Smoke/RemoteSupport.Smoke.csproj -- http://127.0.0.1:5188
 powershell -ExecutionPolicy Bypass -File scripts/build-light-client.ps1
+cmake -S native -B native/out -A x64
+cmake --build native/out --config Release --target RotaLink.Client
+powershell -ExecutionPolicy Bypass -File scripts/Test-NativeClientArtifact.ps1 `
+  -Path native/out/Release/RotaLink-Native.exe
 ```
+
+Kolay derleme komutu `scripts/build-native-client.ps1` dosyasıdır. Visual Studio C++
+Desktop workload, Windows SDK ve CMake yalnız derleme/CI makinesinde gerekir; müşteriye
+kurulmaz. PE kapısı EXE'nin x64 olduğunu, CLR başlığı taşımadığını ve 10 MB sınırını denetler.
 
 İmzalı üretim paketi için:
 

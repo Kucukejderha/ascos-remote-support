@@ -25,18 +25,12 @@ jobs:
       - name: Restore without audit network dependency
         shell: powershell
         run: dotnet restore tests/RemoteSupport.Smoke/RemoteSupport.Smoke.csproj --configfile NuGet.Config -p:NuGetAudit=false
-      - name: Build portable client
-        shell: powershell
-        run: ./scripts/build-light-client.ps1
       - name: Architecture checks
         shell: powershell
         run: dotnet run --project tests/RemoteSupport.Smoke/RemoteSupport.Smoke.csproj -c Release --no-restore -- --architecture-only
       - name: Compatibility matrix release gate checks
         shell: powershell
         run: ./tests/Test-CompatibilityMatrix.ps1
-      - name: Build compatibility test kit
-        shell: powershell
-        run: ./scripts/build-compatibility-kit.ps1
       - name: Probe Windows Server 2022 runner
         shell: powershell
         run: ./scripts/Test-RotaLinkCompatibility.ps1 -TargetId server-2022 -OutputPath artifacts/compatibility/rotalink-compatibility-server-2022.json
@@ -44,6 +38,4 @@ jobs:
         with:
           name: windows-server-2022-compatibility-evidence
           path: |
-            artifacts/RotaLink-v1.1.0-alpha.26-UNSIGNED-DEVELOPMENT.exe
-            artifacts/RotaLink-Alpha26-Uyumluluk-Test-Kiti.zip
             artifacts/compatibility/rotalink-compatibility-server-2022.json
