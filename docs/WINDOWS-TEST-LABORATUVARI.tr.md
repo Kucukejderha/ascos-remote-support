@@ -33,6 +33,12 @@ RotaLink-Uyumluluk-Testi.cmd server-2019
 ```
 
 JSON raporu masaüstündeki `RotaLink-Test-Sonuclari` klasörüne yazılır.
+Raporun `schemaVersion` değeri `2` olmalıdır. `client` bölümü test edilen EXE'nin tam
+sürümünü, boyutunu ve SHA-256 karmasını; `diagnostics` bölümü çalışan süreçleri, geçici
+servis durumunu ve kullanıcı/SYSTEM native günlüklerinin son 200 satırını içerir. Kontrol
+denemesinden hemen sonra, RotaLink hâlâ açıkken bu rapor üretilmelidir. `schemaVersion: 1`
+veya `dotnet-48` kontrolü içeren bir rapor eski managed test kitine aittir ve native istemci
+arızasını teşhis etmek için kullanılmaz.
 
 Yönetici PowerShell penceresinde depo kökünden çalıştırın:
 

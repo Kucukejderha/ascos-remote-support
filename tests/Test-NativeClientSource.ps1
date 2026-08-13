@@ -29,6 +29,7 @@ $checks = @(
     @{ Id="per-monitor-manifest"; Passed=$manifest.Contains('PerMonitorV2,PerMonitor,System') },
     @{ Id="no-managed-project"; Passed=(-not (Test-Path (Join-Path $root "native\RotaLink.Client\RotaLink.Client.csproj"))) }
     @{ Id="dotnet-not-a-release-gate"; Passed=($probe.Contains('Add-Check "native-runtime" "P0" $true') -and -not $probe.Contains('Add-Check "dotnet-48"')) },
+    @{ Id="native-diagnostic-evidence"; Passed=($probe.Contains('schemaVersion = 2') -and $probe.Contains('Get-FileHash') -and $probe.Contains('RotaLink-Native.log') -and $probe.Contains('RotaLinkNativeRuntime')) },
     @{ Id="cng-p256-spki"; Passed=($identity.Contains('BCRYPT_ECDSA_P256_ALGORITHM') -and $identity.Contains('BCRYPT_ECCPUBLIC_BLOB')) },
     @{ Id="challenge-signature"; Passed=($signaling.Contains('SignBase64(nonce)') -and $signaling.Contains('/verify')) },
     @{ Id="support-code"; Passed=($signaling.Contains('/v1/support-codes') -and $signaling.Contains('result.code.size() != 9')) },

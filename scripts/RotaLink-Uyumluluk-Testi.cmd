@@ -8,9 +8,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Test-RotaLinkCompa
 set "EXIT_CODE=%ERRORLEVEL%"
 echo.
 if "%EXIT_CODE%"=="0" (
-  echo On kontrol basarili. JSON raporu: %RESULT_DIR%
+  echo On kontrol basarili. Surum, EXE karmasi ve native kontrol gunlugu JSON raporuna eklendi: %RESULT_DIR%
 ) else (
-  echo En az bir uyumluluk engeli bulundu. JSON raporu: %RESULT_DIR%
+  echo En az bir uyumluluk engeli bulundu. Surum, EXE karmasi ve native kontrol gunlugu JSON raporunda: %RESULT_DIR%
 )
 echo Native RotaLink EXE testi ve manuel P0/P1 senaryolari icin WINDOWS-TEST-LABORATUVARI.tr.md dosyasini izleyin.
 exit /b %EXIT_CODE%

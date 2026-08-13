@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$TargetId,
     [string]$OutputPath = "",
-    [string]$ServerBaseUrl = "https://45.87.173.201.nip.io"
+    [string]$ServerBaseUrl = "https://45.87.173.201.nip.io",
+    [string]$ClientPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,6 +54,49 @@ function Add-Check {
         passed = $Passed
         message = $Message
     }
+}
+
+function Read-LogTail {
+    param([string]$Path, [int]$Lines = 200)
+    $result = [ordered]@{ path=$Path; exists=$false; lastWriteTimeUtc=""; tail=@(); error="" }
+    try {
+        if (Test-Path -LiteralPath $Path) {
+            $file = Get-Item -LiteralPath $Path
+            $result.exists = $true
+            $result.lastWriteTimeUtc = $file.LastWriteTimeUtc.ToString("o")
+            $result.tail = @(Get-Content -LiteralPath $Path -Tail $Lines -ErrorAction Stop)
+        }
+    } catch { $result.error = $_.Exception.Message }
+    return [pscustomobject]$result
+}
+
+if ([string]::IsNullOrWhiteSpace($ClientPath)) {
+    $candidate = Get-ChildItem -LiteralPath $PSScriptRoot -Filter "RotaLink-*.exe" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+    if ($null -ne $candidate) { $ClientPath = $candidate.FullName }
+}
+$clientEvidence = [ordered]@{
+    found = $false
+    path = ""
+    fileVersion = ""
+    productVersion = ""
+    bytes = 0
+    sha256 = ""
+    lastWriteTimeUtc = ""
+    error = ""
+}
+if (-not [string]::IsNullOrWhiteSpace($ClientPath)) {
+    try {
+        $resolvedClient = [IO.Path]::GetFullPath($ClientPath)
+        $clientFile = Get-Item -LiteralPath $resolvedClient -ErrorAction Stop
+        $clientEvidence.found = $true
+        $clientEvidence.path = $resolvedClient
+        $clientEvidence.fileVersion = [string]$clientFile.VersionInfo.FileVersion
+        $clientEvidence.productVersion = [string]$clientFile.VersionInfo.ProductVersion
+        $clientEvidence.bytes = [long]$clientFile.Length
+        $clientEvidence.sha256 = (Get-FileHash -LiteralPath $resolvedClient -Algorithm SHA256).Hash.ToLowerInvariant()
+        $clientEvidence.lastWriteTimeUtc = $clientFile.LastWriteTimeUtc.ToString("o")
+    } catch { $clientEvidence.error = $_.Exception.Message }
 }
 
 $checks = @()
@@ -175,11 +219,39 @@ $p0Failed = @($checks | Where-Object { $_.severity -eq "P0" -and -not $_.passed 
 $p1Failed = @($checks | Where-Object { $_.severity -eq "P1" -and -not $_.passed }).Count -gt 0
 $status = if ($p0Failed) { "Fail" } elseif ($p1Failed) { "Warn" } else { "Pass" }
 
+$userLogPath = Join-Path $env:LOCALAPPDATA "Rotaniz\RotaLink\RotaLink-Native.log"
+$systemLogPath = Join-Path $env:WINDIR "System32\config\systemprofile\AppData\Local\Rotaniz\RotaLink\RotaLink-Native.log"
+$processEvidence = @()
+try {
+    foreach ($process in @(Get-Process -Name RotaLink -ErrorAction SilentlyContinue)) {
+        $processStartTime = ""
+        $processPath = ""
+        try { $processStartTime = $process.StartTime.ToUniversalTime().ToString("o") } catch { }
+        try { $processPath = [string]$process.Path } catch { }
+        $processEvidence += [pscustomobject][ordered]@{
+            id = $process.Id
+            sessionId = $process.SessionId
+            startTimeUtc = $processStartTime
+            path = $processPath
+        }
+    }
+} catch { }
+$serviceEvidence = [ordered]@{ found=$false; status=""; startType=""; error="" }
+try {
+    $service = Get-WmiObject -Class Win32_Service -Filter "Name='RotaLinkNativeRuntime'" -ErrorAction Stop
+    if ($null -ne $service) {
+        $serviceEvidence.found = $true
+        $serviceEvidence.status = [string]$service.State
+        $serviceEvidence.startType = [string]$service.StartMode
+    }
+} catch { $serviceEvidence.error = $_.Exception.Message }
+
 $report = [pscustomobject][ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     targetId = $TargetId
     generatedAtUtc = [DateTime]::UtcNow.ToString("o")
     status = $status
+    client = $clientEvidence
     machine = [ordered]@{
         computerName = $env:COMPUTERNAME
         manufacturer = [string]$computer.Manufacturer
@@ -217,6 +289,12 @@ $report = [pscustomobject][ordered]@{
     }
     graphics = $gpus
     serverEndpoint = $endpoint
+    diagnostics = [ordered]@{
+        processes = $processEvidence
+        service = $serviceEvidence
+        userLog = Read-LogTail $userLogPath
+        systemLog = Read-LogTail $systemLogPath
+    }
     checks = $checks
 }
 
