@@ -38,7 +38,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-light-client.ps1
 cmake -S native -B native/out -A x64
 cmake --build native/out --config Release --target RotaLink.Client
 powershell -ExecutionPolicy Bypass -File scripts/Test-NativeClientArtifact.ps1 `
-  -Path native/out/Release/RotaLink-Native.exe
+  -Path native/out/Release/RotaLink.exe
 ```
 
 Kolay derleme komutu `scripts/build-native-client.ps1` dosyasıdır. Visual Studio C++
@@ -57,7 +57,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-signed-client.ps1
 
 - Operatör: https://45.87.173.201.nip.io/operator
 - Sağlık kontrolü: https://45.87.173.201.nip.io/health
-- Güncel test paketi yerel olarak üretilir; siteye yükleme yalnız uyumluluk testi tamamlandıktan sonra yapılır.
+- Güncel native önizleme GitHub Actions tarafından üretilir; siteye yükleme yalnız gerçek Windows uyumluluk testi tamamlandıktan sonra yapılır.
 
 ## Ürün sınırı
 
