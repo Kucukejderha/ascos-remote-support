@@ -39,6 +39,7 @@ $checks = @(
     @{ Id="wts-active-session-monitor"; Passed=($runtime.Contains('WTSQuerySessionInformationW') -and $runtime.Contains('WTSConnectState') -and $runtime.Contains('WTSActive')) },
     @{ Id="authenticated-input-ipc"; Passed=($inputPipe.Contains('GetNamedPipeClientProcessId') -and $inputPipe.Contains('PIPE_REJECT_REMOTE_CLIENTS') -and $sessionRuntime.Contains('InputPipeClient input')) },
     @{ Id="helper-clean-stop"; Passed=($runtime.Contains('HelperStop') -and $inputPipe.Contains('WaitForSingleObject(stop') -and $inputEngine.Contains('KEYEVENTF_KEYUP')) },
+    @{ Id="portable-runtime-cleanup"; Passed=($runtime.Contains('DeleteFileW(installedRuntime_') -and $runtime.Contains('RemoveDirectoryW(versionDirectory')) },
     @{ Id="atomic-sendinput"; Passed=($inputEngine.Contains('SendInput(') -and $inputEngine.Contains('sent == expected')) },
     @{ Id="truthful-input-result"; Passed=($inputPipe.Contains('result.accepted ? "true" : "false"') -and $inputEngine.Contains('result.accepted = Send(inputs, result)') -and $sessionRuntime.Contains('native-helper-ipc-unavailable')) },
     @{ Id="native-dxgi-video"; Passed=($sessionRuntime.Contains('DesktopDuplicator duplicator') -and $sessionRuntime.Contains('H264Encoder encoder') -and $sessionRuntime.Contains('socket.SendBinary(packet)')) },

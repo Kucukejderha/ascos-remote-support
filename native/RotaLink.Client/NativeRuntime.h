@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <filesystem>
 #include <memory>
 
 class NativeRuntime final {
@@ -16,4 +17,5 @@ public:
 private:
     SC_HANDLE manager_{};
     SC_HANDLE service_{};
+    std::filesystem::path installedRuntime_;
 };

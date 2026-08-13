@@ -267,9 +267,10 @@ void NativeRuntime::StartForCurrentClient() {
     wchar_t programFiles[MAX_PATH]{};
     if (!GetEnvironmentVariableW(L"ProgramFiles", programFiles, ARRAYSIZE(programFiles)))
         ThrowWin32("GetEnvironmentVariableW(ProgramFiles)");
-    const std::filesystem::path directory = std::filesystem::path(programFiles) / L"RotaLink" / L"Runtime" / L"1.2.0-native.1";
+    const std::filesystem::path directory = std::filesystem::path(programFiles) / L"RotaLink" / L"Runtime" / L"1.2.0-native.2";
     std::filesystem::create_directories(directory);
     const std::filesystem::path installed = directory / L"RotaLink.exe";
+    installedRuntime_ = installed;
     try {
         manager_ = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
         if (!manager_) ThrowWin32("OpenSCManagerW");
@@ -314,6 +315,16 @@ void NativeRuntime::Stop() noexcept {
     if (manager_) {
         CloseServiceHandle(manager_);
         manager_ = nullptr;
+    }
+    if (!installedRuntime_.empty()) {
+        if (!DeleteFileW(installedRuntime_.c_str()) && GetLastError() != ERROR_FILE_NOT_FOUND) {
+            MoveFileExW(installedRuntime_.c_str(), nullptr, MOVEFILE_DELAY_UNTIL_REBOOT);
+        }
+        const std::filesystem::path versionDirectory = installedRuntime_.parent_path();
+        RemoveDirectoryW(versionDirectory.c_str());
+        RemoveDirectoryW(versionDirectory.parent_path().c_str());
+        RemoveDirectoryW(versionDirectory.parent_path().parent_path().c_str());
+        installedRuntime_.clear();
     }
 }
 
