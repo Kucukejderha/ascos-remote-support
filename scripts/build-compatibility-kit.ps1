@@ -1,21 +1,33 @@
-param([string]$Configuration = "Release")
+param(
+    [string]$NativeClientPath = "",
+    [string]$Version = "1.2.0-native.1"
+)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $artifacts = Join-Path $root "artifacts"
-$kitDirectory = Join-Path $artifacts "RotaLink-Alpha26-Uyumluluk-Test-Kiti"
-$zipPath = Join-Path $artifacts "RotaLink-Alpha26-Uyumluluk-Test-Kiti.zip"
-$client = Join-Path $artifacts "RotaLink-v1.1.0-alpha.26-UNSIGNED-DEVELOPMENT.exe"
+$kitDirectory = Join-Path $artifacts ("RotaLink-" + $Version + "-Uyumluluk-Test-Kiti")
+$zipPath = $kitDirectory + ".zip"
+$clientName = "RotaLink-" + $Version + ".exe"
 
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-light-client.ps1") -Configuration $Configuration
-if ($LASTEXITCODE -ne 0) { throw "Alpha.26 client build failed." }
-if (-not (Test-Path -LiteralPath $client)) { throw "Alpha.26 artifact was not produced." }
+if ([string]::IsNullOrWhiteSpace($NativeClientPath)) {
+    $NativeClientPath = Join-Path $root "native\out\Release\RotaLink.exe"
+}
+$client = [IO.Path]::GetFullPath($NativeClientPath)
+if (-not (Test-Path -LiteralPath $client)) {
+    throw "Native client not found: $client. Build it with scripts\build-native-client.ps1 or pass -NativeClientPath."
+}
+
+$verification = Join-Path $artifacts "native-client-kit-report.json"
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "Test-NativeClientArtifact.ps1") -Path $client -OutputPath $verification
+if ($LASTEXITCODE -ne 0) { throw "Native client PE verification failed." }
 
 if (Test-Path -LiteralPath $kitDirectory) { Remove-Item -LiteralPath $kitDirectory -Recurse -Force }
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
 New-Item -ItemType Directory -Force -Path $kitDirectory | Out-Null
 
 $files = @(
-    @{ Source=$client; Name="RotaLink-v1.1.0-alpha.26-UNSIGNED-DEVELOPMENT.exe" },
+    @{ Source=$client; Name=$clientName },
+    @{ Source=$verification; Name="native-client-report.json" },
     @{ Source=(Join-Path $PSScriptRoot "Test-RotaLinkCompatibility.ps1"); Name="Test-RotaLinkCompatibility.ps1" },
     @{ Source=(Join-Path $PSScriptRoot "Test-RotaLinkCompatibilityMatrix.ps1"); Name="Test-RotaLinkCompatibilityMatrix.ps1" },
     @{ Source=(Join-Path $PSScriptRoot "RotaLink-Uyumluluk-Testi.cmd"); Name="RotaLink-Uyumluluk-Testi.cmd" },

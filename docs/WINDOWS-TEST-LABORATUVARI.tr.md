@@ -11,18 +11,21 @@ sözleşmesinin tamamını kanıtlamak için kullanılır.
   bulunmalıdır. Native müşteri istemcisi için .NET veya VC++ Runtime kurulmaz.
 - Konsol ve RDP testlerini ayrı snapshot/rapor olarak saklayın. Matris kapısına aktif
   etkileşimli oturum raporu verilir.
-- Alpha paketi yalnız kontrollü laboratuvarda ve yönetici onayıyla çalıştırılır.
+- İmzasız native önizleme yalnız kontrollü laboratuvarda ve yönetici onayıyla çalıştırılır.
 
 ## Otomatik ön kontrol
 
 Geliştirici, tek dosyalık laboratuvar paketini şu komutla üretir:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1
+powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1 `
+  -NativeClientPath C:\RotaLink-Build\RotaLink.exe `
+  -Version 1.2.0-native.1
 ```
 
-`Alpha.26` kiti eski `net48` laboratuvar hattına aittir ve müşteri kabul kanıtı olarak
-kullanılmaz. Native önizleme paketi üretildiğinde hedef VM'ye kopyalanıp açılır.
+Paketleyici önce PE dosyasının x64, CLR içermeyen ve 10 MB altında bir native istemci
+olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.1-Uyumluluk-Test-Kiti.zip` hedef VM'ye
+kopyalanıp açılır; müşterinin sistemindeki .NET sürümü yalnız raporlanır ve sonuç kapısı değildir.
 Depo kurmadan ön kontrol başlatmak için örneğin:
 
 ```cmd
