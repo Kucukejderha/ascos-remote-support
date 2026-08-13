@@ -137,6 +137,14 @@ int InputPipeServer::Run() {
             while (ReadMessage(pipe, request)) {
                 if (WaitForSingleObject(stop, 0) == WAIT_OBJECT_0) break;
                 const NativeInputResult result = input.Dispatch(request);
+                if (!result.accepted || result.eventType != "move") {
+                    Diagnostics::Write(L"Native input result. Accepted=" +
+                        std::wstring(result.accepted ? L"true" : L"false") + L", Stage=" +
+                        std::wstring(result.stage.begin(), result.stage.end()) + L", Win32=" +
+                        std::to_wstring(result.error) + L", Desktop=" +
+                        std::wstring(result.desktop.begin(), result.desktop.end()) + L", Event=" +
+                        std::wstring(result.eventType.begin(), result.eventType.end()) + L".");
+                }
                 if (!WriteMessage(pipe, ResultJson(result))) break;
             }
         }

@@ -17,11 +17,11 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "Rota Bilişim Hizmetleri\0"
       VALUE "FileDescription", "Rotaniz Remote Support — RotaLink\0"
-      VALUE "FileVersion", "1.2.0-native.2\0"
+      VALUE "FileVersion", "1.2.0-native.3\0"
       VALUE "InternalName", "RotaLink.exe\0"
       VALUE "OriginalFilename", "RotaLink.exe\0"
       VALUE "ProductName", "RotaLink\0"
-      VALUE "ProductVersion", "1.2.0-native.2\0"
+      VALUE "ProductVersion", "1.2.0-native.3\0"
     END
   END
   BLOCK "VarFileInfo"

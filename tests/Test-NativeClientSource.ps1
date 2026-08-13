@@ -34,6 +34,7 @@ $checks = @(
     @{ Id="support-code"; Passed=($signaling.Contains('/v1/support-codes') -and $signaling.Contains('result.code.size() != 9')) },
     @{ Id="split-control-video"; Passed=($sessionRuntime.Contains('ConnectHostSocket(session, "control")') -and $sessionRuntime.Contains('ConnectHostSocket(session, "video")')) },
     @{ Id="dynamic-input-desktop"; Passed=($inputEngine.Contains('OpenInputDesktop') -and $inputEngine.Contains('SetThreadDesktop')) },
+    @{ Id="same-desktop-handle-reuse"; Passed=($inputEngine.Contains('GetThreadDesktop') -and $inputEngine.Contains('_wcsicmp(currentName.c_str(), nextName.c_str())') -and $inputEngine.Contains('CloseDesktop(next)')) },
     @{ Id="single-exe-service-helper"; Passed=($main.Contains('--service') -and $main.Contains('--helper') -and $runtime.Contains('CreateServiceW') -and $runtime.Contains('CreateProcessAsUserW')) },
     @{ Id="interactive-user-token"; Passed=($runtime.Contains('OpenProcess(client for helper token)') -and $runtime.Contains('OpenProcessToken(client)') -and $runtime.Contains('Interactive token session mismatch') -and $runtime.Contains('TOKEN_ASSIGN_PRIMARY') -and -not $runtime.Contains('SetMediumIntegrity(primary)') -and $runtime.Contains('winsta0\\default')) },
     @{ Id="wts-active-session-monitor"; Passed=($runtime.Contains('WTSQuerySessionInformationW') -and $runtime.Contains('WTSConnectState') -and $runtime.Contains('WTSActive')) },

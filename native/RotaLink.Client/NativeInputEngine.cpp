@@ -1,4 +1,5 @@
 #include "NativeInputEngine.h"
+#include "Diagnostics.h"
 #include "JsonLite.h"
 #include <algorithm>
 #include <cmath>
@@ -44,6 +45,17 @@ bool Send(std::vector<INPUT>& inputs, NativeInputResult& result) {
 }
 
 bool IsNormalized(double value) { return std::isfinite(value) && value >= 0.0 && value <= 1.0; }
+
+bool DesktopName(HDESK desktop, std::wstring& name, DWORD& error) noexcept {
+    wchar_t buffer[256]{};
+    DWORD needed = 0;
+    if (!desktop || !GetUserObjectInformationW(desktop, UOI_NAME, buffer, sizeof(buffer), &needed)) {
+        error = GetLastError();
+        return false;
+    }
+    name.assign(buffer);
+    return true;
+}
 }
 
 NativeInputEngine::~NativeInputEngine() {
@@ -78,20 +90,39 @@ bool NativeInputEngine::AttachInputDesktop(NativeInputResult& result) {
     if (!next) {
         result.error = GetLastError(); result.stage = "open-input-desktop-failed"; return false;
     }
-    if (next != desktop_) {
+    std::wstring nextName;
+    if (!DesktopName(next, nextName, result.error)) {
+        result.stage = "query-input-desktop-failed";
+        CloseDesktop(next);
+        return false;
+    }
+    const HDESK current = GetThreadDesktop(GetCurrentThreadId());
+    std::wstring currentName;
+    DWORD currentNameError = ERROR_SUCCESS;
+    const bool sameDesktop = DesktopName(current, currentName, currentNameError) &&
+        _wcsicmp(currentName.c_str(), nextName.c_str()) == 0;
+    if (sameDesktop) {
+        // OpenInputDesktop returns a new handle even when it represents the same
+        // desktop object. Handle-value comparison therefore caused every second
+        // event (typically the click following a move) to fail while attempting
+        // to close the still-assigned desktop. Retain the assigned handle and
+        // close only the redundant newly opened handle.
+        CloseDesktop(next);
+    } else {
         if (!SetThreadDesktop(next)) {
-            result.error = GetLastError(); result.stage = "set-thread-desktop-failed"; CloseDesktop(next); return false;
+            result.error = GetLastError();
+            result.stage = "set-thread-desktop-failed";
+            CloseDesktop(next);
+            return false;
         }
-        HDESK previous = desktop_;
+        const HDESK previousOwned = desktop_;
         desktop_ = next;
-        if (previous && !CloseDesktop(previous)) {
-            result.error = GetLastError(); result.stage = "close-previous-desktop-failed"; return false;
+        if (previousOwned && !CloseDesktop(previousOwned)) {
+            Diagnostics::Write(L"Previous native input desktop handle could not be closed after a successful switch. Win32=" +
+                std::to_wstring(GetLastError()) + L".");
         }
     }
-    wchar_t name[256]{};
-    DWORD needed = 0;
-    result.desktop = GetUserObjectInformationW(desktop_, UOI_NAME, name, sizeof(name), &needed)
-        ? JsonLite::Utf8(name) : "input-desktop";
+    result.desktop = JsonLite::Utf8(nextName);
     return true;
 }
 
