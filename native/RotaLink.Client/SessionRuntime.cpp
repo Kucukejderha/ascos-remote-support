@@ -6,6 +6,7 @@
 #include "GdiJpegCapture.h"
 #include "JsonLite.h"
 #include "NativeInputEngine.h"
+#include "InputPipe.h"
 #include <windows.h>
 #include <objbase.h>
 #include <chrono>
@@ -101,17 +102,20 @@ void SessionRuntime::Run() noexcept {
 }
 
 void SessionRuntime::ControlLoop(NativeWebSocket& socket) {
-    NativeInputEngine input;
+    InputPipeClient input(GetCurrentProcessId());
     std::vector<std::uint8_t> message;
     bool binary = false;
     while (!stopping_.load() && socket.Receive(message, binary, stopping_)) {
         if (binary) continue;
         const std::string json(message.begin(), message.end());
-        const NativeInputResult result = input.Dispatch(json);
-        const std::string acknowledgement = "{\"type\":\"control-result\",\"ok\":" +
-            std::string(result.accepted ? "true" : "false") + ",\"stage\":\"" + JsonLite::Escape(result.stage) +
-            "\",\"error\":" + std::to_string(result.error) + ",\"desktop\":\"" + JsonLite::Escape(result.desktop) +
-            "\",\"eventType\":\"" + JsonLite::Escape(result.eventType) + "\"}";
+        std::string acknowledgement;
+        if (!input.TryDispatch(json, acknowledgement)) {
+            std::string eventType = "unknown";
+            try { eventType = JsonLite::StringValue(json, "type"); } catch (...) { }
+            acknowledgement = "{\"type\":\"control-result\",\"ok\":false,"
+                "\"stage\":\"native-helper-ipc-unavailable\",\"error\":0,\"desktop\":\"\",\"eventType\":\"" +
+                JsonLite::Escape(eventType) + "\"}";
+        }
         socket.SendText(acknowledgement);
     }
 }

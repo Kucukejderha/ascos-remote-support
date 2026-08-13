@@ -1,6 +1,7 @@
 #include "Diagnostics.h"
 #include "NativeHandles.h"
 #include "NativeWindow.h"
+#include "NativeRuntime.h"
 #include "PlatformCompatibility.h"
 #include <windows.h>
 #include <shellapi.h>
@@ -46,6 +47,17 @@ bool HasArgument(std::wstring_view commandLine, std::wstring_view argument) noex
     return leftBoundary && rightBoundary;
 }
 
+DWORD ProcessIdArgument(std::wstring_view commandLine) noexcept {
+    constexpr std::wstring_view marker = L"--client-pid";
+    const std::size_t position = commandLine.find(marker);
+    if (position == std::wstring_view::npos) return 0;
+    const std::size_t valueStart = commandLine.find_first_not_of(L" \t", position + marker.size());
+    if (valueStart == std::wstring_view::npos) return 0;
+    wchar_t* end = nullptr;
+    const unsigned long value = wcstoul(commandLine.data() + valueStart, &end, 10);
+    return end != commandLine.data() + valueStart ? static_cast<DWORD>(value) : 0;
+}
+
 bool RelaunchElevated() noexcept {
     wchar_t executable[MAX_PATH]{};
     const DWORD length = GetModuleFileNameW(nullptr, executable, ARRAYSIZE(executable));
@@ -63,12 +75,15 @@ bool RelaunchElevated() noexcept {
 }
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR commandLine, int showCommand) {
+    const std::wstring_view arguments = commandLine ? commandLine : L"";
+    if (HasArgument(arguments, L"--service")) return NativeRuntime::RunServiceMode();
+    if (HasArgument(arguments, L"--helper")) return NativeRuntime::RunHelperMode(ProcessIdArgument(arguments));
     EnableDpiAwareness();
     Diagnostics::Initialize();
     // A second launch must focus the already running elevated window without
     // presenting another UAC prompt.
     if (ActivateExistingWindow()) return 0;
-    const bool elevatedMarker = HasArgument(commandLine ? commandLine : L"", L"--elevated");
+    const bool elevatedMarker = HasArgument(arguments, L"--elevated");
     if (!IsProcessElevated()) {
         if (!elevatedMarker && RelaunchElevated()) return 0;
         const DWORD error = GetLastError();

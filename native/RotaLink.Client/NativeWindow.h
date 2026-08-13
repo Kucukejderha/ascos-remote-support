@@ -2,6 +2,7 @@
 
 #include "PlatformCompatibility.h"
 #include "SessionRuntime.h"
+#include "NativeRuntime.h"
 #include <windows.h>
 #include <atomic>
 #include <memory>
@@ -31,6 +32,7 @@ private:
     HFONT bodyFont_{};
     HFONT codeFont_{};
     std::unique_ptr<SessionRuntime> sessionRuntime_;
+    std::unique_ptr<NativeRuntime> nativeRuntime_;
     std::atomic_bool closing_{};
     std::wstring status_{L"Native bağlantı denetleniyor…"};
     std::wstring code_{L"Hazırlanıyor…"};

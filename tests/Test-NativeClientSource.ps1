@@ -11,6 +11,8 @@ $identity = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\Cn
 $sessionRuntime = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\SessionRuntime.cpp") -Raw
 $inputEngine = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeInputEngine.cpp") -Raw
 $gdiCapture = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\GdiJpegCapture.cpp") -Raw
+$runtime = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeRuntime.cpp") -Raw
+$inputPipe = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\InputPipe.cpp") -Raw
 
 $checks = @(
     @{ Id="static-crt"; Passed=$cmake.Contains('CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded') },
@@ -31,8 +33,13 @@ $checks = @(
     @{ Id="support-code"; Passed=($signaling.Contains('/v1/support-codes') -and $signaling.Contains('result.code.size() != 9')) },
     @{ Id="split-control-video"; Passed=($sessionRuntime.Contains('ConnectHostSocket(session, "control")') -and $sessionRuntime.Contains('ConnectHostSocket(session, "video")')) },
     @{ Id="dynamic-input-desktop"; Passed=($inputEngine.Contains('OpenInputDesktop') -and $inputEngine.Contains('SetThreadDesktop')) },
+    @{ Id="single-exe-service-helper"; Passed=($main.Contains('--service') -and $main.Contains('--helper') -and $runtime.Contains('CreateServiceW') -and $runtime.Contains('CreateProcessAsUserW')) },
+    @{ Id="system-interactive-token"; Passed=($runtime.Contains('SetTokenInformation(primary, TokenSessionId') -and $runtime.Contains('winsta0\\default')) },
+    @{ Id="wts-active-session-monitor"; Passed=($runtime.Contains('WTSQuerySessionInformationW') -and $runtime.Contains('WTSConnectState') -and $runtime.Contains('WTSActive')) },
+    @{ Id="authenticated-input-ipc"; Passed=($inputPipe.Contains('GetNamedPipeClientProcessId') -and $inputPipe.Contains('PIPE_REJECT_REMOTE_CLIENTS') -and $sessionRuntime.Contains('InputPipeClient input')) },
+    @{ Id="helper-clean-stop"; Passed=($runtime.Contains('HelperStop') -and $inputPipe.Contains('WaitForSingleObject(stop') -and $inputEngine.Contains('KEYEVENTF_KEYUP')) },
     @{ Id="atomic-sendinput"; Passed=($inputEngine.Contains('SendInput(') -and $inputEngine.Contains('sent == expected')) },
-    @{ Id="truthful-input-result"; Passed=($sessionRuntime.Contains('result.accepted ? "true" : "false"') -and $inputEngine.Contains('result.accepted = Send(inputs, result)')) },
+    @{ Id="truthful-input-result"; Passed=($inputPipe.Contains('result.accepted ? "true" : "false"') -and $inputEngine.Contains('result.accepted = Send(inputs, result)') -and $sessionRuntime.Contains('native-helper-ipc-unavailable')) },
     @{ Id="native-dxgi-video"; Passed=($sessionRuntime.Contains('DesktopDuplicator duplicator') -and $sessionRuntime.Contains('H264Encoder encoder') -and $sessionRuntime.Contains('socket.SendBinary(packet)')) },
     @{ Id="native-jpeg-fallback"; Passed=($sessionRuntime.Contains('GdiVideoLoop(socket)') -and $gdiCapture.Contains('GUID_ContainerFormatJpeg') -and $gdiCapture.Contains('StretchBlt')) },
     @{ Id="multi-monitor-geometry"; Passed=($sessionRuntime.Contains('SM_CMONITORS') -and $gdiCapture.Contains('SM_XVIRTUALSCREEN') -and $gdiCapture.Contains('SM_CXVIRTUALSCREEN')) }

@@ -57,6 +57,7 @@ NativeWindow::NativeWindow(PlatformCompatibility compatibility) : compatibility_
 NativeWindow::~NativeWindow() {
     closing_.store(true);
     if (sessionRuntime_) sessionRuntime_->Stop();
+    if (nativeRuntime_) nativeRuntime_->Stop();
     if (titleFont_) DeleteObject(titleFont_);
     if (bodyFont_) DeleteObject(bodyFont_);
     if (codeFont_) DeleteObject(codeFont_);
@@ -166,6 +167,16 @@ void NativeWindow::Paint() const {
 }
 
 void NativeWindow::StartSession() {
+    try {
+        nativeRuntime_ = std::make_unique<NativeRuntime>();
+        nativeRuntime_->StartForCurrentClient();
+    } catch (const std::exception& error) {
+        const std::string narrow(error.what());
+        const std::wstring message(narrow.begin(), narrow.end());
+        Diagnostics::Write(L"Native control runtime startup failed: " + message);
+        SetStatus(L"Kontrol motoru başlatılamadı: " + message, RGB(178,34,34));
+        return;
+    }
     sessionRuntime_ = std::make_unique<SessionRuntime>(
         [this](const NativeHostSession& session) { PostSessionReady(session); },
         [this](std::wstring status, bool error) { PostStatus(std::move(status), error); });

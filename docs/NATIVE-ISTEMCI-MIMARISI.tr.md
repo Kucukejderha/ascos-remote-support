@@ -61,7 +61,7 @@ Foundation API'lerini kullanır. Modern API giriş noktaları Server 2012'de bul
 2. CNG cihaz kaydı, challenge imzası, 9 haneli kod ve çift WinHTTP WebSocket. **Kaynak akışına bağlandı.**
 3. Atomik `SendInput`, dinamik input desktop, koordinat dönüşümü ve klavye. **Etkileşimli native akışa bağlandı; service/helper ayrımı bekliyor.**
 4. Mevcut C++ DXGI/H.264 motorunun video WebSocket'ine bağlanması. **Etkileşimli native akışa bağlandı; DXGI/Media Foundation bulunmazsa veya birden çok monitörün tam sanal masaüstü geometrisi gerekiyorsa WIC/JPEG uyumluluk yolu otomatik devreye girer.**
-5. Aynı EXE'nin service/helper kipleri, güvenli named-pipe ACL, aktif WTS oturumu ve basılı tuş temizliği.
+5. Aynı EXE'nin service/helper kipleri, istemci PID doğrulamalı yerel named pipe ve aktif oturuma `CreateProcessAsUser` ile helper başlatılması. **Kaynak akışına bağlandı; WTS oturum değişimi ve basılı tuş temizliği sertleştirmesi bekliyor.**
 6. Windows 10/11 ve Server 2012–2025 VM kabul matrisi.
 7. Authenticode imza, güvenli güncelleme ve pilot yayın.
 

@@ -47,9 +47,29 @@ bool IsNormalized(double value) { return std::isfinite(value) && value >= 0.0 &&
 }
 
 NativeInputEngine::~NativeInputEngine() {
-    // Windows owns the desktop assigned to this worker thread until the thread
-    // exits. Closing an assigned desktop handle is forbidden; process teardown
-    // closes it after the input thread has ended.
+    // Release the state that could otherwise remain held when an operator closes
+    // the session during a drag or modifier-key sequence.
+    std::vector<INPUT> releases;
+    for (const WORD key : {static_cast<WORD>(VK_SHIFT), static_cast<WORD>(VK_CONTROL),
+        static_cast<WORD>(VK_MENU), static_cast<WORD>(VK_LWIN), static_cast<WORD>(VK_RWIN)}) {
+        INPUT input{};
+        input.type = INPUT_KEYBOARD;
+        input.ki.wVk = key;
+        input.ki.dwFlags = KEYEVENTF_KEYUP;
+        releases.push_back(input);
+    }
+    auto buttonRelease = [](DWORD flag) {
+        INPUT input{};
+        input.type = INPUT_MOUSE;
+        input.mi.dwFlags = flag;
+        return input;
+    };
+    releases.push_back(buttonRelease(MouseLeftUp));
+    releases.push_back(buttonRelease(MouseRightUp));
+    releases.push_back(buttonRelease(MouseMiddleUp));
+    SendInput(static_cast<UINT>(releases.size()), releases.data(), sizeof(INPUT));
+    // The worker thread is still assigned to desktop_; Windows closes that final
+    // handle when the helper process exits.
 }
 
 bool NativeInputEngine::AttachInputDesktop(NativeInputResult& result) {
