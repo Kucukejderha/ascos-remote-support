@@ -10,8 +10,8 @@ ve 10 MB kesin üst sınır kontrollerinden geçmiştir.
 
 - Dosya: `RotaLink-v1.2.0-native.1.exe`
 - Boyut: `476.672` bayt
-- SHA-256: `83f1167dedf25bc1a02cf31ac38ab624f03f9f8714d8da639d5131e1b515bd3d`
-- CI commit: `fdfdbe3d31c83628036fdb46637747ba87b8798b`
+- SHA-256: `c008b878fddfe68df3eaa1ddc3ee3d5e7353ba375335f5d73c6d2fb5e1bc3d4b`
+- CI commit: `9021e3ab1841b70d6a27ff96366ab91ffdd8e82b`
 - Durum: İmzasız teknik önizleme; hedef Windows VM matrisi tamamlanmadan sitenin
   kararlı `RotaLink.exe` bağlantısının üzerine yazılmaz.
 
