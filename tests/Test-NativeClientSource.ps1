@@ -20,6 +20,7 @@ $checks = @(
     @{ Id="native-gui-target"; Passed=$cmake.Contains('add_executable(RotaLink.Client WIN32') },
     @{ Id="customer-exe-name"; Passed=$cmake.Contains('OUTPUT_NAME "RotaLink"') },
     @{ Id="release-size-optimization"; Passed=($cmake.Contains('/O1') -and $cmake.Contains('/OPT:REF') -and $cmake.Contains('/OPT:ICF')) },
+    @{ Id="reproducible-build"; Passed=$cmake.Contains('/Brepro') },
     @{ Id="single-instance"; Passed=($main.Contains('CreateMutexW') -and $main.Contains('if (ActivateExistingWindow()) return 0;')) },
     @{ Id="explicit-uac-elevation"; Passed=($main.Contains('ShellExecuteExW') -and $main.Contains('lpVerb = L"runas"')) },
     @{ Id="runtime-os-version"; Passed=$compatibility.Contains('RtlGetVersion') },

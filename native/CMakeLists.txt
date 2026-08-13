@@ -51,12 +51,12 @@ target_link_libraries(RotaLink.Client PRIVATE advapi32 bcrypt crypt32 d3d11 dxgi
   ole32 oleaut32 shell32 user32 userenv windowscodecs winhttp wtsapi32)
 set_target_properties(RotaLink.Client PROPERTIES OUTPUT_NAME "RotaLink")
 if(MSVC)
-  target_compile_options(RotaLink.Client PRIVATE /W4 /WX /permissive- /EHsc /utf-8 /guard:cf
+  target_compile_options(RotaLink.Client PRIVATE /W4 /WX /permissive- /EHsc /utf-8 /guard:cf /Brepro
     $<$<CONFIG:Release>:/O1> $<$<CONFIG:Release>:/GL> $<$<CONFIG:Release>:/Gy>
     $<$<CONFIG:Release>:/Gw> $<$<CONFIG:Release>:/Zc:inline>)
   # app.manifest is already embedded as RT_MANIFEST in resources.rc.in.
   # Disable MSVC's second generated manifest to avoid duplicate resource ID 1.
-  target_link_options(RotaLink.Client PRIVATE /MANIFEST:NO /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /CETCOMPAT
+  target_link_options(RotaLink.Client PRIVATE /MANIFEST:NO /Brepro /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /CETCOMPAT
     $<$<CONFIG:Release>:/LTCG> $<$<CONFIG:Release>:/OPT:REF>
     $<$<CONFIG:Release>:/OPT:ICF> $<$<CONFIG:Release>:/DEBUG:NONE>)
 endif()
