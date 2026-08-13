@@ -64,8 +64,10 @@ void H264Encoder::Configure(ID3D11Device* device) {
     Check(MFCreateDXGIDeviceManager(&resetToken_, &deviceManager_), "MFCreateDXGIDeviceManager");
     Check(deviceManager_->ResetDevice(device, resetToken_), "ResetDevice");
     transform_->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(deviceManager_.Get()));
-    ComPtr<ICodecAPI> codec;
-    if (SUCCEEDED(transform_.As(&codec))) {
+    ICodecAPI* codecRaw = nullptr;
+    if (SUCCEEDED(transform_->QueryInterface(IID_PPV_ARGS(&codecRaw))) && codecRaw != nullptr) {
+        ComPtr<ICodecAPI> codec;
+        codec.Attach(codecRaw);
         VARIANT value;
         VariantInit(&value);
         value.vt = VT_BOOL; value.boolVal = VARIANT_TRUE;
