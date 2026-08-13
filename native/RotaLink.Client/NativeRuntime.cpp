@@ -1,7 +1,6 @@
 #include "NativeRuntime.h"
 #include "Diagnostics.h"
 #include "InputPipe.h"
-#include <sddl.h>
 #include <userenv.h>
 #include <wtsapi32.h>
 #include <array>
@@ -159,36 +158,31 @@ bool EnablePrivilege(const wchar_t* name) noexcept {
     return changed && error == ERROR_SUCCESS;
 }
 
-void SetMediumIntegrity(HANDLE token) {
-    PSID mediumIntegritySid = nullptr;
-    if (!ConvertStringSidToSidW(L"S-1-16-8192", &mediumIntegritySid))
-        ThrowWin32("ConvertStringSidToSidW(medium integrity)");
-    struct SidCloser { PSID value; ~SidCloser() { if (value) LocalFree(value); } } closer{mediumIntegritySid};
-    TOKEN_MANDATORY_LABEL label{};
-    label.Label.Attributes = SE_GROUP_INTEGRITY;
-    label.Label.Sid = mediumIntegritySid;
-    const DWORD bytes = sizeof(TOKEN_MANDATORY_LABEL) + GetLengthSid(mediumIntegritySid);
-    if (!SetTokenInformation(token, TokenIntegrityLevel, &label, bytes))
-        ThrowWin32("SetTokenInformation(TokenIntegrityLevel)");
-}
-
 HANDLE LaunchInteractiveHelper(DWORD clientProcessId) {
     EnablePrivilege(SE_ASSIGNPRIMARYTOKEN_NAME);
     EnablePrivilege(SE_INCREASE_QUOTA_NAME);
     DWORD targetSessionId = 0;
     if (!ProcessIdToSessionId(clientProcessId, &targetSessionId)) ThrowWin32("ProcessIdToSessionId(client)");
     struct HandleCloser { HANDLE value; ~HandleCloser() { if (value) CloseHandle(value); } };
+    HANDLE clientProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, clientProcessId);
+    if (!clientProcess) ThrowWin32("OpenProcess(client for helper token)");
+    HandleCloser clientProcessCloser{clientProcess};
     HANDLE rawToken = nullptr;
-    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, &rawToken))
-        ThrowWin32("OpenProcessToken(service)");
+    if (!OpenProcessToken(clientProcess, TOKEN_DUPLICATE | TOKEN_QUERY, &rawToken))
+        ThrowWin32("OpenProcessToken(client)");
     HandleCloser tokenCloser{rawToken};
     HANDLE primary = nullptr;
-    if (!DuplicateTokenEx(rawToken, MAXIMUM_ALLOWED, nullptr, SecurityImpersonation, TokenPrimary, &primary))
+    constexpr DWORD primaryAccess = TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE | TOKEN_QUERY |
+        TOKEN_ADJUST_DEFAULT | TOKEN_ADJUST_SESSIONID;
+    if (!DuplicateTokenEx(rawToken, primaryAccess, nullptr, SecurityImpersonation, TokenPrimary, &primary))
         ThrowWin32("DuplicateTokenEx");
     HandleCloser primaryCloser{primary};
-    if (!SetTokenInformation(primary, TokenSessionId, &targetSessionId, sizeof(targetSessionId)))
-        ThrowWin32("SetTokenInformation(TokenSessionId)");
-    SetMediumIntegrity(primary);
+    DWORD tokenSessionId = 0;
+    DWORD returnedBytes = 0;
+    if (!GetTokenInformation(primary, TokenSessionId, &tokenSessionId, sizeof(tokenSessionId), &returnedBytes))
+        ThrowWin32("GetTokenInformation(TokenSessionId)");
+    if (tokenSessionId != targetSessionId)
+        ThrowWin32("Interactive token session mismatch", ERROR_INVALID_SESSION);
     LPVOID environment = nullptr;
     if (!CreateEnvironmentBlock(&environment, primary, FALSE)) ThrowWin32("CreateEnvironmentBlock");
     struct EnvironmentCloser { LPVOID value; ~EnvironmentCloser() { if (value) DestroyEnvironmentBlock(value); } } environmentCloser{environment};
@@ -203,7 +197,7 @@ HANDLE LaunchInteractiveHelper(DWORD clientProcessId) {
         CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW, environment,
         std::filesystem::path(executable).parent_path().c_str(), &startup, &process)) ThrowWin32("CreateProcessAsUserW(helper)");
     CloseHandle(process.hThread);
-    Diagnostics::Write(L"SYSTEM helper token assigned to interactive session " +
+    Diagnostics::Write(L"Elevated interactive client token assigned to native helper in session " +
         std::to_wstring(targetSessionId) + L".");
     return process.hProcess;
 }
