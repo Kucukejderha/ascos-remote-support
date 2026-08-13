@@ -7,6 +7,7 @@
 - İndirilen paket x64, Authenticode imzalı, tek EXE ve en fazla 10 MB olur.
 - Uygulama açılınca destek kodu ve paylaşım otomatik başlar; pencere kapanınca oturum biter.
 - UAC istemi yalnız Windows'un kontrol çalışma zamanını başlatmak için gösterilebilir.
+- Tek EXE ilk açılışta kendisini bir kez `runas` ile yükseltir; bu işlem bir framework veya ek paket kurmaz.
 - Uygulama gizli çalışmaz ve kullanıcının başlatmadığı bir oturumu kabul etmez.
 
 ## Tek ikili, üç çalışma kipi
@@ -56,11 +57,11 @@ Foundation API'lerini kullanır. Modern API giriş noktaları Server 2012'de bul
 
 ## Geçiş sırası
 
-1. Native pencere, platform denetimi, günlük ve sunucu sağlık bağlantısı.
-2. CNG cihaz kaydı, challenge imzası, 9 haneli kod ve çift WinHTTP WebSocket.
-3. Aynı EXE'nin service/helper kipleri, güvenli named-pipe ACL ve aktif WTS oturumu.
-4. Mevcut C++ DXGI/H.264 motorunun helper kipine doğrudan bağlanması.
-5. Atomik `SendInput`, koordinat dönüşümü, klavye ve basılı tuş temizliği.
+1. Native pencere, platform denetimi, günlük ve sunucu sağlık bağlantısı. **Tamamlandı.**
+2. CNG cihaz kaydı, challenge imzası, 9 haneli kod ve çift WinHTTP WebSocket. **Kaynak akışına bağlandı.**
+3. Atomik `SendInput`, dinamik input desktop, koordinat dönüşümü ve klavye. **Etkileşimli native akışa bağlandı; service/helper ayrımı bekliyor.**
+4. Mevcut C++ DXGI/H.264 motorunun video WebSocket'ine bağlanması. **Etkileşimli native akışa bağlandı; DXGI/Media Foundation bulunmazsa veya birden çok monitörün tam sanal masaüstü geometrisi gerekiyorsa WIC/JPEG uyumluluk yolu otomatik devreye girer.**
+5. Aynı EXE'nin service/helper kipleri, güvenli named-pipe ACL, aktif WTS oturumu ve basılı tuş temizliği.
 6. Windows 10/11 ve Server 2012–2025 VM kabul matrisi.
 7. Authenticode imza, güvenli güncelleme ve pilot yayın.
 

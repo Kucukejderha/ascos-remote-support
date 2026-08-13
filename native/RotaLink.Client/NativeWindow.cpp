@@ -1,6 +1,5 @@
 #include "NativeWindow.h"
 #include "Diagnostics.h"
-#include "WinHttpHealthClient.h"
 #include <windowsx.h>
 #include <memory>
 #include <utility>
@@ -9,11 +8,13 @@ namespace {
 constexpr wchar_t WindowClass[] = L"Rotaniz.RotaLink.Native.Window";
 constexpr wchar_t WindowTitle[] = L"Rotaniz Remote Support — RotaLink";
 constexpr UINT StatusMessage = WM_APP + 1;
+constexpr UINT SessionReadyMessage = WM_APP + 2;
 constexpr UINT DpiChangedMessage = 0x02E0;
 constexpr COLORREF Navy = RGB(7, 27, 43);
 constexpr COLORREF Blue = RGB(11, 102, 195);
 
 struct StatusPayload final { std::wstring text; COLORREF color{}; };
+struct SessionPayload final { std::wstring code; };
 
 int Scale(int value, unsigned dpi) { return MulDiv(value, static_cast<int>(dpi), 96); }
 
@@ -55,7 +56,7 @@ NativeWindow::NativeWindow(PlatformCompatibility compatibility) : compatibility_
 
 NativeWindow::~NativeWindow() {
     closing_.store(true);
-    if (healthThread_.joinable()) healthThread_.join();
+    if (sessionRuntime_) sessionRuntime_->Stop();
     if (titleFont_) DeleteObject(titleFont_);
     if (bodyFont_) DeleteObject(bodyFont_);
     if (codeFont_) DeleteObject(codeFont_);
@@ -77,7 +78,7 @@ bool NativeWindow::Create(HINSTANCE instance, int showCommand) {
     if (!window_) return false;
     ShowWindow(window_, showCommand);
     UpdateWindow(window_);
-    StartHealthProbe();
+    StartSession();
     return true;
 }
 
@@ -120,6 +121,14 @@ LRESULT NativeWindow::HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
         if (payload) SetStatus(std::move(payload->text), payload->color);
         return 0;
     }
+    case SessionReadyMessage: {
+        std::unique_ptr<SessionPayload> payload(reinterpret_cast<SessionPayload*>(lParam));
+        if (payload) {
+            code_ = std::move(payload->code);
+            InvalidateRect(window_, nullptr, FALSE);
+        }
+        return 0;
+    }
     case WM_PAINT: Paint(); return 0;
     case WM_CLOSE: closing_.store(true); DestroyWindow(window_); return 0;
     case WM_DESTROY: PostQuitMessage(0); return 0;
@@ -144,7 +153,7 @@ void NativeWindow::Paint() const {
     FrameRect(dc, &card, reinterpret_cast<HBRUSH>(GetStockObject(LTGRAY_BRUSH)));
     Text(dc, L"DESTEK KODUNUZ", {card.left+Scale(24,dpi_),card.top+Scale(18,dpi_),card.right-Scale(20,dpi_),card.top+Scale(46,dpi_)},
         bodyFont_, Blue, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-    Text(dc, L"Hazırlanıyor…", {card.left+Scale(22,dpi_),card.top+Scale(45,dpi_),card.right-Scale(20,dpi_),card.top+Scale(102,dpi_)},
+    Text(dc, code_.c_str(), {card.left+Scale(22,dpi_),card.top+Scale(45,dpi_),card.right-Scale(20,dpi_),card.top+Scale(102,dpi_)},
         codeFont_, Navy, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
     Text(dc, status_.c_str(), {card.left+Scale(24,dpi_),card.top+Scale(112,dpi_),card.right-Scale(20,dpi_),card.top+Scale(142,dpi_)},
         bodyFont_, statusColor_, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_VCENTER);
@@ -156,17 +165,26 @@ void NativeWindow::Paint() const {
     EndPaint(window_, &paint);
 }
 
-void NativeWindow::StartHealthProbe() {
-    healthThread_ = std::thread([this] {
-        const HealthResult result = WinHttpHealthClient::Probe();
-        Diagnostics::Write(L"Health probe: Reachable=" + std::wstring(result.reachable ? L"True" : L"False") +
-            L", HTTP=" + std::to_wstring(result.statusCode) + L", Win32=" + std::to_wstring(result.errorCode));
-        if (closing_.load()) return;
-        auto payload = std::make_unique<StatusPayload>();
-        payload->text = result.message;
-        payload->color = result.reachable ? Blue : RGB(178, 34, 34);
-        if (PostMessageW(window_, StatusMessage, 0, reinterpret_cast<LPARAM>(payload.get()))) payload.release();
-    });
+void NativeWindow::StartSession() {
+    sessionRuntime_ = std::make_unique<SessionRuntime>(
+        [this](const NativeHostSession& session) { PostSessionReady(session); },
+        [this](std::wstring status, bool error) { PostStatus(std::move(status), error); });
+    sessionRuntime_->Start();
+}
+
+void NativeWindow::PostSessionReady(const NativeHostSession& session) {
+    if (closing_.load()) return;
+    auto payload = std::make_unique<SessionPayload>();
+    payload->code.assign(session.code.begin(), session.code.end());
+    if (PostMessageW(window_, SessionReadyMessage, 0, reinterpret_cast<LPARAM>(payload.get()))) payload.release();
+}
+
+void NativeWindow::PostStatus(std::wstring status, bool error) {
+    if (closing_.load()) return;
+    auto payload = std::make_unique<StatusPayload>();
+    payload->text = std::move(status);
+    payload->color = error ? RGB(178,34,34) : Blue;
+    if (PostMessageW(window_, StatusMessage, 0, reinterpret_cast<LPARAM>(payload.get()))) payload.release();
 }
 
 void NativeWindow::SetStatus(std::wstring status, COLORREF color) {

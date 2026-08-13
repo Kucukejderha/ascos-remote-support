@@ -6,18 +6,36 @@ $compatibility = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Clie
 $window = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeWindow.cpp") -Raw
 $manifest = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\app.manifest") -Raw
 $probe = Get-Content -LiteralPath (Join-Path $root "scripts\Test-RotaLinkCompatibility.ps1") -Raw
+$signaling = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\SignalingClient.cpp") -Raw
+$identity = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\CngDeviceIdentity.cpp") -Raw
+$sessionRuntime = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\SessionRuntime.cpp") -Raw
+$inputEngine = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeInputEngine.cpp") -Raw
+$gdiCapture = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\GdiJpegCapture.cpp") -Raw
 
 $checks = @(
     @{ Id="static-crt"; Passed=$cmake.Contains('CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded') },
     @{ Id="minimum-win8-api"; Passed=$cmake.Contains('_WIN32_WINNT=0x0602') },
     @{ Id="native-gui-target"; Passed=$cmake.Contains('add_executable(RotaLink.Client WIN32') },
-    @{ Id="single-instance"; Passed=$main.Contains('CreateMutexW') },
+    @{ Id="customer-exe-name"; Passed=$cmake.Contains('OUTPUT_NAME "RotaLink"') },
+    @{ Id="release-size-optimization"; Passed=($cmake.Contains('/O1') -and $cmake.Contains('/OPT:REF') -and $cmake.Contains('/OPT:ICF')) },
+    @{ Id="single-instance"; Passed=($main.Contains('CreateMutexW') -and $main.Contains('if (ActivateExistingWindow()) return 0;')) },
+    @{ Id="explicit-uac-elevation"; Passed=($main.Contains('ShellExecuteExW') -and $main.Contains('lpVerb = L"runas"')) },
     @{ Id="runtime-os-version"; Passed=$compatibility.Contains('RtlGetVersion') },
     @{ Id="server-core-block"; Passed=$compatibility.Contains('serverCore') },
     @{ Id="dynamic-modern-dpi"; Passed=$window.Contains('GetProcAddress(user32, "GetDpiForWindow")') },
     @{ Id="per-monitor-manifest"; Passed=$manifest.Contains('PerMonitorV2,PerMonitor,System') },
     @{ Id="no-managed-project"; Passed=(-not (Test-Path (Join-Path $root "native\RotaLink.Client\RotaLink.Client.csproj"))) }
-    @{ Id="dotnet-not-a-release-gate"; Passed=($probe.Contains('Add-Check "native-runtime" "P0" $true') -and -not $probe.Contains('Add-Check "dotnet-48"')) }
+    @{ Id="dotnet-not-a-release-gate"; Passed=($probe.Contains('Add-Check "native-runtime" "P0" $true') -and -not $probe.Contains('Add-Check "dotnet-48"')) },
+    @{ Id="cng-p256-spki"; Passed=($identity.Contains('BCRYPT_ECDSA_P256_ALGORITHM') -and $identity.Contains('BCRYPT_ECCPUBLIC_BLOB')) },
+    @{ Id="challenge-signature"; Passed=($signaling.Contains('SignBase64(nonce)') -and $signaling.Contains('/verify')) },
+    @{ Id="support-code"; Passed=($signaling.Contains('/v1/support-codes') -and $signaling.Contains('result.code.size() != 9')) },
+    @{ Id="split-control-video"; Passed=($sessionRuntime.Contains('ConnectHostSocket(session, "control")') -and $sessionRuntime.Contains('ConnectHostSocket(session, "video")')) },
+    @{ Id="dynamic-input-desktop"; Passed=($inputEngine.Contains('OpenInputDesktop') -and $inputEngine.Contains('SetThreadDesktop')) },
+    @{ Id="atomic-sendinput"; Passed=($inputEngine.Contains('SendInput(') -and $inputEngine.Contains('sent == expected')) },
+    @{ Id="truthful-input-result"; Passed=($sessionRuntime.Contains('result.accepted ? "true" : "false"') -and $inputEngine.Contains('result.accepted = Send(inputs, result)')) },
+    @{ Id="native-dxgi-video"; Passed=($sessionRuntime.Contains('DesktopDuplicator duplicator') -and $sessionRuntime.Contains('H264Encoder encoder') -and $sessionRuntime.Contains('socket.SendBinary(packet)')) },
+    @{ Id="native-jpeg-fallback"; Passed=($sessionRuntime.Contains('GdiVideoLoop(socket)') -and $gdiCapture.Contains('GUID_ContainerFormatJpeg') -and $gdiCapture.Contains('StretchBlt')) },
+    @{ Id="multi-monitor-geometry"; Passed=($sessionRuntime.Contains('SM_CMONITORS') -and $gdiCapture.Contains('SM_XVIRTUALSCREEN') -and $gdiCapture.Contains('SM_CXVIRTUALSCREEN')) }
 )
 $failed = @($checks | Where-Object { -not $_.Passed })
 $checks | ForEach-Object { [pscustomobject]@{ id=$_.Id; passed=[bool]$_.Passed } } | Format-Table -AutoSize

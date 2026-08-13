@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace([string]$windowsSdk)) {
 if ($LASTEXITCODE -ne 0) { throw "Native CMake yapılandırması başarısız oldu." }
 & $cmake.Source --build $BuildDirectory --config $Configuration --target RotaLink.Client
 if ($LASTEXITCODE -ne 0) { throw "Native RotaLink derlemesi başarısız oldu." }
-$artifact = Join-Path $BuildDirectory "$Configuration\RotaLink-Native.exe"
+$artifact = Join-Path $BuildDirectory "$Configuration\RotaLink.exe"
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "Test-NativeClientArtifact.ps1") `
     -Path $artifact -OutputPath (Join-Path $root "artifacts\native-client-report.json")
 if ($LASTEXITCODE -ne 0) { throw "Native RotaLink bağımlılık veya boyut kapısını geçemedi." }

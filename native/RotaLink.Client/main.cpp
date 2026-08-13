@@ -3,6 +3,8 @@
 #include "NativeWindow.h"
 #include "PlatformCompatibility.h"
 #include <windows.h>
+#include <shellapi.h>
+#include <string_view>
 
 namespace {
 constexpr wchar_t MutexName[] = L"Local\\Rotaniz.RotaLink.Client";
@@ -17,17 +19,66 @@ void EnableDpiAwareness() noexcept {
     SetProcessDPIAware();
 }
 
-void ActivateExistingWindow() noexcept {
+bool ActivateExistingWindow() noexcept {
     const HWND existing = FindWindowW(nullptr, WindowTitle);
-    if (!existing) return;
+    if (!existing) return false;
     ShowWindowAsync(existing, SW_RESTORE);
     SetForegroundWindow(existing);
+    return true;
+}
+
+bool IsProcessElevated() noexcept {
+    HANDLE rawToken = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &rawToken)) return false;
+    UniqueHandle token(rawToken);
+    TOKEN_ELEVATION elevation{};
+    DWORD bytes = 0;
+    return GetTokenInformation(token.get(), TokenElevation, &elevation, sizeof(elevation), &bytes) != FALSE &&
+        elevation.TokenIsElevated != 0;
+}
+
+bool HasArgument(std::wstring_view commandLine, std::wstring_view argument) noexcept {
+    const std::size_t position = commandLine.find(argument);
+    if (position == std::wstring_view::npos) return false;
+    const bool leftBoundary = position == 0 || commandLine[position - 1] == L' ' || commandLine[position - 1] == L'\t';
+    const std::size_t end = position + argument.size();
+    const bool rightBoundary = end == commandLine.size() || commandLine[end] == L' ' || commandLine[end] == L'\t';
+    return leftBoundary && rightBoundary;
+}
+
+bool RelaunchElevated() noexcept {
+    wchar_t executable[MAX_PATH]{};
+    const DWORD length = GetModuleFileNameW(nullptr, executable, ARRAYSIZE(executable));
+    if (length == 0 || length >= ARRAYSIZE(executable)) return false;
+    SHELLEXECUTEINFOW request{sizeof(request)};
+    request.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+    request.lpVerb = L"runas";
+    request.lpFile = executable;
+    request.lpParameters = L"--elevated";
+    request.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&request)) return false;
+    if (request.hProcess) CloseHandle(request.hProcess);
+    return true;
 }
 }
 
-int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand) {
+int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR commandLine, int showCommand) {
     EnableDpiAwareness();
     Diagnostics::Initialize();
+    // A second launch must focus the already running elevated window without
+    // presenting another UAC prompt.
+    if (ActivateExistingWindow()) return 0;
+    const bool elevatedMarker = HasArgument(commandLine ? commandLine : L"", L"--elevated");
+    if (!IsProcessElevated()) {
+        if (!elevatedMarker && RelaunchElevated()) return 0;
+        const DWORD error = GetLastError();
+        Diagnostics::Write(L"Elevation was not granted. Win32=" + std::to_wstring(error));
+        MessageBoxW(nullptr,
+            L"Uzak kontrol motorunu başlatmak için Windows yönetici onayı gereklidir.\n\n"
+            L"Hiçbir ek .NET veya çalışma zamanı kurulmayacaktır.",
+            L"RotaLink yönetici onayı", MB_OK | MB_ICONWARNING);
+        return 5;
+    }
     UniqueHandle mutex(CreateMutexW(nullptr, FALSE, MutexName));
     if (!mutex) {
         MessageBoxW(nullptr, L"Tek örnek kilidi oluşturulamadı.", L"RotaLink", MB_OK | MB_ICONERROR);
