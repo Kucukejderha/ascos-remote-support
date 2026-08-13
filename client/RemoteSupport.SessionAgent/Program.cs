@@ -21,6 +21,18 @@ internal static class Program
             return;
         }
         EnablePhysicalPixelCoordinates();
+        var compatibility = WindowsCompatibility.Evaluate();
+        AppDiagnostics.Write(compatibility.ToDiagnosticString());
+        if (!compatibility.IsSupported)
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            MessageBox.Show("Bu sistem RotaLink destek kapsamının dışındadır.\n\n" +
+                compatibility.OperatingSystem + " " + compatibility.Version + "\n" +
+                compatibility.Reason,
+                "RotaLink uyumluluk denetimi", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
         var version = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? typeof(Program).Assembly.GetName().Version?.ToString()
             ?? "unknown";

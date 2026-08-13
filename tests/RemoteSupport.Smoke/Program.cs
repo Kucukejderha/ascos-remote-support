@@ -23,9 +23,32 @@ if (args is ["--architecture-only"])
     await VerifyIpcAsync();
     VerifyBinaryTransportProtocol();
     VerifyCoordinateTransformation();
+    VerifyWindowsCompatibilityNames();
     await VerifyLatestVideoQueueAsync();
     Console.WriteLine("Service/helper protocol, coordinate and drop-frame checks passed.");
     return;
+}
+
+static void VerifyWindowsCompatibilityNames()
+{
+    var cases = new (Version Version, bool Server, string Expected)[]
+    {
+        (new Version(6, 2, 9200), true, "Windows Server 2012"),
+        (new Version(6, 3, 9600), true, "Windows Server 2012 R2"),
+        (new Version(10, 0, 14393), true, "Windows Server 2016"),
+        (new Version(10, 0, 17763), true, "Windows Server 2019"),
+        (new Version(10, 0, 20348), true, "Windows Server 2022"),
+        (new Version(10, 0, 26100), true, "Windows Server 2025 veya üstü"),
+        (new Version(10, 0, 19045), false, "Windows 10"),
+        (new Version(10, 0, 22631), false, "Windows 11")
+    };
+    foreach (var item in cases)
+    {
+        var actual = WindowsCompatibility.ResolveName(item.Version, item.Server);
+        if (!string.Equals(actual, item.Expected, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"Compatibility name mismatch for {item.Version}: expected {item.Expected}, actual {actual}.");
+    }
 }
 
 var transportOnly = args.Contains("--transport-only", StringComparer.Ordinal);

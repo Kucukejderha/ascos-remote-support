@@ -1,15 +1,15 @@
 # RotaLink — Sürüm Durumu
 
-Güncelleme tarihi: 12 Ağustos 2026
+Güncelleme tarihi: 13 Ağustos 2026
 
 ## Güncel sürüm
 
-- Sürüm: `1.1.0-alpha.25`
+- Sürüm: `1.1.0-alpha.26`
 - Kanal: İmzasız kontrollü geliştirme testi
-- Paket: `RotaLink-v1.1.0-alpha.25-UNSIGNED-DEVELOPMENT.exe`
-- Boyut: `207.872` bayt
-- SHA-256: `bf79658088613a570d0f377b9d89bdc0e63c42dc25e8d46d5f5af50613602af3`
-- İndirme: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.25-UNSIGNED-DEVELOPMENT.exe
+- Paket: `RotaLink-v1.1.0-alpha.26-UNSIGNED-DEVELOPMENT.exe`
+- Boyut: `215.040` bayt
+- SHA-256: `b89b768920169a4d0605852293ae3c01d541503394aa25eef18a5a5809c7edd9`
+- İndirme: Henüz yayınlanmadı; Alpha.25 web testi korunuyor.
 
 ## Sürüm doğrulama özeti
 
@@ -21,6 +21,7 @@ Güncelleme tarihi: 12 Ağustos 2026
 - `alpha.23`: Alpha.22 gerçek cihaz günlüğünde Explorer masaüstü ve görev çubuğu hedeflerinde görülen `AttachThreadInput · Win32 5` hatası giderildi. Helper artık fiziksel fare gibi doğrudan sistem input akışına tıklama ekler; hedef pencereyi zorla foreground/active/focus yapmaz.
 - `alpha.24`: Alpha.23 günlüğünde doğru hit-test edilen ancak bir süre sonra işlemeyen Explorer kabuk denetimleri için hedefe özgü senkron pencere mesajı yolu eklendi. Gerçek cihaz testi, mesaj tesliminin gerçek seçim/odak ve görev çubuğu etkinleştirme davranışını üretmediğini gösterdi.
 - `alpha.25`: Explorer'a doğrudan `WM_LBUTTONDOWN/UP` gönderme kaldırıldı. Görev çubuğu için UI Automation `InvokePattern`, masaüstü simgesi için `SelectionItemPattern` ve çift tıklamada `InvokePattern` kullanılır. Boş masaüstü ve sağ tık gerçek, atomik `SendInput` olarak kalır.
+- `alpha.26` Faz 0 uyumluluk başlangıcı: Uygulama gerçek Windows sürümünü `RtlGetVersion` ile, istemci/sunucu türünü, Server Core/Desktop Experience bilgisini, mimariyi ve .NET 4.8 release değerini günlüğe yazar. Destek dışı Server Core ve x86 sistemleri servis kurulmadan önce açık hata ile durdurur. Windows uyumluluk matrisi ve ürünleştirme sırası `docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md` belgesindedir.
 
 `alpha.24` gerçek cihaz kaydı, senkron pencere mesajlarının API seviyesinde başarılı dönmesine rağmen masaüstü seçimini, bağlam menüsünün kapanmasını ve bazı görev çubuğu düğmelerinin etkinleşmesini sağlamadığını doğruladı. `alpha.25` bu sahte başarı yolunu kaldırır. Beklenen günlükler `Desktop item selected through UI Automation` ve `Taskbar control invoked through UI Automation` satırlarıdır; boş alanda bu satırlar oluşmaz ve gerçek `SendInput` çalışır.
 

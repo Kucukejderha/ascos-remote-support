@@ -1,8 +1,10 @@
 # RotaLink — Rotanız Uzaktan Destek
 
-RotaLink; Windows 10, Windows 11 ve Windows Server 2019 üzerinde kullanıcı tarafından başlatılan, görünür uzaktan destek oturumları için geliştirilen modüler bir uygulamadır.
+RotaLink; Windows 10, Windows 11 ve Windows Server 2012–2025 Desktop Experience üzerinde kullanıcı tarafından başlatılan, görünür uzaktan destek oturumları için geliştirilen modüler bir uygulamadır. Platformların güncel doğrulama durumu ve önkoşulları [Windows uyumluluk yol haritasında](docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md) tanımlanır; bu ifade tüm matrisin henüz doğrulandığı anlamına gelmez.
 
-Güncel geliştirme sürümü `1.1.0-alpha.25`tir. Sürüm ve canlı ortam ayrıntıları için [STATUS.md](STATUS.md), mimari için [docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md](docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md) belgesine bakın.
+Güncel geliştirme sürümü `1.1.0-alpha.26`dır. Sürüm ve canlı ortam ayrıntıları için [STATUS.md](STATUS.md), mimari için [docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md](docs/YENIDEN-YAPILANDIRMA-V1.1.tr.md) belgesine bakın.
+
+Geliştirme sırası: [Windows 10/11 ve Server 2012+ uyumluluk yol haritası](docs/WINDOWS-UYUMLULUK-YOL-HARITASI.tr.md).
 
 ## Bileşenler
 
@@ -41,7 +43,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-signed-client.ps1
 
 - Operatör: https://45.87.173.201.nip.io/operator
 - Sağlık kontrolü: https://45.87.173.201.nip.io/health
-- Test istemcisi: https://rotaniz.com/downloads/RotaLink-v1.1.0-alpha.25-UNSIGNED-DEVELOPMENT.exe
+- Güncel test paketi yerel olarak üretilir; siteye yükleme yalnız uyumluluk testi tamamlandıktan sonra yapılır.
 
 ## Ürün sınırı
 

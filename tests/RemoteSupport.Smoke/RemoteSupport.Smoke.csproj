@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><NoWarn>$(NoWarn);CA1416</NoWarn></PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\client\RemoteSupport.SessionAgent\WindowsCompatibility.cs" Link="WindowsCompatibility.cs" NoWarn="CA1416" />
     <ProjectReference Include="..\..\client\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" />
     <ProjectReference Include="..\..\client\RemoteSupport.Service\RemoteSupport.Service.csproj" />
     <ProjectReference Include="..\..\client\RemoteSupport.SessionAgent\RemoteSupport.SessionAgent.csproj" />
