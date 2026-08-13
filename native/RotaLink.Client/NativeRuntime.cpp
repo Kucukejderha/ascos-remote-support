@@ -182,7 +182,7 @@ HANDLE LaunchInteractiveHelper(DWORD clientProcessId) {
     if (!GetTokenInformation(primary, TokenSessionId, &tokenSessionId, sizeof(tokenSessionId), &returnedBytes))
         ThrowWin32("GetTokenInformation(TokenSessionId)");
     if (tokenSessionId != targetSessionId)
-        ThrowWin32("Interactive token session mismatch", ERROR_INVALID_SESSION);
+        ThrowWin32("Interactive token session mismatch", ERROR_INVALID_DATA);
     LPVOID environment = nullptr;
     if (!CreateEnvironmentBlock(&environment, primary, FALSE)) ThrowWin32("CreateEnvironmentBlock");
     struct EnvironmentCloser { LPVOID value; ~EnvironmentCloser() { if (value) DestroyEnvironmentBlock(value); } } environmentCloser{environment};
