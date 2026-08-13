@@ -1,12 +1,9 @@
 name: Native customer client
 on:
   push:
-    paths:
-      - 'native/**'
-      - 'tests/Test-NativeClientSource.ps1'
-      - 'scripts/build-native-client.ps1'
-      - 'scripts/Test-NativeClientArtifact.ps1'
-      - '.github/workflows/native-client.yml'
+    branches:
+      - main
+      - agent/signed-control-runtime
   pull_request:
     paths:
       - 'native/**'
