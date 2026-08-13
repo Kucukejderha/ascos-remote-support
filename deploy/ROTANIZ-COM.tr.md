@@ -9,9 +9,9 @@ GitHub Actions üzerindeki gerçek Windows derlemesi CLR yokluğu, statik bağı
 ve 10 MB kesin üst sınır kontrollerinden geçmiştir.
 
 - Dosya: `RotaLink-v1.2.0-native.2.exe`
-- Boyut: `476.672` bayt
-- SHA-256: CI derlemesinden sonra kaydedilecek
-- CI commit: CI derlemesinden sonra kaydedilecek
+- Boyut: `477.184` bayt
+- SHA-256: `86aa742d58ccb5c686c966da93788f514f6bbeea8fee5fb601849bb5fbda1ce9`
+- CI commit: `98b6bbf15a5930ebf468a1477cbd7cde42e5f91b`
 - Durum: İmzasız teknik önizleme; hedef Windows VM matrisi tamamlanmadan sitenin
   kararlı `RotaLink.exe` bağlantısının üzerine yazılmaz.
 

@@ -31,12 +31,12 @@ Güncelleme tarihi: 13 Ağustos 2026
 
 - Geliştirme sürümü: `1.2.0-native.2`
 - Teknoloji: x64 Win32/C++20, statik CRT, CLR/.NET bağımlılığı yok
-- Üretilen paket: `RotaLink.exe`, `476.672` bayt
-- SHA-256: CI derlemesinden sonra kaydedilecek
+- Üretilen paket: `RotaLink.exe`, `477.184` bayt
+- SHA-256: `86aa742d58ccb5c686c966da93788f514f6bbeea8fee5fb601849bb5fbda1ce9`
 - Paket hedefi: Kurulumsuz tek EXE, en fazla 10 MB
 - Tamamlanan temel: Win32 pencere, DPI farkındalığı, tek örnek kilidi, gerçek Windows sürüm denetimi, Server Core engeli, CNG P-256 cihaz kimliği, REST challenge doğrulaması, gerçek 9 haneli kod, ayrık control/video WinHTTP WebSocket ve PE bağımlılık kapısı
 - Tamamlanan ürün akışı: Tek seferlik UAC yükseltmesi → CNG kimliği → REST challenge → 9 haneli kod → ayrık WebSocket → DXGI/NV12/Media Foundation H.264 (ve WIC/JPEG uyumluluk yolu) görüntü → dinamik `OpenInputDesktop` kullanan atomik `SendInput` ACK akışı.
-- Durum: Uçtan uca kaynak akışı ve aynı EXE içindeki geçici SYSTEM service/interactive helper ayrımı bağlıdır. Helper, Session 0 SYSTEM tokenını başka oturuma taşımak yerine yükseltilmiş istemcinin gerçek etkileşimli kullanıcı/logon tokenından üretilir. Uygulama kapanınca servis kaydı ve Program Files altındaki geçici çalışma kopyası temizlenir. Hedef işletim sistemi VM matrisi tamamlanmadığı için kararlı müşteri sürümü olarak yayınlanmaz. Input ACK yalnız helper IPC sonucu ile `SendInput` beklenen olay sayısını gerçekten döndürürse başarılıdır.
+- Durum: Uçtan uca kaynak akışı ve aynı EXE içindeki geçici SYSTEM service/interactive helper ayrımı bağlıdır. Helper, Session 0 SYSTEM tokenını başka oturuma taşımak yerine yükseltilmiş istemcinin gerçek etkileşimli kullanıcı/logon tokenından üretilir. Uygulama kapanınca servis kaydı ve Program Files altındaki geçici çalışma kopyası temizlenir. GitHub Actions Windows Server 2022 üzerinde gerçek x64 Release derlemesi, CLR yokluğu, statik CRT bağımlılık denetimi ve 10 MB boyut kapısı `98b6bbf15a5930ebf468a1477cbd7cde42e5f91b` commitinde başarılıdır. Hedef işletim sistemi VM matrisi tamamlanmadığı için kararlı müşteri sürümü olarak yayınlanmaz. Input ACK yalnız helper IPC sonucu ile `SendInput` beklenen olay sayısını gerçekten döndürürse başarılıdır.
 
 `alpha.24` gerçek cihaz kaydı, senkron pencere mesajlarının API seviyesinde başarılı dönmesine rağmen masaüstü seçimini, bağlam menüsünün kapanmasını ve bazı görev çubuğu düğmelerinin etkinleşmesini sağlamadığını doğruladı. `alpha.25` bu sahte başarı yolunu kaldırır. Beklenen günlükler `Desktop item selected through UI Automation` ve `Taskbar control invoked through UI Automation` satırlarıdır; boş alanda bu satırlar oluşmaz ve gerçek `SendInput` çalışır.
 
