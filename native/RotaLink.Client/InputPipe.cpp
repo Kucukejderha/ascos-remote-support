@@ -14,15 +14,42 @@ std::wstring PipeName(DWORD processId) {
     return L"\\\\.\\pipe\\RotaLink.Native." + std::to_wstring(processId) + L".Input.v1";
 }
 
-bool IsExpectedClientProcess(ULONG processId, DWORD allowedProcessId) noexcept {
-    if (processId != allowedProcessId) return false;
-    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
-    if (!process) return false;
-    FILETIME creation{}, exit{}, kernel{}, user{};
-    const BOOL alive = GetProcessTimes(process, &creation, &exit, &kernel, &user) &&
-        WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
-    CloseHandle(process);
-    return alive != FALSE;
+struct ClientValidation final {
+    bool accepted{};
+    DWORD error{};
+    ULONG pipeSession{};
+    DWORD helperSession{};
+    const wchar_t* stage{L"unknown"};
+};
+
+ClientValidation ValidateClient(HANDLE pipe, ULONG processId, DWORD allowedProcessId) noexcept {
+    ClientValidation result{};
+    if (processId != allowedProcessId) {
+        result.stage = L"pid-mismatch";
+        return result;
+    }
+
+    if (!GetNamedPipeClientSessionId(pipe, &result.pipeSession)) {
+        result.error = GetLastError();
+        result.stage = L"pipe-session-query-failed";
+        return result;
+    }
+    if (!ProcessIdToSessionId(GetCurrentProcessId(), &result.helperSession)) {
+        result.error = GetLastError();
+        result.stage = L"helper-session-query-failed";
+        return result;
+    }
+    if (result.pipeSession != result.helperSession) {
+        result.stage = L"session-mismatch";
+        return result;
+    }
+
+    // GetNamedPipeClientProcessId/GetNamedPipeClientSessionId are kernel supplied values.
+    // Opening the UI process again is both redundant and incorrect: an elevated helper can
+    // receive ERROR_ACCESS_DENIED for a valid interactive client on hardened Server systems.
+    result.accepted = true;
+    result.stage = L"kernel-identity-ok";
+    return result;
 }
 
 bool WriteAll(HANDLE handle, const void* buffer, DWORD length) noexcept {
@@ -123,14 +150,26 @@ int InputPipeServer::Run() {
             DisconnectNamedPipe(pipe); CloseHandle(pipe); return 0;
         }
         ULONG clientProcessId = 0;
-        if (!GetNamedPipeClientProcessId(pipe, &clientProcessId) ||
-            !IsExpectedClientProcess(clientProcessId, allowedClientProcessId_)) {
-            Diagnostics::Write(L"Rejected unexpected input pipe client. Pid=" + std::to_wstring(clientProcessId) + L".");
+        if (!GetNamedPipeClientProcessId(pipe, &clientProcessId)) {
+            Diagnostics::Write(L"Rejected input pipe client: kernel PID query failed. Win32=" +
+                std::to_wstring(GetLastError()) + L".");
             DisconnectNamedPipe(pipe);
             CloseHandle(pipe);
             continue;
         }
-        Diagnostics::Write(L"Native input IPC client connected. Pid=" + std::to_wstring(clientProcessId) + L".");
+        const ClientValidation validation = ValidateClient(pipe, clientProcessId, allowedClientProcessId_);
+        if (!validation.accepted) {
+            Diagnostics::Write(L"Rejected input pipe client. Stage=" + std::wstring(validation.stage) +
+                L", ExpectedPid=" + std::to_wstring(allowedClientProcessId_) + L", ActualPid=" +
+                std::to_wstring(clientProcessId) + L", PipeSession=" + std::to_wstring(validation.pipeSession) +
+                L", HelperSession=" + std::to_wstring(validation.helperSession) + L", Win32=" +
+                std::to_wstring(validation.error) + L".");
+            DisconnectNamedPipe(pipe);
+            CloseHandle(pipe);
+            continue;
+        }
+        Diagnostics::Write(L"Native input IPC client authenticated by kernel identity. Pid=" +
+            std::to_wstring(clientProcessId) + L", Session=" + std::to_wstring(validation.pipeSession) + L".");
         {
             NativeInputEngine input;
             std::string request;
