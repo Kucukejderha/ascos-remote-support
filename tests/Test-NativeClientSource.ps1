@@ -13,6 +13,7 @@ $inputEngine = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client
 $gdiCapture = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\GdiJpegCapture.cpp") -Raw
 $runtime = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeRuntime.cpp") -Raw
 $inputPipe = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\InputPipe.cpp") -Raw
+$diagnostics = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\Diagnostics.cpp") -Raw
 
 $checks = @(
     @{ Id="static-crt"; Passed=$cmake.Contains('CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded') },
@@ -30,6 +31,7 @@ $checks = @(
     @{ Id="no-managed-project"; Passed=(-not (Test-Path (Join-Path $root "native\RotaLink.Client\RotaLink.Client.csproj"))) }
     @{ Id="dotnet-not-a-release-gate"; Passed=($probe.Contains('Add-Check "native-runtime" "P0" $true') -and -not $probe.Contains('Add-Check "dotnet-48"')) },
     @{ Id="native-diagnostic-evidence"; Passed=($probe.Contains('schemaVersion = 2') -and $probe.Contains('Get-FileHash') -and $probe.Contains('RotaLink-Native.log') -and $probe.Contains('RotaLinkNativeRuntime')) },
+    @{ Id="portable-unified-log"; Passed=($diagnostics.Contains('ExecutableDirectory()') -and $diagnostics.Contains('RotaLink-Native.log') -and $runtime.Contains('--log-directory') -and $probe.Contains('portableLog')) },
     @{ Id="cng-p256-spki"; Passed=($identity.Contains('BCRYPT_ECDSA_P256_ALGORITHM') -and $identity.Contains('BCRYPT_ECCPUBLIC_BLOB')) },
     @{ Id="challenge-signature"; Passed=($signaling.Contains('SignBase64(nonce)') -and $signaling.Contains('/verify')) },
     @{ Id="support-code"; Passed=($signaling.Contains('/v1/support-codes') -and $signaling.Contains('result.code.size() != 9')) },

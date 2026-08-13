@@ -1,24 +1,25 @@
 #include "Diagnostics.h"
 #include "NativeHandles.h"
-#include <shlobj.h>
 #include <windows.h>
 #include <array>
+#include <filesystem>
 #include <mutex>
+#include <vector>
 
 namespace {
 std::mutex logMutex;
 std::wstring logPath;
 
-std::wstring ResolveLogPath() {
-    PWSTR localAppData = nullptr;
-    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &localAppData)))
-        return L"RotaLink-Native.log";
-    std::wstring directory(localAppData);
-    CoTaskMemFree(localAppData);
-    directory += L"\\Rotaniz\\RotaLink";
-    CreateDirectoryW((directory.substr(0, directory.find_last_of(L'\\'))).c_str(), nullptr);
-    CreateDirectoryW(directory.c_str(), nullptr);
-    return directory + L"\\RotaLink-Native.log";
+std::wstring ExecutableDirectory() {
+    std::vector<wchar_t> buffer(4096);
+    const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (length == 0 || length >= buffer.size()) return L".";
+    return std::filesystem::path(std::wstring(buffer.data(), length)).parent_path().wstring();
+}
+
+std::wstring ResolveLogPath(const std::wstring& directory) {
+    const std::filesystem::path base = directory.empty() ? ExecutableDirectory() : directory;
+    return (base / L"RotaLink-Native.log").wstring();
 }
 
 std::wstring Timestamp() {
@@ -31,15 +32,18 @@ std::wstring Timestamp() {
 }
 }
 
-void Diagnostics::Initialize() {
+bool Diagnostics::Initialize(const std::wstring& directory) noexcept {
     std::scoped_lock lock(logMutex);
-    if (logPath.empty()) logPath = ResolveLogPath();
+    logPath = ResolveLogPath(directory);
+    UniqueHandle file(CreateFileW(logPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    return static_cast<bool>(file);
 }
 
 void Diagnostics::Write(const std::wstring& message) noexcept {
     try {
         std::scoped_lock lock(logMutex);
-        if (logPath.empty()) logPath = ResolveLogPath();
+        if (logPath.empty()) logPath = ResolveLogPath({});
         UniqueHandle file(CreateFileW(logPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
             nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
         if (!file) return;
@@ -57,6 +61,6 @@ void Diagnostics::Write(const std::wstring& message) noexcept {
 
 std::wstring Diagnostics::LogPath() {
     std::scoped_lock lock(logMutex);
-    if (logPath.empty()) logPath = ResolveLogPath();
+    if (logPath.empty()) logPath = ResolveLogPath({});
     return logPath;
 }

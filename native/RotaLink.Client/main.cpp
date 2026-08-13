@@ -58,6 +58,21 @@ DWORD ProcessIdArgument(std::wstring_view commandLine) noexcept {
     return end != commandLine.data() + valueStart ? static_cast<DWORD>(value) : 0;
 }
 
+std::wstring ArgumentValue(const wchar_t* name) noexcept {
+    int count = 0;
+    LPWSTR* values = CommandLineToArgvW(GetCommandLineW(), &count);
+    if (!values) return {};
+    std::wstring result;
+    for (int index = 1; index + 1 < count; ++index) {
+        if (_wcsicmp(values[index], name) == 0) {
+            result = values[index + 1];
+            break;
+        }
+    }
+    LocalFree(values);
+    return result;
+}
+
 bool RelaunchElevated() noexcept {
     wchar_t executable[MAX_PATH]{};
     const DWORD length = GetModuleFileNameW(nullptr, executable, ARRAYSIZE(executable));
@@ -77,9 +92,16 @@ bool RelaunchElevated() noexcept {
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR commandLine, int showCommand) {
     const std::wstring_view arguments = commandLine ? commandLine : L"";
     if (HasArgument(arguments, L"--service")) return NativeRuntime::RunServiceMode();
-    if (HasArgument(arguments, L"--helper")) return NativeRuntime::RunHelperMode(ProcessIdArgument(arguments));
+    if (HasArgument(arguments, L"--helper"))
+        return NativeRuntime::RunHelperMode(ProcessIdArgument(arguments), ArgumentValue(L"--log-directory"));
     EnableDpiAwareness();
-    Diagnostics::Initialize();
+    if (!Diagnostics::Initialize()) {
+        MessageBoxW(nullptr,
+            L"RotaLink-Native.log dosyası uygulamanın bulunduğu klasörde oluşturulamadı.\n\n"
+            L"RotaLink.exe dosyasını yazma izniniz olan bir klasöre taşıyıp yeniden çalıştırın.",
+            L"RotaLink tanılama dosyası", MB_OK | MB_ICONERROR);
+        return 6;
+    }
     // A second launch must focus the already running elevated window without
     // presenting another UAC prompt.
     if (ActivateExistingWindow()) return 0;
@@ -104,7 +126,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR commandLine, int showCo
         return 0;
     }
     const PlatformCompatibility compatibility = PlatformCompatibility::Evaluate();
-    Diagnostics::Write(L"RotaLink v1.2.0-native.3 started. " + compatibility.DiagnosticText());
+    Diagnostics::Write(L"RotaLink v1.2.0-native.4 started. Log=" + Diagnostics::LogPath() + L". " + compatibility.DiagnosticText());
     if (!compatibility.supported) {
         MessageBoxW(nullptr, compatibility.reason.c_str(), L"RotaLink uyumluluk denetimi", MB_OK | MB_ICONERROR);
         return 3;

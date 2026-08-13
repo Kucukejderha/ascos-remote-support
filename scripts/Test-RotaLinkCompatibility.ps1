@@ -219,8 +219,11 @@ $p0Failed = @($checks | Where-Object { $_.severity -eq "P0" -and -not $_.passed 
 $p1Failed = @($checks | Where-Object { $_.severity -eq "P1" -and -not $_.passed }).Count -gt 0
 $status = if ($p0Failed) { "Fail" } elseif ($p1Failed) { "Warn" } else { "Pass" }
 
-$userLogPath = Join-Path $env:LOCALAPPDATA "Rotaniz\RotaLink\RotaLink-Native.log"
-$systemLogPath = Join-Path $env:WINDIR "System32\config\systemprofile\AppData\Local\Rotaniz\RotaLink\RotaLink-Native.log"
+$portableLogPath = if ($clientEvidence.found) {
+    Join-Path (Split-Path -Parent $clientEvidence.path) "RotaLink-Native.log"
+} else {
+    Join-Path $PSScriptRoot "RotaLink-Native.log"
+}
 $processEvidence = @()
 try {
     foreach ($process in @(Get-Process -Name RotaLink -ErrorAction SilentlyContinue)) {
@@ -292,8 +295,7 @@ $report = [pscustomobject][ordered]@{
     diagnostics = [ordered]@{
         processes = $processEvidence
         service = $serviceEvidence
-        userLog = Read-LogTail $userLogPath
-        systemLog = Read-LogTail $systemLogPath
+        portableLog = Read-LogTail $portableLogPath
     }
     checks = $checks
 }

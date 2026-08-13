@@ -20,11 +20,11 @@ Geliştirici, tek dosyalık laboratuvar paketini şu komutla üretir:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1 `
   -NativeClientPath C:\RotaLink-Build\RotaLink.exe `
-  -Version 1.2.0-native.3
+  -Version 1.2.0-native.4
 ```
 
 Paketleyici önce PE dosyasının x64, CLR içermeyen ve 10 MB altında bir native istemci
-olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.3-Uyumluluk-Test-Kiti.zip` hedef VM'ye
+olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.4-Uyumluluk-Test-Kiti.zip` hedef VM'ye
 kopyalanıp açılır; müşterinin sistemindeki .NET sürümü yalnız raporlanır ve sonuç kapısı değildir.
 Depo kurmadan ön kontrol başlatmak için örneğin:
 
@@ -35,7 +35,7 @@ RotaLink-Uyumluluk-Testi.cmd server-2019
 JSON raporu masaüstündeki `RotaLink-Test-Sonuclari` klasörüne yazılır.
 Raporun `schemaVersion` değeri `2` olmalıdır. `client` bölümü test edilen EXE'nin tam
 sürümünü, boyutunu ve SHA-256 karmasını; `diagnostics` bölümü çalışan süreçleri, geçici
-servis durumunu ve kullanıcı/SYSTEM native günlüklerinin son 200 satırını içerir. Kontrol
+servis durumunu ve EXE'nin yanındaki birleşik native günlüğün son 200 satırını içerir. Kontrol
 denemesinden hemen sonra, RotaLink hâlâ açıkken bu rapor üretilmelidir. `schemaVersion: 1`
 veya `dotnet-48` kontrolü içeren bir rapor eski managed test kitine aittir ve native istemci
 arızasını teşhis etmek için kullanılmaz.
@@ -79,3 +79,8 @@ varsa `Fail` olur. Yerel geliştirme sırasında eksik raporları yalnız görü
 
 Kanıt klasöründe uyumluluk JSON'u, RotaLink birleşik tanılama kaydı, ekran kaydı ve test
 eden kişinin tarihli sonucu bulunur. Bir P0 başarısızlığı sürüm adayını durdurur.
+
+Native.4 ile ana uygulama, geçici SYSTEM servisi ve etkileşimli helper bütün tanılama
+satırlarını müşterinin çalıştırdığı `RotaLink.exe` dosyasının yanındaki tek
+`RotaLink-Native.log` dosyasına yazar. EXE klasöründe yazma izni yoksa uygulama bunu açılışta
+görünür hata olarak bildirir; başka bir profile veya Program Files altına sessiz log bırakmaz.

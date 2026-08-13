@@ -29,14 +29,14 @@ Güncelleme tarihi: 13 Ağustos 2026
 
 ## Yeni müşteri istemcisi
 
-- Geliştirme sürümü: `1.2.0-native.3`
+- Geliştirme sürümü: `1.2.0-native.4`
 - Teknoloji: x64 Win32/C++20, statik CRT, CLR/.NET bağımlılığı yok
-- Üretilen paket: `RotaLink.exe`, `479.232` bayt
-- SHA-256: `7f598ffd53a3f3b3cedf46bd19a1047065de0b77890a93deb3e6cd1abbea597b`
+- Üretilen paket: CI derlemesinden sonra kaydedilecek
+- SHA-256: CI derlemesinden sonra kaydedilecek
 - Paket hedefi: Kurulumsuz tek EXE, en fazla 10 MB
 - Tamamlanan temel: Win32 pencere, DPI farkındalığı, tek örnek kilidi, gerçek Windows sürüm denetimi, Server Core engeli, CNG P-256 cihaz kimliği, REST challenge doğrulaması, gerçek 9 haneli kod, ayrık control/video WinHTTP WebSocket ve PE bağımlılık kapısı
 - Tamamlanan ürün akışı: Tek seferlik UAC yükseltmesi → CNG kimliği → REST challenge → 9 haneli kod → ayrık WebSocket → DXGI/NV12/Media Foundation H.264 (ve WIC/JPEG uyumluluk yolu) görüntü → dinamik `OpenInputDesktop` kullanan atomik `SendInput` ACK akışı.
-- Durum: Native.2 gerçek testinde fare hareket edip tıklamanın uygulanmamasının kök nedeni bulundu: `OpenInputDesktop` aynı desktop nesnesi için her olayda farklı bir handle döndürdüğü halde kod handle değerlerini karşılaştırıyordu. İkinci olayda gereksiz `SetThreadDesktop`/`CloseDesktop` yolu tıklamayı `SendInput` öncesinde kesiyordu. Native.3 mevcut thread desktop adını dinamik input desktop adıyla karşılaştırır; aynı desktop için yeni handle'ı kapatıp olayı doğrudan `SendInput`'a iletir. Her tıklama/tuş ve tüm başarısız sonuçlar tanılama günlüğüne yazılır. GitHub Actions Windows Server 2022 üzerindeki x64 Release, CLR yokluğu, statik CRT bağımlılık ve 10 MB kapıları `56ae646820a3d450b605d985a2abfb0e5b3c42e4` commitinde başarılıdır. Hedef işletim sistemi VM matrisi tamamlanmadığı için kararlı müşteri sürümü olarak yayınlanmaz.
+- Durum: Native.3 aynı input desktop için gereksiz handle değişimini engeller ve gerçek `SendInput` sonucunu raporlar. Native.4 ana UI, SYSTEM servis ve etkileşimli helper günlüklerini kullanıcının çalıştırdığı EXE'nin yanındaki tek `RotaLink-Native.log` dosyasında birleştirir. Program Files çalışma kopyası ayrı log üretmez. EXE klasörü yazılamazsa görünür açılış hatası verilir. CI derlemesi beklenmektedir.
 
 `alpha.24` gerçek cihaz kaydı, senkron pencere mesajlarının API seviyesinde başarılı dönmesine rağmen masaüstü seçimini, bağlam menüsünün kapanmasını ve bazı görev çubuğu düğmelerinin etkinleşmesini sağlamadığını doğruladı. `alpha.25` bu sahte başarı yolunu kaldırır. Beklenen günlükler `Desktop item selected through UI Automation` ve `Taskbar control invoked through UI Automation` satırlarıdır; boş alanda bu satırlar oluşmaz ve gerçek `SendInput` çalışır.
 

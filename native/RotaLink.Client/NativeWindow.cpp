@@ -161,7 +161,7 @@ void NativeWindow::Paint() const {
     Text(dc, L"Bu sürüm müşteri bilgisayarında .NET veya VC++ Runtime gerektirmez.",
         {card.left+Scale(24,dpi_),card.top+Scale(148,dpi_),card.right-Scale(20,dpi_),card.bottom-Scale(12,dpi_)},
         bodyFont_, RGB(70,96,117), DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-    Text(dc, L"v1.2.0-native.3", {Scale(350,dpi_),client.bottom-Scale(42,dpi_),client.right-Scale(28,dpi_),client.bottom-Scale(8,dpi_)},
+    Text(dc, L"v1.2.0-native.4", {Scale(350,dpi_),client.bottom-Scale(42,dpi_),client.right-Scale(28,dpi_),client.bottom-Scale(8,dpi_)},
         bodyFont_, RGB(99,120,138), DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
     EndPaint(window_, &paint);
 }

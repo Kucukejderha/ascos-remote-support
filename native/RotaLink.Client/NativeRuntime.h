@@ -13,7 +13,7 @@ public:
     void StartForCurrentClient();
     void Stop() noexcept;
     [[nodiscard]] static int RunServiceMode();
-    [[nodiscard]] static int RunHelperMode(DWORD allowedClientProcessId);
+    [[nodiscard]] static int RunHelperMode(DWORD allowedClientProcessId, const std::wstring& logDirectory);
 private:
     SC_HANDLE manager_{};
     SC_HANDLE service_{};

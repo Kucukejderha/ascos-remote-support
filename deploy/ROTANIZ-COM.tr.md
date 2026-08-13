@@ -1,6 +1,6 @@
 # rotaniz.com dağıtımı
 
-## 1.2.0-native.3 — .NET gerektirmeyen tek EXE önizlemesi
+## 1.2.0-native.4 — .NET gerektirmeyen tek EXE önizlemesi
 
 Müşteri bilgisayarına .NET Framework veya Visual C++ Redistributable kurdurmamak için
 istemci statik CRT kullanan x64 Win32/C++20 uygulamasına taşındı. Aynı `RotaLink.exe`;
@@ -8,10 +8,10 @@ görünür kullanıcı arayüzü, geçici SYSTEM servisi ve aktif oturum helper 
 GitHub Actions üzerindeki gerçek Windows derlemesi CLR yokluğu, statik bağımlılık kümesi
 ve 10 MB kesin üst sınır kontrollerinden geçmiştir.
 
-- Dosya: `RotaLink-v1.2.0-native.3.exe`
-- Boyut: `479.232` bayt
-- SHA-256: `7f598ffd53a3f3b3cedf46bd19a1047065de0b77890a93deb3e6cd1abbea597b`
-- CI commit: `56ae646820a3d450b605d985a2abfb0e5b3c42e4`
+- Dosya: `RotaLink-v1.2.0-native.4.exe`
+- Boyut: CI derlemesinden sonra kaydedilecek
+- SHA-256: CI derlemesinden sonra kaydedilecek
+- CI commit: CI derlemesinden sonra kaydedilecek
 - Durum: İmzasız teknik önizleme; hedef Windows VM matrisi tamamlanmadan sitenin
   kararlı `RotaLink.exe` bağlantısının üzerine yazılmaz.
 

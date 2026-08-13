@@ -4,7 +4,7 @@
 
 class Diagnostics final {
 public:
-    static void Initialize();
+    [[nodiscard]] static bool Initialize(const std::wstring& directory = {}) noexcept;
     static void Write(const std::wstring& message) noexcept;
     [[nodiscard]] static std::wstring LogPath();
 };

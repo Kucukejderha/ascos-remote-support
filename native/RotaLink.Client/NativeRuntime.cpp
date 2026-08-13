@@ -21,6 +21,7 @@ HANDLE stopEvent{};
 HANDLE reconcileEvent{};
 DWORD serviceClientProcessId{};
 HANDLE helperProcess{};
+std::wstring serviceLogDirectory;
 
 HANDLE LaunchInteractiveHelper(DWORD clientProcessId);
 
@@ -187,7 +188,8 @@ HANDLE LaunchInteractiveHelper(DWORD clientProcessId) {
     if (!CreateEnvironmentBlock(&environment, primary, FALSE)) ThrowWin32("CreateEnvironmentBlock");
     struct EnvironmentCloser { LPVOID value; ~EnvironmentCloser() { if (value) DestroyEnvironmentBlock(value); } } environmentCloser{environment};
     const std::wstring executable = ExecutablePath();
-    std::wstring command = L"\"" + executable + L"\" --helper --client-pid " + std::to_wstring(clientProcessId);
+    std::wstring command = L"\"" + executable + L"\" --helper --client-pid " +
+        std::to_wstring(clientProcessId) + L" --log-directory \"" + serviceLogDirectory + L"\"";
     std::vector<wchar_t> mutableCommand(command.begin(), command.end());
     mutableCommand.push_back(L'\0');
     STARTUPINFOW startup{sizeof(startup)};
@@ -213,8 +215,12 @@ void WINAPI ServiceMain(DWORD argumentCount, LPWSTR* arguments) {
         for (DWORD index = 1; index + 1 < argumentCount; ++index) {
             if (_wcsicmp(arguments[index], L"--client-pid") == 0)
                 serviceClientProcessId = wcstoul(arguments[index + 1], nullptr, 10);
+            if (_wcsicmp(arguments[index], L"--log-directory") == 0)
+                serviceLogDirectory = arguments[index + 1];
         }
         if (serviceClientProcessId == 0) throw std::runtime_error("Service client process id is missing");
+        if (serviceLogDirectory.empty() || !Diagnostics::Initialize(serviceLogDirectory))
+            throw std::runtime_error("Service cannot open the portable log beside the customer executable");
         stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
         if (!stopEvent) ThrowWin32("CreateEventW(service stop)");
         reconcileEvent = CreateEventW(nullptr, FALSE, TRUE, nullptr);
@@ -267,7 +273,7 @@ void NativeRuntime::StartForCurrentClient() {
     wchar_t programFiles[MAX_PATH]{};
     if (!GetEnvironmentVariableW(L"ProgramFiles", programFiles, ARRAYSIZE(programFiles)))
         ThrowWin32("GetEnvironmentVariableW(ProgramFiles)");
-    const std::filesystem::path directory = std::filesystem::path(programFiles) / L"RotaLink" / L"Runtime" / L"1.2.0-native.3";
+    const std::filesystem::path directory = std::filesystem::path(programFiles) / L"RotaLink" / L"Runtime" / L"1.2.0-native.4";
     std::filesystem::create_directories(directory);
     const std::filesystem::path installed = directory / L"RotaLink.exe";
     installedRuntime_ = installed;
@@ -291,7 +297,8 @@ void NativeRuntime::StartForCurrentClient() {
             SERVICE_ERROR_NORMAL, binaryPath.c_str(), nullptr, nullptr, nullptr, nullptr, nullptr, ServiceDisplayName))
             ThrowWin32("ChangeServiceConfigW");
         std::wstring processId = std::to_wstring(GetCurrentProcessId());
-        const wchar_t* arguments[]{L"--client-pid", processId.c_str()};
+        const std::wstring logDirectory = std::filesystem::path(current).parent_path().wstring();
+        const wchar_t* arguments[]{L"--client-pid", processId.c_str(), L"--log-directory", logDirectory.c_str()};
         if (!StartServiceW(service_, ARRAYSIZE(arguments), arguments) && GetLastError() != ERROR_SERVICE_ALREADY_RUNNING)
             ThrowWin32("StartServiceW");
         if (!WaitForState(service_, SERVICE_RUNNING, 10'000)) throw std::runtime_error("Native control service did not reach RUNNING state");
@@ -334,8 +341,8 @@ int NativeRuntime::RunServiceMode() {
     return 0;
 }
 
-int NativeRuntime::RunHelperMode(DWORD allowedClientProcessId) {
-    if (allowedClientProcessId == 0) return 30;
-    Diagnostics::Initialize();
+int NativeRuntime::RunHelperMode(DWORD allowedClientProcessId, const std::wstring& logDirectory) {
+    if (allowedClientProcessId == 0 || logDirectory.empty()) return 30;
+    if (!Diagnostics::Initialize(logDirectory)) return 33;
     return InputPipeServer(allowedClientProcessId).Run();
 }
