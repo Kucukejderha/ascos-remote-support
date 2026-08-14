@@ -126,7 +126,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR commandLine, int showCo
         return 0;
     }
     const PlatformCompatibility compatibility = PlatformCompatibility::Evaluate();
-    Diagnostics::Write(L"RotaLink v1.2.0-native.7 started. Log=" + Diagnostics::LogPath() + L". " + compatibility.DiagnosticText());
+    Diagnostics::Write(L"RotaLink v1.2.0-native.8 started. Log=" + Diagnostics::LogPath() + L". " + compatibility.DiagnosticText());
     if (!compatibility.supported) {
         MessageBoxW(nullptr, compatibility.reason.c_str(), L"RotaLink uyumluluk denetimi", MB_OK | MB_ICONERROR);
         return 3;

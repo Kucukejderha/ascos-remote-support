@@ -1,5 +1,6 @@
 #include "NativeShellAutomation.h"
 #include <ole2.h>
+#include <oleacc.h>
 #include <oleauto.h>
 #include <UIAutomation.h>
 #include <wrl/client.h>
@@ -17,6 +18,81 @@ public:
     [[nodiscard]] HRESULT Result() const noexcept { return result_; }
 private:
     HRESULT result_{};
+};
+
+class AccessibleTarget final {
+public:
+    AccessibleTarget() noexcept { VariantInit(&child_); }
+    ~AccessibleTarget() { VariantClear(&child_); }
+    AccessibleTarget(const AccessibleTarget&) = delete;
+    AccessibleTarget& operator=(const AccessibleTarget&) = delete;
+
+    HRESULT FromPoint(POINT point) noexcept {
+        IAccessible* raw = nullptr;
+        const HRESULT found = AccessibleObjectFromPoint(point, &raw, &child_);
+        if (FAILED(found)) return found;
+        if (!raw) return E_NOINTERFACE;
+        accessible_.Attach(raw);
+
+        // Some providers return the actual child as IDispatch instead of a
+        // CHILDID value. Normalize both representations so the action methods
+        // below work on old and new Explorer accessibility providers.
+        if (child_.vt == VT_DISPATCH && child_.pdispVal) {
+            ComPtr<IAccessible> actual;
+            const HRESULT converted = child_.pdispVal->QueryInterface(
+                IID_PPV_ARGS(actual.GetAddressOf()));
+            if (FAILED(converted) || !actual) return FAILED(converted) ? converted : E_NOINTERFACE;
+            VariantClear(&child_);
+            VariantInit(&child_);
+            child_.vt = VT_I4;
+            child_.lVal = CHILDID_SELF;
+            accessible_ = std::move(actual);
+        }
+        return child_.vt == VT_I4 ? S_OK : E_INVALIDARG;
+    }
+
+    [[nodiscard]] bool Available() const noexcept { return accessible_ != nullptr; }
+
+    HRESULT Role(LONG& role) const noexcept {
+        if (!accessible_) return E_POINTER;
+        VARIANT value{};
+        VariantInit(&value);
+        const HRESULT queried = accessible_->get_accRole(child_, &value);
+        const bool valid = SUCCEEDED(queried) && value.vt == VT_I4;
+        if (valid) role = value.lVal;
+        VariantClear(&value);
+        return valid ? queried : (FAILED(queried) ? queried : DISP_E_TYPEMISMATCH);
+    }
+
+    std::wstring Name() const noexcept {
+        if (!accessible_) return {};
+        BSTR value = nullptr;
+        if (FAILED(accessible_->get_accName(child_, &value)) || !value) return {};
+        std::wstring result(value, SysStringLen(value));
+        SysFreeString(value);
+        return result;
+    }
+
+    HRESULT Select() const noexcept {
+        if (!accessible_) return E_POINTER;
+        HRESULT selected = accessible_->accSelect(
+            SELFLAG_TAKEFOCUS | SELFLAG_TAKESELECTION, child_);
+        if (SUCCEEDED(selected)) return selected;
+
+        // A few Server-era Explorer providers reject combined flags although
+        // they accept the same operations separately.
+        selected = accessible_->accSelect(SELFLAG_TAKEFOCUS, child_);
+        if (FAILED(selected)) return selected;
+        return accessible_->accSelect(SELFLAG_TAKESELECTION, child_);
+    }
+
+    HRESULT Invoke() const noexcept {
+        return accessible_ ? accessible_->accDoDefaultAction(child_) : E_POINTER;
+    }
+
+private:
+    ComPtr<IAccessible> accessible_;
+    VARIANT child_{};
 };
 
 std::wstring WindowClass(HWND window) {
@@ -79,9 +155,21 @@ HRESULT InvokeElement(IUIAutomation* automation, IUIAutomationElement* start,
 }
 
 DWORD ErrorCode(HRESULT result) noexcept { return static_cast<DWORD>(result); }
+
+HRESULT ShowContextMenu(HWND target, POINT point) noexcept {
+    if (!target) return E_HANDLE;
+    DWORD_PTR messageResult = 0;
+    SetLastError(ERROR_SUCCESS);
+    const LRESULT sent = SendMessageTimeoutW(target, WM_CONTEXTMENU,
+        reinterpret_cast<WPARAM>(target), MAKELPARAM(point.x, point.y),
+        SMTO_ABORTIFHUNG | SMTO_BLOCK, 1000, &messageResult);
+    if (sent != 0) return S_OK;
+    const DWORD error = GetLastError();
+    return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_TIMEOUT : error);
+}
 }
 
-ShellAutomationResult NativeShellAutomation::TryHandleLeftClick(POINT point) noexcept {
+ShellAutomationResult NativeShellAutomation::TryHandleClick(POINT point, unsigned button) noexcept {
     ShellAutomationResult result;
     const HWND hit = WindowFromPoint(point);
     result.targetClass = WindowClass(hit);
@@ -90,7 +178,7 @@ ShellAutomationResult NativeShellAutomation::TryHandleLeftClick(POINT point) noe
     const bool desktop = _wcsicmp(result.targetClass.c_str(), L"SysListView32") == 0;
     const bool taskbar = _wcsicmp(rootClass.c_str(), L"Shell_TrayWnd") == 0 ||
         _wcsicmp(result.targetClass.c_str(), L"MSTaskListWClass") == 0;
-    if (!desktop && !taskbar) return result;
+    if ((!desktop && !taskbar) || (button != 0 && button != 2)) return result;
 
     ComApartment apartment;
     if (!apartment.Available()) {
@@ -100,6 +188,94 @@ ShellAutomationResult NativeShellAutomation::TryHandleLeftClick(POINT point) noe
         return result;
     }
 
+    AccessibleTarget accessible;
+    HRESULT accessibleOperation = accessible.FromPoint(point);
+    LONG accessibleRole = 0;
+    const bool accessibleReady = SUCCEEDED(accessibleOperation) && accessible.Available() &&
+        SUCCEEDED(accessible.Role(accessibleRole));
+    if (accessibleReady) result.targetName = accessible.Name();
+
+    if (desktop) {
+        // SysListView32 itself represents empty desktop space. Only a list item
+        // is a desktop icon and may be selected or invoked semantically.
+        if (!accessibleReady || accessibleRole != ROLE_SYSTEM_LISTITEM) {
+            if (button == 2) {
+                accessibleOperation = ShowContextMenu(hit, point);
+                result.status = SUCCEEDED(accessibleOperation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
+                result.error = SUCCEEDED(accessibleOperation) ? ERROR_SUCCESS : ErrorCode(accessibleOperation);
+                result.stage = SUCCEEDED(accessibleOperation) ? "native-desktop-background-context-menu-ok" :
+                    "native-desktop-background-context-menu-failed";
+                return result;
+            }
+            result.status = ShellAutomationStatus::NotShell;
+            result.stage = "desktop-empty-space";
+            return result;
+        }
+
+        accessibleOperation = accessible.Select();
+        if (FAILED(accessibleOperation)) {
+            result.status = ShellAutomationStatus::Failed;
+            result.error = ErrorCode(accessibleOperation);
+            result.stage = "native-desktop-msaa-selection-failed";
+            return result;
+        }
+
+        if (button == 2) {
+            accessibleOperation = ShowContextMenu(hit, point);
+            result.status = SUCCEEDED(accessibleOperation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
+            result.error = SUCCEEDED(accessibleOperation) ? ERROR_SUCCESS : ErrorCode(accessibleOperation);
+            result.stage = SUCCEEDED(accessibleOperation) ? "native-desktop-context-menu-ok" :
+                "native-desktop-context-menu-failed";
+            return result;
+        }
+
+        const DWORD now = GetTickCount();
+        const DWORD elapsed = now - lastDesktopClickTick_;
+        const int maximumX = (std::max)(GetSystemMetrics(SM_CXDOUBLECLK), 4);
+        const int maximumY = (std::max)(GetSystemMetrics(SM_CYDOUBLECLK), 4);
+        const bool doubleClick = lastDesktopWindow_ == hit && elapsed <= GetDoubleClickTime() &&
+            std::abs(point.x - lastDesktopPoint_.x) <= maximumX &&
+            std::abs(point.y - lastDesktopPoint_.y) <= maximumY;
+        lastDesktopClickTick_ = now;
+        lastDesktopPoint_ = point;
+        lastDesktopWindow_ = hit;
+
+        if (doubleClick) {
+            accessibleOperation = accessible.Invoke();
+            result.status = SUCCEEDED(accessibleOperation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
+            result.error = SUCCEEDED(accessibleOperation) ? ERROR_SUCCESS : ErrorCode(accessibleOperation);
+            result.stage = SUCCEEDED(accessibleOperation) ? "native-desktop-msaa-invoke-ok" :
+                "native-desktop-msaa-invoke-failed";
+            lastDesktopClickTick_ = 0;
+            lastDesktopWindow_ = nullptr;
+            return result;
+        }
+
+        result.status = ShellAutomationStatus::Handled;
+        result.stage = "native-desktop-msaa-selection-ok";
+        return result;
+    }
+
+    if (button == 2) {
+        accessibleOperation = ShowContextMenu(hit, point);
+        result.status = SUCCEEDED(accessibleOperation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
+        result.error = SUCCEEDED(accessibleOperation) ? ERROR_SUCCESS : ErrorCode(accessibleOperation);
+        result.stage = SUCCEEDED(accessibleOperation) ? "native-taskbar-context-menu-ok" :
+            "native-taskbar-context-menu-failed";
+        return result;
+    }
+
+    if (accessibleReady) {
+        accessibleOperation = accessible.Invoke();
+        if (SUCCEEDED(accessibleOperation)) {
+            result.status = ShellAutomationStatus::Handled;
+            result.stage = "native-taskbar-msaa-invoke-ok";
+            return result;
+        }
+    }
+
+    // Modern taskbar providers may expose only UI Automation patterns. Keep
+    // that path as a fallback after the Server-compatible MSAA route.
     ComPtr<IUIAutomation> automation;
     HRESULT operation = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
         IID_PPV_ARGS(automation.GetAddressOf()));
@@ -120,48 +296,9 @@ ShellAutomationResult NativeShellAutomation::TryHandleLeftClick(POINT point) noe
     }
     result.targetName = ElementName(element.Get());
 
-    if (taskbar) {
-        operation = InvokeElement(automation.Get(), element.Get(), true, result.targetName);
-        result.status = SUCCEEDED(operation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
-        result.error = SUCCEEDED(operation) ? ERROR_SUCCESS : ErrorCode(operation);
-        result.stage = SUCCEEDED(operation) ? "native-taskbar-invoke-ok" : "native-taskbar-pattern-unavailable";
-        return result;
-    }
-
-    ComPtr<IUIAutomationSelectionItemPattern> selection;
-    operation = Pattern(element.Get(), UIA_SelectionItemPatternId, selection);
-    if (FAILED(operation) || !selection) {
-        // Empty desktop space is intentionally left to the physical input path.
-        result.status = ShellAutomationStatus::NotShell;
-        result.stage = "desktop-empty-space";
-        return result;
-    }
-
-    const DWORD now = GetTickCount();
-    const DWORD elapsed = now - lastDesktopClickTick_;
-    const int maximumX = (std::max)(GetSystemMetrics(SM_CXDOUBLECLK), 4);
-    const int maximumY = (std::max)(GetSystemMetrics(SM_CYDOUBLECLK), 4);
-    const bool doubleClick = lastDesktopWindow_ == hit && elapsed <= GetDoubleClickTime() &&
-        std::abs(point.x - lastDesktopPoint_.x) <= maximumX &&
-        std::abs(point.y - lastDesktopPoint_.y) <= maximumY;
-    lastDesktopClickTick_ = now;
-    lastDesktopPoint_ = point;
-    lastDesktopWindow_ = hit;
-
-    if (doubleClick) {
-        operation = InvokeElement(automation.Get(), element.Get(), false, result.targetName);
-        result.status = SUCCEEDED(operation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
-        result.error = SUCCEEDED(operation) ? ERROR_SUCCESS : ErrorCode(operation);
-        result.stage = SUCCEEDED(operation) ? "native-desktop-invoke-ok" : "native-desktop-invoke-unavailable";
-        lastDesktopClickTick_ = 0;
-        lastDesktopWindow_ = nullptr;
-        return result;
-    }
-
-    operation = selection->Select();
-    if (SUCCEEDED(operation)) operation = element->SetFocus();
+    operation = InvokeElement(automation.Get(), element.Get(), true, result.targetName);
     result.status = SUCCEEDED(operation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
     result.error = SUCCEEDED(operation) ? ERROR_SUCCESS : ErrorCode(operation);
-    result.stage = SUCCEEDED(operation) ? "native-desktop-selection-ok" : "native-desktop-selection-failed";
+    result.stage = SUCCEEDED(operation) ? "native-taskbar-uia-invoke-ok" : "native-taskbar-pattern-unavailable";
     return result;
 }

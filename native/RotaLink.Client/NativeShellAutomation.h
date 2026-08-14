@@ -19,7 +19,7 @@ struct ShellAutomationResult final {
 
 class NativeShellAutomation final {
 public:
-    [[nodiscard]] ShellAutomationResult TryHandleLeftClick(POINT point) noexcept;
+    [[nodiscard]] ShellAutomationResult TryHandleClick(POINT point, unsigned button) noexcept;
 private:
     DWORD lastDesktopClickTick_{};
     POINT lastDesktopPoint_{};

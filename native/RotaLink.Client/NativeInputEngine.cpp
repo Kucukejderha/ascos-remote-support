@@ -208,7 +208,7 @@ NativeInputResult NativeInputEngine::Dispatch(std::string_view json) {
                 else { result.stage = "button-invalid"; return result; }
                 inputs.push_back(Mouse(x, y, MouseMove));
                 if (type == "click") {
-                    if (button == 0) {
+                    if (button == 0 || button == 2) {
                         std::vector<INPUT> move{Mouse(x, y, MouseMove)};
                         if (!Send(move, result)) return result;
                         Sleep(16);
@@ -218,7 +218,8 @@ NativeInputResult NativeInputEngine::Dispatch(std::string_view json) {
                             result.stage = "shell-cursor-query-failed";
                             return result;
                         }
-                        const ShellAutomationResult shell = shellAutomation_.TryHandleLeftClick(point);
+                        const ShellAutomationResult shell = shellAutomation_.TryHandleClick(
+                            point, static_cast<unsigned>(button));
                         if (shell.status != ShellAutomationStatus::NotShell) {
                             result.accepted = shell.status == ShellAutomationStatus::Handled;
                             result.error = shell.error;

@@ -49,7 +49,7 @@ target_compile_definitions(RotaLink.Client PRIVATE
   UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
   WINVER=0x0602 _WIN32_WINNT=0x0602 NTDDI_VERSION=0x06020000)
 target_link_libraries(RotaLink.Client PRIVATE advapi32 bcrypt crypt32 d3d11 dxgi gdi32 mf mfplat mfuuid
-  ole32 oleaut32 shell32 uiautomationcore user32 userenv windowscodecs winhttp wtsapi32)
+  ole32 oleacc oleaut32 shell32 uiautomationcore user32 userenv windowscodecs winhttp wtsapi32)
 set_target_properties(RotaLink.Client PROPERTIES OUTPUT_NAME "RotaLink")
 if(MSVC)
   target_compile_options(RotaLink.Client PRIVATE /W4 /WX /permissive- /EHsc /utf-8 /guard:cf /Brepro
