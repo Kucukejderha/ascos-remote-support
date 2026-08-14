@@ -6,6 +6,7 @@
 #include <wrl/client.h>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 using Microsoft::WRL::ComPtr;
 
@@ -34,19 +35,42 @@ public:
         if (!raw) return E_NOINTERFACE;
         accessible_.Attach(raw);
 
-        // Some providers return the actual child as IDispatch instead of a
-        // CHILDID value. Normalize both representations so the action methods
-        // below work on old and new Explorer accessibility providers.
-        if (child_.vt == VT_DISPATCH && child_.pdispVal) {
-            ComPtr<IAccessible> actual;
-            const HRESULT converted = child_.pdispVal->QueryInterface(
-                IID_PPV_ARGS(actual.GetAddressOf()));
-            if (FAILED(converted) || !actual) return FAILED(converted) ? converted : E_NOINTERFACE;
+        // Walk accessibility providers that initially expose only a container.
+        // Explorer 2012/2016/2019 frequently needs an explicit accHitTest before
+        // returning the desktop icon, taskbar button or popup-menu item.
+        for (int depth = 0; depth < 8; ++depth) {
+            if (child_.vt == VT_DISPATCH && child_.pdispVal) {
+                ComPtr<IAccessible> actual;
+                const HRESULT converted = child_.pdispVal->QueryInterface(
+                    IID_PPV_ARGS(actual.GetAddressOf()));
+                if (FAILED(converted) || !actual) return FAILED(converted) ? converted : E_NOINTERFACE;
+                VariantClear(&child_);
+                VariantInit(&child_);
+                child_.vt = VT_I4;
+                child_.lVal = CHILDID_SELF;
+                accessible_ = std::move(actual);
+            }
+            if (child_.vt != VT_I4) return E_INVALIDARG;
+            if (child_.lVal != CHILDID_SELF) return S_OK;
+
+            VARIANT nested{};
+            VariantInit(&nested);
+            const HRESULT tested = accessible_->accHitTest(point.x, point.y, &nested);
+            if (FAILED(tested)) {
+                VariantClear(&nested);
+                return tested;
+            }
+            const bool unchanged = nested.vt == VT_EMPTY ||
+                (nested.vt == VT_I4 && nested.lVal == CHILDID_SELF);
+            if (unchanged) {
+                VariantClear(&nested);
+                return S_OK;
+            }
             VariantClear(&child_);
             VariantInit(&child_);
-            child_.vt = VT_I4;
-            child_.lVal = CHILDID_SELF;
-            accessible_ = std::move(actual);
+            const HRESULT copied = VariantCopy(&child_, &nested);
+            VariantClear(&nested);
+            if (FAILED(copied)) return copied;
         }
         return child_.vt == VT_I4 ? S_OK : E_INVALIDARG;
     }
@@ -158,14 +182,36 @@ DWORD ErrorCode(HRESULT result) noexcept { return static_cast<DWORD>(result); }
 
 HRESULT ShowContextMenu(HWND target, POINT point) noexcept {
     if (!target) return E_HANDLE;
-    DWORD_PTR messageResult = 0;
     SetLastError(ERROR_SUCCESS);
-    const LRESULT sent = SendMessageTimeoutW(target, WM_CONTEXTMENU,
-        reinterpret_cast<WPARAM>(target), MAKELPARAM(point.x, point.y),
-        SMTO_ABORTIFHUNG | SMTO_BLOCK, 1000, &messageResult);
-    if (sent != 0) return S_OK;
+    const BOOL posted = PostMessageW(target, WM_CONTEXTMENU,
+        reinterpret_cast<WPARAM>(target), MAKELPARAM(point.x, point.y));
+    if (posted) return S_OK;
     const DWORD error = GetLastError();
-    return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_TIMEOUT : error);
+    return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_GEN_FAILURE : error);
+}
+
+HWND ActivePopupMenu() noexcept {
+    const DWORD currentSession = []() noexcept {
+        DWORD session = 0;
+        return ProcessIdToSessionId(GetCurrentProcessId(), &session) ? session : (std::numeric_limits<DWORD>::max)();
+    }();
+    HWND previous = nullptr;
+    while ((previous = FindWindowExW(nullptr, previous, L"#32768", nullptr)) != nullptr) {
+        if (!IsWindowVisible(previous)) continue;
+        DWORD processId = 0;
+        GetWindowThreadProcessId(previous, &processId);
+        DWORD session = 0;
+        if (processId != 0 && ProcessIdToSessionId(processId, &session) && session == currentSession) return previous;
+    }
+    return nullptr;
+}
+
+HRESULT DismissPopupMenu(HWND menu) noexcept {
+    if (!menu) return E_HANDLE;
+    SetLastError(ERROR_SUCCESS);
+    if (PostMessageW(menu, WM_CANCELMODE, 0, 0)) return S_OK;
+    const DWORD error = GetLastError();
+    return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_GEN_FAILURE : error);
 }
 }
 
@@ -175,10 +221,21 @@ ShellAutomationResult NativeShellAutomation::TryHandleClick(POINT point, unsigne
     result.targetClass = WindowClass(hit);
     const HWND root = hit ? GetAncestor(hit, GA_ROOT) : nullptr;
     const std::wstring rootClass = WindowClass(root);
+    const bool menu = _wcsicmp(result.targetClass.c_str(), L"#32768") == 0;
     const bool desktop = _wcsicmp(result.targetClass.c_str(), L"SysListView32") == 0;
     const bool taskbar = _wcsicmp(rootClass.c_str(), L"Shell_TrayWnd") == 0 ||
         _wcsicmp(result.targetClass.c_str(), L"MSTaskListWClass") == 0;
-    if ((!desktop && !taskbar) || (button != 0 && button != 2)) return result;
+    const HWND popupMenu = ActivePopupMenu();
+    if (popupMenu && !menu && button == 0) {
+        const HRESULT dismissed = DismissPopupMenu(popupMenu);
+        result.status = SUCCEEDED(dismissed) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
+        result.error = SUCCEEDED(dismissed) ? ERROR_SUCCESS : ErrorCode(dismissed);
+        result.stage = SUCCEEDED(dismissed) ? "native-popup-menu-dismiss-posted" :
+            "native-popup-menu-dismiss-failed";
+        result.targetClass = L"#32768";
+        return result;
+    }
+    if ((!desktop && !taskbar && !menu) || (button != 0 && button != 2)) return result;
 
     ComApartment apartment;
     if (!apartment.Available()) {
@@ -194,6 +251,23 @@ ShellAutomationResult NativeShellAutomation::TryHandleClick(POINT point, unsigne
     const bool accessibleReady = SUCCEEDED(accessibleOperation) && accessible.Available() &&
         SUCCEEDED(accessible.Role(accessibleRole));
     if (accessibleReady) result.targetName = accessible.Name();
+
+    if (menu) {
+        if (button == 0 && accessibleReady && accessibleRole == ROLE_SYSTEM_MENUITEM) {
+            accessibleOperation = accessible.Invoke();
+            result.status = SUCCEEDED(accessibleOperation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
+            result.error = SUCCEEDED(accessibleOperation) ? ERROR_SUCCESS : ErrorCode(accessibleOperation);
+            result.stage = SUCCEEDED(accessibleOperation) ? "native-popup-menu-msaa-invoke-ok" :
+                "native-popup-menu-msaa-invoke-failed";
+            return result;
+        }
+        accessibleOperation = DismissPopupMenu(hit);
+        result.status = SUCCEEDED(accessibleOperation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
+        result.error = SUCCEEDED(accessibleOperation) ? ERROR_SUCCESS : ErrorCode(accessibleOperation);
+        result.stage = SUCCEEDED(accessibleOperation) ? "native-popup-menu-dismiss-posted" :
+            "native-popup-menu-dismiss-failed";
+        return result;
+    }
 
     if (desktop) {
         // SysListView32 itself represents empty desktop space. Only a list item
