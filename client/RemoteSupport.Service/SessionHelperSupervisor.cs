@@ -13,17 +13,24 @@ internal sealed class SessionHelperSupervisor : IDisposable
     private const uint TokenAdjustPrivileges = 0x0020;
     private const uint TokenAdjustDefault = 0x0080;
     private const uint TokenAdjustSessionId = 0x0100;
+    private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint CreateNoWindow = 0x08000000;
     private const int TokenSessionId = 12;
-    private const int TokenUiAccess = 26;
     private readonly ServiceLog _logger;
+    private readonly uint _allowedClientProcessId;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private SafeProcessHandle? _helperProcess;
     private uint _helperSessionId = InvalidSessionId;
     private bool _disposed;
 
-    public SessionHelperSupervisor(ServiceLog logger) => _logger = logger;
+    public SessionHelperSupervisor(ServiceLog logger, uint allowedClientProcessId)
+    {
+        _logger = logger;
+        _allowedClientProcessId = allowedClientProcessId != 0
+            ? allowedClientProcessId
+            : throw new ArgumentOutOfRangeException(nameof(allowedClientProcessId));
+    }
 
     public async Task EnsureActiveSessionAsync(CancellationToken cancellationToken)
     {
@@ -31,7 +38,7 @@ internal sealed class SessionHelperSupervisor : IDisposable
         try
         {
             ThrowIfDisposed();
-            var activeSession = WTSGetActiveConsoleSessionId();
+            var activeSession = ResolveClientSessionId();
             if (activeSession == InvalidSessionId)
             {
                 await StopHelperCoreAsync(cancellationToken).ConfigureAwait(false);
@@ -44,13 +51,21 @@ internal sealed class SessionHelperSupervisor : IDisposable
             await StopHelperCoreAsync(cancellationToken).ConfigureAwait(false);
             _helperProcess = LaunchHelper(activeSession, out var processId);
             _helperSessionId = activeSession;
-            _logger.Write("RotaLink.SessionHelper started with the interactive user's UIAccess token in session " +
+            _logger.Write("RotaLink.SessionHelper started with the elevated interactive client token in session " +
                 activeSession + ", process " + processId + ".");
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    private uint ResolveClientSessionId()
+    {
+        if (!ProcessIdToSessionId(_allowedClientProcessId, out var sessionId))
+            throw new Win32Exception(Marshal.GetLastWin32Error(),
+                "ProcessIdToSessionId failed for RotaLink client " + _allowedClientProcessId + ".");
+        return sessionId;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -70,20 +85,27 @@ internal sealed class SessionHelperSupervisor : IDisposable
         EnablePrivilege("SeIncreaseQuotaPrivilege");
         EnablePrivilege("SeTcbPrivilege");
 
-        if (!WTSQueryUserToken(sessionId, out var interactiveToken))
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "WTSQueryUserToken failed for session " + sessionId + ".");
+        // A LocalSystem token with only TokenSessionId rewritten can appear in the
+        // correct WTS session and make SendInput return success, while Windows
+        // Server/RDP silently discards the event because the token is not the
+        // interactive logon token that owns the input queue. Duplicate the actual,
+        // already-elevated RotaLink client token instead. The service remains the
+        // trusted launcher and the pipe still accepts only that exact client PID.
+        using var clientProcess = OpenProcess(ProcessQueryLimitedInformation, false, _allowedClientProcessId);
+        if (clientProcess.IsInvalid)
+            throw new Win32Exception(Marshal.GetLastWin32Error(),
+                "OpenProcess failed for RotaLink client " + _allowedClientProcessId + ".");
+        if (!OpenProcessToken(clientProcess, TokenDuplicate | TokenQuery, out var interactiveToken))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenProcessToken for interactive RotaLink client failed.");
         using (interactiveToken)
         {
             if (!DuplicateTokenEx(interactiveToken, 0x000F01FF, IntPtr.Zero, 2, 1, out var sessionToken))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "DuplicateTokenEx for interactive token failed.");
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "DuplicateTokenEx for interactive client token failed.");
             using (sessionToken)
             {
                 SetTokenUInt32(sessionToken, TokenSessionId, sessionId, "TokenSessionId");
-                SetTokenUInt32(sessionToken, TokenUiAccess, 1, "TokenUIAccess");
-                var uiAccess = GetTokenUInt32(sessionToken, TokenUiAccess, "TokenUIAccess");
-                if (uiAccess != 1)
-                    throw new InvalidOperationException("Session helper token did not retain the UIAccess flag.");
-                _logger.Write("Interactive user helper token prepared. Session=" + sessionId + ", UIAccess=True.");
+                _logger.Write("Elevated interactive client helper token prepared. ClientPid=" +
+                    _allowedClientProcessId + ", Session=" + sessionId + ".");
 
                 var environment = IntPtr.Zero;
                 try
@@ -96,7 +118,8 @@ internal sealed class SessionHelperSupervisor : IDisposable
                         Size = Marshal.SizeOf<StartupInfo>(),
                         Desktop = "winsta0\\default"
                     };
-                    var commandLine = "\"" + helperPath + "\" --service-child --session " + sessionId;
+                    var commandLine = "\"" + helperPath + "\" --service-child --session " + sessionId +
+                        " --client-pid " + _allowedClientProcessId;
                     if (!CreateProcessAsUser(sessionToken, helperPath, commandLine, IntPtr.Zero, IntPtr.Zero, false,
                             CreateUnicodeEnvironment | CreateNoWindow, environment, AppContext.BaseDirectory,
                             ref startup, out var processInformation))
@@ -123,20 +146,6 @@ internal sealed class SessionHelperSupervisor : IDisposable
             Marshal.WriteInt32(buffer, unchecked((int)value));
             if (!SetTokenInformation(token, informationClass, buffer, sizeof(uint)))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "SetTokenInformation(" + name + ") failed.");
-        }
-        finally { Marshal.FreeHGlobal(buffer); }
-    }
-
-    private static uint GetTokenUInt32(SafeKernelHandle token, int informationClass, string name)
-    {
-        var buffer = Marshal.AllocHGlobal(sizeof(uint));
-        try
-        {
-            if (!GetTokenInformation(token, informationClass, buffer, sizeof(uint), out var returnedLength))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "GetTokenInformation(" + name + ") failed.");
-            if (returnedLength != sizeof(uint))
-                throw new InvalidDataException("GetTokenInformation(" + name + ") returned " + returnedLength + " bytes.");
-            return unchecked((uint)Marshal.ReadInt32(buffer));
         }
         finally { Marshal.FreeHGlobal(buffer); }
     }
@@ -219,15 +228,16 @@ internal sealed class SessionHelperSupervisor : IDisposable
     private struct ProcessInformation { public IntPtr Process; public IntPtr Thread; public uint ProcessId; public uint ThreadId; }
 
     [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern SafeProcessHandle OpenProcess(uint desiredAccess, bool inheritHandle, uint processId);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr handle);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern uint WaitForSingleObject(SafeProcessHandle handle, uint milliseconds);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool TerminateProcess(SafeProcessHandle process, uint exitCode);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern SafeKernelHandle OpenEvent(uint desiredAccess, bool inheritHandle, string name);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool SetEvent(SafeKernelHandle handle);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool OpenProcessToken(IntPtr process, uint desiredAccess, out SafeKernelHandle token);
+    [DllImport("advapi32.dll", SetLastError = true)] private static extern bool OpenProcessToken(SafeProcessHandle process, uint desiredAccess, out SafeKernelHandle token);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool DuplicateTokenEx(SafeKernelHandle existingToken, uint desiredAccess, IntPtr attributes, int impersonationLevel, int tokenType, out SafeKernelHandle newToken);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool SetTokenInformation(SafeKernelHandle token, int tokenInformationClass, IntPtr tokenInformation, int tokenInformationLength);
-    [DllImport("advapi32.dll", SetLastError = true)] private static extern bool GetTokenInformation(SafeKernelHandle token, int tokenInformationClass, IntPtr tokenInformation, int tokenInformationLength, out int returnLength);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool LookupPrivilegeValue(string? systemName, string name, out Luid luid);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool AdjustTokenPrivileges(SafeKernelHandle token, bool disableAll, ref TokenPrivileges newState, uint bufferLength, IntPtr previousState, IntPtr returnLength);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -236,9 +246,8 @@ internal sealed class SessionHelperSupervisor : IDisposable
         string currentDirectory, ref StartupInfo startupInfo, out ProcessInformation processInformation);
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool CreateEnvironmentBlock(out IntPtr environment, SafeKernelHandle token, bool inherit);
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool DestroyEnvironmentBlock(IntPtr environment);
-    [DllImport("kernel32.dll")] private static extern uint WTSGetActiveConsoleSessionId();
-    [DllImport("wtsapi32.dll", SetLastError = true)]
+    [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool WTSQueryUserToken(uint sessionId, out SafeKernelHandle token);
+    private static extern bool ProcessIdToSessionId(uint processId, out uint sessionId);
     [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
 }

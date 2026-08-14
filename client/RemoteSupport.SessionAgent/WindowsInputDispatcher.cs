@@ -35,11 +35,12 @@ public sealed class WindowsInputDispatcher : IDisposable
     {
         if (!_consent.IsControlAllowed(_sessionId)) return new InputDispatchReport(false, "consent-denied", 0, null, null);
         if (length <= 0 || length > 4096) return new InputDispatchReport(false, "packet-size-invalid", 0, null, null);
-        if (!TryAcquireRatePermit()) return new InputDispatchReport(false, "rate-limited", 0, null, null);
         InputMessage? message;
         try { message = new JavaScriptSerializer().Deserialize<InputMessage>(Encoding.UTF8.GetString(json, 0, length)); }
         catch (ArgumentException) { return new InputDispatchReport(false, "json-invalid", 0, null, null); }
         if (message is null) return new InputDispatchReport(false, "message-empty", 0, null, null);
+        var eventType = DescribeEvent(message);
+        if (!TryAcquireRatePermit(message)) return new InputDispatchReport(false, "rate-limited", 0, null, eventType);
 
         if (!_inputLogged)
         {
@@ -53,17 +54,17 @@ public sealed class WindowsInputDispatcher : IDisposable
             var result = helperResult.Value;
             return new InputDispatchReport(result.Accepted,
                 result.Accepted ? "system-helper-ok" : "system-helper-" + result.Stage,
-                result.ErrorCode, "SYSTEM helper / WinSta0", message.Type);
+                result.ErrorCode, "interactive helper / WinSta0", eventType);
         }
-        if (EphemeralInputService.IsRunning)
-            return new InputDispatchReport(false, "system-helper-ipc-unavailable", 0, "SYSTEM helper", message.Type);
+        if (InstalledInputRuntime.IsRunning)
+            return new InputDispatchReport(false, "system-helper-ipc-unavailable", 0, "interactive helper", eventType);
 
         var work = new InputWorkItem(message);
         try { _queue.Add(work); }
-        catch (InvalidOperationException) { return new InputDispatchReport(false, "input-worker-stopped", 0, null, message.Type); }
+        catch (InvalidOperationException) { return new InputDispatchReport(false, "input-worker-stopped", 0, null, eventType); }
         if (!work.Completed.Wait(TimeSpan.FromSeconds(2)))
-            return new InputDispatchReport(false, "input-worker-timeout", 0, null, message.Type);
-        return new InputDispatchReport(work.Accepted, work.Stage, work.ErrorCode, work.Desktop, message.Type);
+            return new InputDispatchReport(false, "input-worker-timeout", 0, null, eventType);
+        return new InputDispatchReport(work.Accepted, work.Stage, work.ErrorCode, work.Desktop, eventType);
     }
 
     private void DesktopThreadMain()
@@ -116,6 +117,7 @@ public sealed class WindowsInputDispatcher : IDisposable
         {
             "move" => MoveCursor(ResolvePoint(message)),
             "button" => SendButton(message),
+            "click" => SendClick(message),
             "wheel" when message.Delta is >= -1200 and <= 1200 => SendWheel(message),
             "key" => SendKey(message.Code, message.Down),
             _ => false
@@ -129,13 +131,19 @@ public sealed class WindowsInputDispatcher : IDisposable
         _helperInput.Dispose();
     }
 
-    private bool TryAcquireRatePermit()
+    private bool TryAcquireRatePermit(InputMessage message)
     {
         lock (_rateGate)
         {
             var now = Environment.TickCount;
             if (unchecked(now - _rateWindow) >= 1000) { _rateWindow = now; _eventsInWindow = 0; }
-            return ++_eventsInWindow <= 240;
+            // Never discard a release after its matching press. A lost mouse-up
+            // or key-up leaves the remote desktop in a stuck drag/key state.
+            if ((message.Type is "button" or "key") && !message.Down) return true;
+            // Pointer movement is coalesced by the operator page. This defensive
+            // ceiling protects stale clients without starving clicks or keys.
+            if (message.Type == "move") return ++_eventsInWindow <= 120;
+            return true;
         }
     }
 
@@ -156,6 +164,29 @@ public sealed class WindowsInputDispatcher : IDisposable
             Union = new InputUnion { Mouse = new MouseInput { Flags = flag } }
         });
     }
+
+    private bool SendClick(InputMessage message)
+    {
+        var flags = message.Button switch
+        {
+            0 => (Down: 0x0002u, Up: 0x0004u),
+            1 => (Down: 0x0020u, Up: 0x0040u),
+            2 => (Down: 0x0008u, Up: 0x0010u),
+            _ => (Down: 0u, Up: 0u)
+        };
+        if (flags.Down == 0) return false;
+        var point = ResolvePoint(message);
+        return SendInputs(MouseMoveInput(point),
+            new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { Flags = flags.Down } } },
+            new Input { Type = 0, Union = new InputUnion { Mouse = new MouseInput { Flags = flags.Up } } });
+    }
+
+    private static string? DescribeEvent(InputMessage message) => message.Type switch
+    {
+        "button" => "button-" + (message.Down ? "down" : "up"),
+        "key" => "key-" + (message.Down ? "down" : "up"),
+        _ => message.Type
+    };
 
     private bool SendWheel(InputMessage message)
     {
@@ -235,6 +266,15 @@ public sealed class WindowsInputDispatcher : IDisposable
             "Delete" => 0x2E, "Insert" => 0x2D, "Home" => 0x24, "End" => 0x23, "PageUp" => 0x21, "PageDown" => 0x22,
             "ArrowLeft" => 0x25, "ArrowUp" => 0x26, "ArrowRight" => 0x27, "ArrowDown" => 0x28,
             "ShiftLeft" or "ShiftRight" => 0x10, "ControlLeft" or "ControlRight" => 0x11, "AltLeft" or "AltRight" => 0x12,
+            "MetaLeft" => 0x5B, "MetaRight" => 0x5C, "ContextMenu" => 0x5D,
+            "CapsLock" => 0x14, "NumLock" => 0x90, "ScrollLock" => 0x91, "Pause" => 0x13, "PrintScreen" => 0x2C,
+            "Semicolon" => 0xBA, "Equal" => 0xBB, "Comma" => 0xBC, "Minus" => 0xBD,
+            "Period" => 0xBE, "Slash" => 0xBF, "Backquote" => 0xC0, "BracketLeft" => 0xDB,
+            "Backslash" => 0xDC, "BracketRight" => 0xDD, "Quote" => 0xDE,
+            "Numpad0" => 0x60, "Numpad1" => 0x61, "Numpad2" => 0x62, "Numpad3" => 0x63,
+            "Numpad4" => 0x64, "Numpad5" => 0x65, "Numpad6" => 0x66, "Numpad7" => 0x67,
+            "Numpad8" => 0x68, "Numpad9" => 0x69, "NumpadMultiply" => 0x6A, "NumpadAdd" => 0x6B,
+            "NumpadSubtract" => 0x6D, "NumpadDecimal" => 0x6E, "NumpadDivide" => 0x6F, "NumpadEnter" => 0x0D,
             "F1" => 0x70, "F2" => 0x71, "F3" => 0x72, "F4" => 0x73, "F5" => 0x74, "F6" => 0x75,
             "F7" => 0x76, "F8" => 0x77, "F9" => 0x78, "F10" => 0x79, "F11" => 0x7A, "F12" => 0x7B,
             _ => 0

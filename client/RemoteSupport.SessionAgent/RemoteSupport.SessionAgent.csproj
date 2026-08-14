@@ -14,11 +14,12 @@
     <Version>1.1.0</Version>
     <AssemblyVersion>1.1.0.0</AssemblyVersion>
     <FileVersion>1.1.0.0</FileVersion>
-    <InformationalVersion>1.1.0-alpha.14</InformationalVersion>
+    <InformationalVersion>1.1.0-alpha.26</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>Assets\RotaLink.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition="'$(PortableBuild)' == 'true'"><DefineConstants>$(DefineConstants);PORTABLE_BUILD</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(UnsignedDevelopment)' == 'true'"><DefineConstants>$(DefineConstants);UNSIGNED_DEVELOPMENT</DefineConstants></PropertyGroup>
   <ItemGroup><Compile Remove="SelfInstaller.cs;NativeConsentPrompt.cs" /></ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />

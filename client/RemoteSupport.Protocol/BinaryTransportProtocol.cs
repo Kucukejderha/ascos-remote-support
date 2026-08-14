@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace RemoteSupport.Protocol;
 
-public enum InputEventKind : byte { Move = 1, Button = 2, Wheel = 3, Key = 4 }
+public enum InputEventKind : byte { Move = 1, Button = 2, Wheel = 3, Key = 4, Click = 5 }
 public enum VideoCodec : byte { Bgra32 = 1, Nv12 = 2, H264AnnexB = 3 }
 
 public readonly record struct InputPacket(

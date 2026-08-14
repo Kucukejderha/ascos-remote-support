@@ -1,0 +1,270 @@
+#include "NativeInputEngine.h"
+#include "Diagnostics.h"
+#include "JsonLite.h"
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <vector>
+
+namespace {
+constexpr DWORD MouseMove = 0x0001;
+constexpr DWORD MouseLeftDown = 0x0002;
+constexpr DWORD MouseLeftUp = 0x0004;
+constexpr DWORD MouseRightDown = 0x0008;
+constexpr DWORD MouseRightUp = 0x0010;
+constexpr DWORD MouseMiddleDown = 0x0020;
+constexpr DWORD MouseMiddleUp = 0x0040;
+constexpr DWORD MouseWheel = 0x0800;
+constexpr DWORD MouseVirtualDesktop = 0x4000;
+constexpr DWORD MouseAbsolute = 0x8000;
+
+INPUT Mouse(double normalizedX, double normalizedY, DWORD flags, DWORD data = 0) {
+    const double x = std::clamp(normalizedX, 0.0, 1.0);
+    const double y = std::clamp(normalizedY, 0.0, 1.0);
+    INPUT input{};
+    input.type = INPUT_MOUSE;
+    input.mi.dx = static_cast<LONG>(std::llround(x * 65535.0));
+    input.mi.dy = static_cast<LONG>(std::llround(y * 65535.0));
+    input.mi.mouseData = data;
+    input.mi.dwFlags = MouseAbsolute | MouseVirtualDesktop | flags;
+    return input;
+}
+
+bool Send(std::vector<INPUT>& inputs, NativeInputResult& result) {
+    if (inputs.empty() || inputs.size() > (std::numeric_limits<UINT>::max)()) {
+        result.stage = "input-count-invalid";
+        return false;
+    }
+    const UINT expected = static_cast<UINT>(inputs.size());
+    SetLastError(ERROR_SUCCESS);
+    const UINT sent = SendInput(expected, inputs.data(), sizeof(INPUT));
+    if (sent == expected) return true;
+    result.error = GetLastError();
+    result.stage = result.error == ERROR_ACCESS_DENIED ? "sendinput-access-denied" : "sendinput-failed";
+    return false;
+}
+
+void LogClickTarget() noexcept {
+    POINT point{};
+    if (!GetCursorPos(&point)) {
+        Diagnostics::Write(L"Native click target query failed. Stage=cursor-position, Win32=" +
+            std::to_wstring(GetLastError()) + L".");
+        return;
+    }
+    const HWND window = WindowFromPoint(point);
+    wchar_t className[256]{};
+    wchar_t windowText[32]{};
+    DWORD processId = 0;
+    if (window) {
+        GetClassNameW(window, className, static_cast<int>(_countof(className)));
+        GetWindowThreadProcessId(window, &processId);
+    }
+    swprintf_s(windowText, L"%p", window);
+    Diagnostics::Write(L"Native physical click target. X=" + std::to_wstring(point.x) + L", Y=" +
+        std::to_wstring(point.y) + L", Window=" + std::wstring(windowText) +
+        L", Class=" + std::wstring(className[0] ? className : L"<none>") + L", ProcessId=" +
+        std::to_wstring(processId) + L".");
+}
+
+bool SendPhysicalClick(double x, double y, DWORD down, DWORD up, NativeInputResult& result) {
+    std::vector<INPUT> move{Mouse(x, y, MouseMove)};
+    if (!Send(move, result)) return false;
+
+    // Explorer's desktop and taskbar controls update their hover/hit-test state on
+    // their own input queues. A zero-duration move+down+up batch can be accepted by
+    // SendInput yet be consumed before those shell controls observe the new target.
+    Sleep(16);
+    LogClickTarget();
+
+    std::vector<INPUT> press{Mouse(x, y, down)};
+    if (!Send(press, result)) return false;
+    Sleep(32);
+
+    std::vector<INPUT> release{Mouse(x, y, up)};
+    if (Send(release, result)) return true;
+
+    // Best-effort release prevents a failed final call from leaving a mouse button held.
+    INPUT emergency = Mouse(x, y, up);
+    SendInput(1, &emergency, sizeof(INPUT));
+    return false;
+}
+
+bool IsNormalized(double value) { return std::isfinite(value) && value >= 0.0 && value <= 1.0; }
+
+bool DesktopName(HDESK desktop, std::wstring& name, DWORD& error) noexcept {
+    wchar_t buffer[256]{};
+    DWORD needed = 0;
+    if (!desktop || !GetUserObjectInformationW(desktop, UOI_NAME, buffer, sizeof(buffer), &needed)) {
+        error = GetLastError();
+        return false;
+    }
+    name.assign(buffer);
+    return true;
+}
+}
+
+NativeInputEngine::~NativeInputEngine() {
+    // Release the state that could otherwise remain held when an operator closes
+    // the session during a drag or modifier-key sequence.
+    std::vector<INPUT> releases;
+    for (const WORD key : {static_cast<WORD>(VK_SHIFT), static_cast<WORD>(VK_CONTROL),
+        static_cast<WORD>(VK_MENU), static_cast<WORD>(VK_LWIN), static_cast<WORD>(VK_RWIN)}) {
+        INPUT input{};
+        input.type = INPUT_KEYBOARD;
+        input.ki.wVk = key;
+        input.ki.dwFlags = KEYEVENTF_KEYUP;
+        releases.push_back(input);
+    }
+    auto buttonRelease = [](DWORD flag) {
+        INPUT input{};
+        input.type = INPUT_MOUSE;
+        input.mi.dwFlags = flag;
+        return input;
+    };
+    releases.push_back(buttonRelease(MouseLeftUp));
+    releases.push_back(buttonRelease(MouseRightUp));
+    releases.push_back(buttonRelease(MouseMiddleUp));
+    SendInput(static_cast<UINT>(releases.size()), releases.data(), sizeof(INPUT));
+    // The worker thread is still assigned to desktop_; Windows closes that final
+    // handle when the helper process exits.
+}
+
+bool NativeInputEngine::AttachInputDesktop(NativeInputResult& result) {
+    constexpr ACCESS_MASK access = DESKTOP_READOBJECTS | DESKTOP_WRITEOBJECTS | DESKTOP_SWITCHDESKTOP;
+    HDESK next = OpenInputDesktop(0, FALSE, access);
+    if (!next) {
+        result.error = GetLastError(); result.stage = "open-input-desktop-failed"; return false;
+    }
+    std::wstring nextName;
+    if (!DesktopName(next, nextName, result.error)) {
+        result.stage = "query-input-desktop-failed";
+        CloseDesktop(next);
+        return false;
+    }
+    const HDESK current = GetThreadDesktop(GetCurrentThreadId());
+    std::wstring currentName;
+    DWORD currentNameError = ERROR_SUCCESS;
+    const bool sameDesktop = DesktopName(current, currentName, currentNameError) &&
+        _wcsicmp(currentName.c_str(), nextName.c_str()) == 0;
+    if (sameDesktop) {
+        // OpenInputDesktop returns a new handle even when it represents the same
+        // desktop object. Handle-value comparison therefore caused every second
+        // event (typically the click following a move) to fail while attempting
+        // to close the still-assigned desktop. Retain the assigned handle and
+        // close only the redundant newly opened handle.
+        CloseDesktop(next);
+    } else {
+        if (!SetThreadDesktop(next)) {
+            result.error = GetLastError();
+            result.stage = "set-thread-desktop-failed";
+            CloseDesktop(next);
+            return false;
+        }
+        const HDESK previousOwned = desktop_;
+        desktop_ = next;
+        if (previousOwned && !CloseDesktop(previousOwned)) {
+            Diagnostics::Write(L"Previous native input desktop handle could not be closed after a successful switch. Win32=" +
+                std::to_wstring(GetLastError()) + L".");
+        }
+    }
+    result.desktop = JsonLite::Utf8(nextName);
+    return true;
+}
+
+NativeInputResult NativeInputEngine::Dispatch(std::string_view json) {
+    NativeInputResult result;
+    try {
+        const std::string type = JsonLite::StringValue(json, "type");
+        result.eventType = type;
+        if (!AttachInputDesktop(result)) return result;
+        const double x = JsonLite::NumberValue(json, "normalizedX", -1.0);
+        const double y = JsonLite::NumberValue(json, "normalizedY", -1.0);
+        result.normalizedX = x;
+        result.normalizedY = y;
+        std::vector<INPUT> inputs;
+        if (type == "key") {
+            const WORD key = MapKey(JsonLite::StringValue(json, "code"));
+            if (key == 0) { result.stage = "key-invalid"; return result; }
+            INPUT input{};
+            input.type = INPUT_KEYBOARD;
+            input.ki.wVk = key;
+            const bool extended = key == VK_PRIOR || key == VK_NEXT || key == VK_END || key == VK_HOME ||
+                key == VK_LEFT || key == VK_UP || key == VK_RIGHT || key == VK_DOWN || key == VK_INSERT ||
+                key == VK_DELETE || key == VK_DIVIDE || key == VK_NUMLOCK;
+            input.ki.dwFlags = (extended ? KEYEVENTF_EXTENDEDKEY : 0) |
+                (JsonLite::BooleanValue(json, "down", false) ? 0 : KEYEVENTF_KEYUP);
+            inputs.push_back(input);
+        } else {
+            if (!IsNormalized(x) || !IsNormalized(y)) { result.stage = "coordinate-invalid"; return result; }
+            if (type == "move") inputs.push_back(Mouse(x, y, MouseMove));
+            else if (type == "wheel") {
+                const int delta = static_cast<int>(JsonLite::NumberValue(json, "delta", 0));
+                if (delta < -1200 || delta > 1200) { result.stage = "wheel-invalid"; return result; }
+                inputs.push_back(Mouse(x, y, MouseMove | MouseWheel, static_cast<DWORD>(delta)));
+            } else if (type == "button" || type == "click") {
+                const int button = static_cast<int>(JsonLite::NumberValue(json, "button", -1));
+                result.button = button;
+                DWORD down = 0, up = 0;
+                if (button == 0) { down = MouseLeftDown; up = MouseLeftUp; }
+                else if (button == 1) { down = MouseMiddleDown; up = MouseMiddleUp; }
+                else if (button == 2) { down = MouseRightDown; up = MouseRightUp; }
+                else { result.stage = "button-invalid"; return result; }
+                inputs.push_back(Mouse(x, y, MouseMove));
+                if (type == "click") {
+                    if (button == 0 || button == 2) {
+                        std::vector<INPUT> move{Mouse(x, y, MouseMove)};
+                        if (!Send(move, result)) return result;
+                        Sleep(16);
+                        POINT point{};
+                        if (!GetCursorPos(&point)) {
+                            result.error = GetLastError();
+                            result.stage = "shell-cursor-query-failed";
+                            return result;
+                        }
+                        const ShellAutomationResult shell = shellAutomation_.TryHandleClick(
+                            point, static_cast<unsigned>(button));
+                        if (shell.status != ShellAutomationStatus::NotShell) {
+                            result.accepted = shell.status == ShellAutomationStatus::Handled;
+                            result.error = shell.error;
+                            result.stage = shell.stage;
+                            Diagnostics::Write(L"Native shell automation result. Accepted=" +
+                                std::wstring(result.accepted ? L"true" : L"false") + L", Stage=" +
+                                std::wstring(shell.stage.begin(), shell.stage.end()) + L", Error=" +
+                                std::to_wstring(shell.error) + L", Class=" + shell.targetClass + L", Name=" +
+                                shell.targetName + L".");
+                            return result;
+                        }
+                    }
+                    result.accepted = SendPhysicalClick(x, y, down, up, result);
+                    if (result.accepted) result.stage = "native-physical-click-ok";
+                    return result;
+                } else inputs.push_back(Mouse(x, y,
+                    JsonLite::BooleanValue(json, "down", false) ? down : up));
+            } else { result.stage = "event-invalid"; return result; }
+        }
+        result.accepted = Send(inputs, result);
+        if (result.accepted) result.stage = "native-sendinput-ok";
+        return result;
+    } catch (...) {
+        result.stage = "json-invalid";
+        return result;
+    }
+}
+
+WORD NativeInputEngine::MapKey(std::string_view code) {
+    if (code.size() == 4 && code.starts_with("Key") && code[3] >= 'A' && code[3] <= 'Z') return code[3];
+    if (code.size() == 6 && code.starts_with("Digit") && code[5] >= '0' && code[5] <= '9') return code[5];
+    struct Pair { std::string_view code; WORD key; };
+    constexpr Pair values[] = {
+        {"Enter",VK_RETURN},{"Escape",VK_ESCAPE},{"Backspace",VK_BACK},{"Tab",VK_TAB},{"Space",VK_SPACE},
+        {"Delete",VK_DELETE},{"Insert",VK_INSERT},{"Home",VK_HOME},{"End",VK_END},{"PageUp",VK_PRIOR},
+        {"PageDown",VK_NEXT},{"ArrowLeft",VK_LEFT},{"ArrowUp",VK_UP},{"ArrowRight",VK_RIGHT},{"ArrowDown",VK_DOWN},
+        {"ShiftLeft",VK_SHIFT},{"ShiftRight",VK_SHIFT},{"ControlLeft",VK_CONTROL},{"ControlRight",VK_CONTROL},
+        {"AltLeft",VK_MENU},{"AltRight",VK_MENU},{"MetaLeft",VK_LWIN},{"MetaRight",VK_RWIN},{"ContextMenu",VK_APPS},
+        {"CapsLock",VK_CAPITAL},{"NumLock",VK_NUMLOCK},{"ScrollLock",VK_SCROLL},{"Pause",VK_PAUSE},{"PrintScreen",VK_SNAPSHOT},
+        {"F1",VK_F1},{"F2",VK_F2},{"F3",VK_F3},{"F4",VK_F4},{"F5",VK_F5},{"F6",VK_F6},
+        {"F7",VK_F7},{"F8",VK_F8},{"F9",VK_F9},{"F10",VK_F10},{"F11",VK_F11},{"F12",VK_F12}
+    };
+    for (const auto& value : values) if (value.code == code) return value.key;
+    return 0;
+}

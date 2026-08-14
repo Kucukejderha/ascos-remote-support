@@ -82,10 +82,11 @@ internal static class RemoteSession
         {
             try
             {
-                capture ??= new GdiScreenCapture(960, 540);
-                if (firstFrame) AppDiagnostics.Write("Screen capture initialized at 960x540.");
+                capture ??= new GdiScreenCapture(1440, 900);
                 await Task.Delay(70, token);
                 var frame = capture.Capture();
+                if (firstFrame) AppDiagnostics.Write("Screen capture initialized at " + frame.Width + "x" + frame.Height +
+                    " with aspect-ratio preservation.");
                 accessDeniedLogged = false;
                 var now = Environment.TickCount;
                 var forceKeyFrame = unchecked(now - nextKeyFrame) >= 0;
@@ -117,7 +118,7 @@ internal static class RemoteSession
     private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, CancellationToken token)
     {
         var buffer = new byte[4096];
-        string? lastReportedResult = null;
+        string? lastReportedLogKey = null;
         var serializer = new JavaScriptSerializer();
         while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
         {
@@ -135,14 +136,17 @@ internal static class RemoteSession
                     desktop = report.Desktop,
                     eventType = report.EventType
                 });
-                if (!report.Accepted || !string.Equals(acknowledgementText, lastReportedResult, StringComparison.Ordinal))
+                // Acknowledge every event. The operator allows only one pointer
+                // move in flight and releases its newest coalesced move on ACK.
+                var acknowledgement = Encoding.UTF8.GetBytes(acknowledgementText);
+                await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
+                var logKey = report.Accepted + "|" + report.Stage + "|" + report.ErrorCode + "|" + report.Desktop + "|" + report.EventType;
+                if (!report.Accepted || !string.Equals(logKey, lastReportedLogKey, StringComparison.Ordinal))
                 {
-                    var acknowledgement = Encoding.UTF8.GetBytes(acknowledgementText);
-                    await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
                     AppDiagnostics.Write("Remote input result reported. Accepted=" + report.Accepted +
                         ", Stage=" + report.Stage + ", Error=" + report.ErrorCode +
                         ", Desktop=" + report.Desktop + ", Event=" + report.EventType);
-                    lastReportedResult = acknowledgementText;
+                    lastReportedLogKey = logKey;
                 }
             }
         }

@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AssemblyName>RotaLink.SessionHelper</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <TargetPlatformSdkPath>C:\Program Files (x86)\Windows Kits\10\</TargetPlatformSdkPath>
     <TargetPlatformDisplayName>Windows</TargetPlatformDisplayName>
@@ -16,10 +17,16 @@
     <Compile Include="InteractiveWindowStation.cs" />
     <Compile Include="InputDesktop.cs" />
     <Compile Include="CoordinateTransformationEngine.cs" />
+    <Compile Include="ForegroundActivation.cs" />
     <Compile Include="InputEngine.cs" />
     <Compile Include="InputPipeServer.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="UIAutomationClient" />
+    <Reference Include="UIAutomationTypes" />
+    <Reference Include="WindowsBase" />
   </ItemGroup>
 </Project>

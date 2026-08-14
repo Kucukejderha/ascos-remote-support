@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    { "id": "windows-10", "displayName": "Windows 10 22H2/LTSC/ESU", "server": false, "major": 10, "minor": 0, "minimumBuild": 10240, "maximumBuild": 21999, "supportLevel": "compatible" },
+    { "id": "windows-11", "displayName": "Windows 11", "server": false, "major": 10, "minor": 0, "minimumBuild": 22000, "supportLevel": "primary" },
+    { "id": "server-2012", "displayName": "Windows Server 2012 Desktop Experience", "server": true, "major": 6, "minor": 2, "minimumBuild": 9200, "maximumBuild": 9200, "supportLevel": "legacy" },
+    { "id": "server-2012-r2", "displayName": "Windows Server 2012 R2 Desktop Experience", "server": true, "major": 6, "minor": 3, "minimumBuild": 9600, "maximumBuild": 9600, "supportLevel": "legacy" },
+    { "id": "server-2016", "displayName": "Windows Server 2016 Desktop Experience", "server": true, "major": 10, "minor": 0, "minimumBuild": 14393, "maximumBuild": 14393, "supportLevel": "compatible" },
+    { "id": "server-2019", "displayName": "Windows Server 2019 Desktop Experience", "server": true, "major": 10, "minor": 0, "minimumBuild": 17763, "maximumBuild": 17763, "supportLevel": "compatible" },
+    { "id": "server-2022", "displayName": "Windows Server 2022 Desktop Experience", "server": true, "major": 10, "minor": 0, "minimumBuild": 20348, "maximumBuild": 20348, "supportLevel": "primary" },
+    { "id": "server-2025", "displayName": "Windows Server 2025 Desktop Experience", "server": true, "major": 10, "minor": 0, "minimumBuild": 26100, "supportLevel": "primary" }
+  ]
+}

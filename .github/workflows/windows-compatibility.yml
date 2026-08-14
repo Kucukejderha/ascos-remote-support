@@ -1,0 +1,41 @@
+name: Windows compatibility baseline
+on:
+  push:
+    paths:
+      - 'client/**'
+      - 'scripts/Test-RotaLinkCompatibility*.ps1'
+      - 'scripts/build-compatibility-kit.ps1'
+      - 'docs/WINDOWS-*.tr.md'
+      - 'tests/**'
+      - '.github/workflows/windows-compatibility.yml'
+  pull_request:
+    paths:
+      - 'client/**'
+      - 'scripts/Test-RotaLinkCompatibility*.ps1'
+      - 'scripts/build-compatibility-kit.ps1'
+      - 'docs/WINDOWS-*.tr.md'
+      - 'tests/**'
+      - '.github/workflows/windows-compatibility.yml'
+  workflow_dispatch:
+jobs:
+  windows-2022-baseline:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore without audit network dependency
+        shell: powershell
+        run: dotnet restore tests/RemoteSupport.Smoke/RemoteSupport.Smoke.csproj --configfile NuGet.Config -p:NuGetAudit=false
+      - name: Architecture checks
+        shell: powershell
+        run: dotnet run --project tests/RemoteSupport.Smoke/RemoteSupport.Smoke.csproj -c Release --no-restore -- --architecture-only
+      - name: Compatibility matrix release gate checks
+        shell: powershell
+        run: ./tests/Test-CompatibilityMatrix.ps1
+      - name: Probe Windows Server 2022 runner
+        shell: powershell
+        run: ./scripts/Test-RotaLinkCompatibility.ps1 -TargetId server-2022 -OutputPath artifacts/compatibility/rotalink-compatibility-server-2022.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-server-2022-compatibility-evidence
+          path: |
+            artifacts/compatibility/rotalink-compatibility-server-2022.json

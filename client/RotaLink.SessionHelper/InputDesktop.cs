@@ -6,12 +6,16 @@ namespace RotaLink.SessionHelper;
 
 internal sealed class InputDesktop : IDisposable
 {
-    private const uint RequiredAccess = 0x0001 | 0x0002 | 0x0004 | 0x0080 | 0x0100;
+    // SendInput is evaluated against the desktop handle assigned to this
+    // thread. Request the complete desktop access mask, including
+    // DESKTOP_JOURNALPLAYBACK (0x20); a read/write-only handle can be opened
+    // successfully yet input injection is then rejected with ERROR_ACCESS_DENIED.
+    private const uint DesktopAllAccess = 0x000F01FF;
     private SafeDesktopHandle? _current;
 
     public void Refresh()
     {
-        var next = OpenInputDesktop(0, false, RequiredAccess);
+        var next = OpenInputDesktop(0, false, DesktopAllAccess);
         if (next.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenInputDesktop failed.");
         if (!SetThreadDesktop(next))
         {

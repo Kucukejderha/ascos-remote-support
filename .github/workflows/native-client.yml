@@ -1,0 +1,51 @@
+name: Native customer client
+on:
+  push:
+    branches:
+      - main
+      - agent/signed-control-runtime
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'tests/Test-NativeClientSource.ps1'
+      - 'scripts/build-native-client.ps1'
+      - 'scripts/Test-NativeClientArtifact.ps1'
+      - '.github/workflows/native-client.yml'
+  workflow_dispatch:
+jobs:
+  build-native-x64:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source compatibility gates
+        shell: powershell
+        run: ./tests/Test-NativeClientSource.ps1
+      - name: Configure static Win32 client
+        run: cmake -S native -B native/out -A x64
+      - name: Build native client
+        run: cmake --build native/out --config Release --target RotaLink.Client
+      - name: Verify no CLR and enforce 10 MB limit
+        shell: powershell
+        run: ./scripts/Test-NativeClientArtifact.ps1 -Path native/out/Release/RotaLink.exe -OutputPath artifacts/native-client-report.json
+      - name: Verify static CRT dependency set
+        shell: powershell
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $visualStudio = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($visualStudio)) { throw "Visual Studio C++ tools were not found." }
+          $dumpbin = Get-ChildItem -LiteralPath "$visualStudio\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe |
+            Where-Object { $_.FullName -match '\\bin\\Hostx64\\x64\\dumpbin\.exe$' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $dumpbin) { throw "x64 dumpbin.exe was not found." }
+          $dependencies = & $dumpbin.FullName /DEPENDENTS native\out\Release\RotaLink.exe 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "dumpbin failed with exit code $LASTEXITCODE" }
+          $dependencies | Set-Content -LiteralPath native-dependencies.txt -Encoding utf8
+          if ((Get-Item -LiteralPath native-dependencies.txt).Length -eq 0) { throw "Dependency evidence is empty." }
+          if ($dependencies -match 'VCRUNTIME|MSVCP|UCRTBASE') { throw "Dynamic C/C++ runtime dependency detected." }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RotaLink-native-preview
+          path: |
+            native/out/Release/RotaLink.exe
+            artifacts/native-client-report.json
+            native-dependencies.txt

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace RemoteSupport.Service;
@@ -25,7 +26,7 @@ internal static class ServiceEntry
     public static int Run(string[] args)
     {
         if (args.Contains("--console", StringComparer.OrdinalIgnoreCase))
-            return RunConsole();
+            return RunConsole(ParseClientProcessId(args));
 
         var table = new[]
         {
@@ -34,14 +35,14 @@ internal static class ServiceEntry
         };
         if (StartServiceCtrlDispatcher(table)) return 0;
         var error = Marshal.GetLastWin32Error();
-        if (error == 1063) return RunConsole(); // Direct developer execution.
+        if (error == 1063) return RunConsole(ParseClientProcessId(args)); // Direct developer execution.
         throw new Win32Exception(error, "StartServiceCtrlDispatcher failed.");
     }
 
-    private static int RunConsole()
+    private static int RunConsole(uint clientProcessId)
     {
         var logger = new ServiceLog();
-        using var supervisor = new SessionHelperSupervisor(logger);
+        using var supervisor = new SessionHelperSupervisor(logger, clientProcessId);
         using var window = new SessionNotificationWindow((reason, session) =>
         {
             logger.Write("Session change " + reason + ", session " + session + ".");
@@ -66,7 +67,11 @@ internal static class ServiceEntry
         var logger = new ServiceLog();
         try
         {
-            using var supervisor = new SessionHelperSupervisor(logger);
+            var serviceArguments = ReadServiceArguments(argumentCount, arguments);
+            var clientProcessId = ParseClientProcessId(serviceArguments);
+            using var clientProcess = Process.GetProcessById(checked((int)clientProcessId));
+            if (clientProcess.HasExited) throw new InvalidOperationException("RotaLink client process has already exited.");
+            using var supervisor = new SessionHelperSupervisor(logger, clientProcessId);
             using var window = new SessionNotificationWindow((reason, session) =>
             {
                 logger.Write("Session change " + reason + ", session " + session + ".");
@@ -76,6 +81,11 @@ internal static class ServiceEntry
             supervisor.EnsureActiveSessionAsync(CancellationToken.None).GetAwaiter().GetResult();
             using var reconcileTimer = new Timer(_ => _ = ReconcileAsync(supervisor, logger), null,
                 TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+            using var clientMonitor = new Timer(_ =>
+            {
+                try { if (clientProcess.HasExited) StopRequested.Set(); }
+                catch (InvalidOperationException) { StopRequested.Set(); }
+            }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
             ReportStatus(ServiceRunning, ServiceAcceptStop, 0);
             StopRequested.Wait();
             ReportStatus(ServiceStopPending, 0, 10_000);
@@ -87,6 +97,26 @@ internal static class ServiceEntry
             logger.Write("RotaLink service failed: " + exception);
             ReportStatus(ServiceStopped, 0, 0, unchecked((uint)exception.HResult));
         }
+    }
+
+    private static uint ParseClientProcessId(string[] args)
+    {
+        var index = Array.FindIndex(args, value => string.Equals(value, "--client-pid", StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || index + 1 >= args.Length || !uint.TryParse(args[index + 1], out var processId) || processId == 0)
+            throw new ArgumentException("--client-pid <id> is required.");
+        return processId;
+    }
+
+    private static string[] ReadServiceArguments(int argumentCount, IntPtr arguments)
+    {
+        if (argumentCount <= 1 || arguments == IntPtr.Zero) return Array.Empty<string>();
+        var result = new string[argumentCount - 1];
+        for (var index = 1; index < argumentCount; index++)
+        {
+            var pointer = Marshal.ReadIntPtr(arguments, index * IntPtr.Size);
+            result[index - 1] = Marshal.PtrToStringUni(pointer) ?? string.Empty;
+        }
+        return result;
     }
 
     private static async Task ReconcileAsync(SessionHelperSupervisor supervisor, ServiceLog logger)

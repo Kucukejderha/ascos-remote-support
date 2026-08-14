@@ -4,9 +4,11 @@ namespace RotaLink.SessionHelper;
 
 internal readonly struct AbsolutePoint
 {
-    public AbsolutePoint(int x, int y) { X = x; Y = y; }
+    public AbsolutePoint(int x, int y, int pixelX, int pixelY) { X = x; Y = y; PixelX = pixelX; PixelY = pixelY; }
     public int X { get; }
     public int Y { get; }
+    public int PixelX { get; }
+    public int PixelY { get; }
 }
 
 internal sealed class CoordinateTransformationEngine
@@ -14,6 +16,8 @@ internal sealed class CoordinateTransformationEngine
     public AbsolutePoint Transform(double x, double y)
     {
         if (!IsNormalized(x) || !IsNormalized(y)) throw new ArgumentOutOfRangeException(nameof(x));
+        var left = GetSystemMetrics(76);
+        var top = GetSystemMetrics(77);
         var width = GetSystemMetrics(78);
         var height = GetSystemMetrics(79);
         if (width <= 0 || height <= 0) throw new InvalidOperationException("Invalid virtual desktop metrics.");
@@ -23,7 +27,9 @@ internal sealed class CoordinateTransformationEngine
         var pixelY = (int)Math.Round(y * pixelSpanY, MidpointRounding.AwayFromZero);
         return new AbsolutePoint(
             Clamp((int)Math.Round(pixelX * 65535d / pixelSpanX, MidpointRounding.AwayFromZero)),
-            Clamp((int)Math.Round(pixelY * 65535d / pixelSpanY, MidpointRounding.AwayFromZero)));
+            Clamp((int)Math.Round(pixelY * 65535d / pixelSpanY, MidpointRounding.AwayFromZero)),
+            left + pixelX,
+            top + pixelY);
     }
 
     private static bool IsNormalized(double value) => !double.IsNaN(value) && !double.IsInfinity(value) && value is >= 0 and <= 1;

@@ -1,18 +1,30 @@
-# Security model
+# RotaLink güvenlik modeli
 
-- The host must display a native Windows consent dialog for every session.
-- No unattended access, hidden mode, secure-desktop bypass, credential capture, clipboard, or file transfer is implemented.
-- The local user can terminate control at any time; consent expires after 15 minutes.
-- Device authentication uses ECDSA P-256 signed challenges. Support codes are random and rate-limited; once the host is connected, the same code remains usable until the local host ends the session. Each redemption rotates the guest token.
-- Host and guest WebSockets are separately authenticated and scoped to one session.
-- Browser guest tokens are carried as a WebSocket subprotocol rather than a URL query value.
-- Input messages are allow-listed, size-limited, coordinate-limited, capped at 240 events/second, and ignored before explicit consent.
-- Service IPC messages are length-limited, HMAC authenticated, and replay protected. Production pipe ACLs contain only LocalSystem and the selected interactive user SID.
-- Production deployment must use HTTPS/WSS. Plain HTTP is for loopback development only.
+## Oturum güvenliği
 
-## Known MVP limits
+- RotaLink yalnız kullanıcı tarafından görünür biçimde başlatılan destek oturumlarını kabul eder.
+- İstemci penceresinin kapatılması ekran paylaşımını, kontrol bağlantısını ve geçici SYSTEM çalışma zamanını durdurur.
+- Dokuz haneli destek kodu yalnız etkin host oturumu boyunca kullanılabilir; her operatör bağlantısında erişim anahtarı yenilenir.
+- Host ve operatör WebSocket bağlantıları ayrı ayrı doğrulanır ve yalnız tek bir destek oturumuna yetkilendirilir.
+- Kontrol ve görüntü kanalları birbirinden ayrıdır; video kuyruğu input trafiğini bloke etmez.
 
-- Screen transport uses 960×540 capture at up to 10 FPS, unchanged-frame suppression, lossless XOR deltas, two-second keyframes, and gzip compression. DXGI plus hardware H.264/WebRTC remains the future path for high-motion video.
-- Server session state is ephemeral. Restarting the server terminates active support sessions.
-- Windows UAC secure desktop and the lock screen are deliberately not controlled.
-- Binaries must be Authenticode-signed before broad distribution.
+## Windows yetki sınırı
+
+- Uzaktan input, LocalSystem servisinin seçtiği aktif WTS kullanıcı oturumundaki `RotaLink.SessionHelper` tarafından uygulanır.
+- SessionHelper, input öncesinde etkin masaüstü bağlamını denetler ve sonucu günlüğe yazar.
+- IPC yalnız beklenen RotaLink sürecinden gelen, boyutu ve biçimi doğrulanmış paketleri kabul eder.
+- Başarısız `SendInput` çağrısı başarı olarak raporlanmaz; `Accepted=False`, aşama ve Win32 hata kodu operatöre iletilir.
+- UAC güvenli masaüstü desteği, imzalı üretim çalışma zamanı tamamlanmadan ürün özelliği olarak taahhüt edilmez.
+
+## Dağıtım güvenliği
+
+- Üretim ortamında yalnız HTTPS/WSS kullanılmalıdır.
+- Geniş müşteri dağıtımından önce istemci, servis ve SessionHelper güvenilir Authenticode sertifikasıyla imzalanmalıdır.
+- `UNSIGNED-DEVELOPMENT` paketleri yalnız kontrollü test içindir; müşterilere dağıtılmamalıdır.
+- İmzalı pakette gömülü çalışma zamanı dosyaları servis kaydından önce `WinVerifyTrust` ile doğrulanır.
+
+## Kapsam dışı özellikler
+
+Mevcut sürümde gözetimsiz erişim, gizli kalıcılık, kimlik bilgisi yakalama, pano aktarımı ve dosya aktarımı yoktur. Bu özellikler ayrı güvenlik tasarımı ve kullanıcı onayı olmadan eklenmemelidir.
+
+Ayrıntılı uygulama notları için [docs/IMZALI-KONTROL-MOTORU.tr.md](docs/IMZALI-KONTROL-MOTORU.tr.md) belgesine bakın.

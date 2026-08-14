@@ -17,9 +17,15 @@ internal static class Program
         {
             using var identity = WindowsIdentity.GetCurrent();
             var uiAccess = ReadCurrentUiAccess();
+            var elevated = ReadCurrentElevation();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
-                ", UIAccess=" + uiAccess + ".");
-            if (!uiAccess) throw new InvalidOperationException("Interactive helper token is missing UIAccess.");
+                ", Elevated=" + elevated + ", UIAccess=" + uiAccess +
+                ", WTSState=" + ReadSessionState(sessionId) + ".");
+            if (identity.IsSystem || !elevated)
+                throw new InvalidOperationException("Session helper must use the elevated interactive RotaLink client token.");
+
+            var clientProcessId = ParseClientProcessId(args);
+            log.Write("Session helper is restricted to RotaLink client process " + clientProcessId + ".");
 
             using var windowStation = InteractiveWindowStation.Attach();
             log.Write("Session helper attached to interactive window station WinSta0.");
@@ -27,7 +33,7 @@ internal static class Program
             using var stop = new EventWaitHandle(false, EventResetMode.ManualReset,
                 "Global\\RotaLink.SessionHelper.Stop." + sessionId);
             using var engine = new InputEngine(log);
-            var server = new InputPipeServer(sessionId, engine, log);
+            var server = new InputPipeServer(sessionId, clientProcessId, engine, log);
             server.Run(stop);
             return 0;
         }
@@ -46,6 +52,14 @@ internal static class Program
         return sessionId;
     }
 
+    private static uint ParseClientProcessId(string[] args)
+    {
+        var index = Array.FindIndex(args, value => string.Equals(value, "--client-pid", StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || index + 1 >= args.Length || !uint.TryParse(args[index + 1], out var processId) || processId == 0)
+            throw new ArgumentException("--client-pid <id> is required.");
+        return processId;
+    }
+
     private static bool ReadCurrentUiAccess()
     {
         if (!OpenProcessToken(GetCurrentProcess(), 0x0008, out var token))
@@ -60,6 +74,30 @@ internal static class Program
         }
     }
 
+    private static bool ReadCurrentElevation()
+    {
+        if (!OpenProcessToken(GetCurrentProcess(), 0x0008, out var token))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "OpenProcessToken for elevation diagnostics failed.");
+        using (token)
+        {
+            if (!GetTokenInformation(token, 20, out var elevation, sizeof(int), out var returnedLength))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "GetTokenInformation(TokenElevation) failed.");
+            if (returnedLength != sizeof(int))
+                throw new InvalidDataException("GetTokenInformation(TokenElevation) returned " + returnedLength + " bytes.");
+            return elevation != 0;
+        }
+    }
+
+    private static string ReadSessionState(uint sessionId)
+    {
+        if (!WTSQuerySessionInformation(IntPtr.Zero, sessionId, 8, out var buffer, out var bytes) || bytes < sizeof(int))
+            return "Unknown(" + Marshal.GetLastWin32Error() + ")";
+        try { return ((WtsConnectState)Marshal.ReadInt32(buffer)).ToString(); }
+        finally { WTSFreeMemory(buffer); }
+    }
+
+    private enum WtsConnectState { Active, Connected, ConnectQuery, Shadow, Disconnected, Idle, Listen, Reset, Down, Init }
+
     [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -71,6 +109,10 @@ internal static class Program
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass,
         out int information, int informationLength, out int returnLength);
+    [DllImport("wtsapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WTSQuerySessionInformation(IntPtr server, uint sessionId, int infoClass, out IntPtr buffer, out int bytesReturned);
+    [DllImport("wtsapi32.dll")] private static extern void WTSFreeMemory(IntPtr memory);
 }
 
 internal sealed class HelperLog
@@ -80,7 +122,10 @@ internal sealed class HelperLog
 
     public HelperLog(uint sessionId)
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RotaLink");
+        using var identity = WindowsIdentity.GetCurrent();
+        var directory = identity.IsSystem
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RotaLink", "Logs")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RotaLink");
         Directory.CreateDirectory(directory);
         _path = Path.Combine(directory, "SessionHelper-" + sessionId + ".log");
     }

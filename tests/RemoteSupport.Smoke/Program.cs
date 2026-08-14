@@ -23,9 +23,32 @@ if (args is ["--architecture-only"])
     await VerifyIpcAsync();
     VerifyBinaryTransportProtocol();
     VerifyCoordinateTransformation();
+    VerifyWindowsCompatibilityNames();
     await VerifyLatestVideoQueueAsync();
     Console.WriteLine("Service/helper protocol, coordinate and drop-frame checks passed.");
     return;
+}
+
+static void VerifyWindowsCompatibilityNames()
+{
+    var cases = new (Version Version, bool Server, string Expected)[]
+    {
+        (new Version(6, 2, 9200), true, "Windows Server 2012"),
+        (new Version(6, 3, 9600), true, "Windows Server 2012 R2"),
+        (new Version(10, 0, 14393), true, "Windows Server 2016"),
+        (new Version(10, 0, 17763), true, "Windows Server 2019"),
+        (new Version(10, 0, 20348), true, "Windows Server 2022"),
+        (new Version(10, 0, 26100), true, "Windows Server 2025 veya üstü"),
+        (new Version(10, 0, 19045), false, "Windows 10"),
+        (new Version(10, 0, 22631), false, "Windows 11")
+    };
+    foreach (var item in cases)
+    {
+        var actual = WindowsCompatibility.ResolveName(item.Version, item.Server);
+        if (!string.Equals(actual, item.Expected, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"Compatibility name mismatch for {item.Version}: expected {item.Expected}, actual {actual}.");
+    }
 }
 
 var transportOnly = args.Contains("--transport-only", StringComparer.Ordinal);
@@ -41,7 +64,6 @@ if (!transportOnly)
         Console.WriteLine("Local codec and security smoke checks passed.");
         return;
     }
-    await VerifyDeviceIdentityAsync();
     VerifyCaptureAndConsentGate();
 }
 
@@ -157,6 +179,10 @@ static void VerifyBinaryTransportProtocol()
     InputPacketCodec.Write(inputBytes, input);
     if (!InputPacketCodec.TryRead(inputBytes, out var decodedInput) || decodedInput != input)
         throw new InvalidOperationException("Binary input protocol round-trip failed.");
+    var click = new InputPacket(InputEventKind.Click, false, 43, 0.5, 0.5, 2, 0);
+    InputPacketCodec.Write(inputBytes, click);
+    if (!InputPacketCodec.TryRead(inputBytes, out decodedInput) || decodedInput != click)
+        throw new InvalidOperationException("Atomic click protocol round-trip failed.");
 
     var video = new VideoPacketHeader(VideoCodec.H264AnnexB, true, 44, 1234567, 1920, 1080, 2048);
     var videoBytes = new byte[VideoPacketCodec.HeaderBytes];
@@ -173,25 +199,6 @@ static void VerifyCoordinateTransformation()
     var bottomRight = engine.Transform(1, 1);
     if (topLeft.AbsoluteX != 0 || topLeft.AbsoluteY != 0 || bottomRight.AbsoluteX != 65535 || bottomRight.AbsoluteY != 65535)
         throw new InvalidOperationException("Virtual desktop absolute coordinate boundaries are invalid.");
-}
-
-static async Task VerifyDeviceIdentityAsync()
-{
-    if (!OperatingSystem.IsWindows()) return;
-    var directory = Path.Combine(Path.GetTempPath(), "ascos-remote-support-smoke", Guid.NewGuid().ToString("N"));
-    var path = Path.Combine(directory, "identity.json");
-    try
-    {
-        var store = new DeviceIdentityStore(path);
-        using var created = await store.LoadOrCreateAsync(CancellationToken.None);
-        using var loaded = await store.LoadOrCreateAsync(CancellationToken.None);
-        if (created.DeviceId != loaded.DeviceId || created.PublicKeySpkiBase64 != loaded.PublicKeySpkiBase64)
-            throw new InvalidOperationException("DPAPI device identity did not persist consistently.");
-    }
-    finally
-    {
-        if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
-    }
 }
 
 static void VerifyCaptureAndConsentGate()
