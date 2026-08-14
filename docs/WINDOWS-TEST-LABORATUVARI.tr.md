@@ -20,11 +20,11 @@ Geliştirici, tek dosyalık laboratuvar paketini şu komutla üretir:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1 `
   -NativeClientPath C:\RotaLink-Build\RotaLink.exe `
-  -Version 1.2.0-native.7
+  -Version 1.2.0-native.8
 ```
 
 Paketleyici önce PE dosyasının x64, CLR içermeyen ve 10 MB altında bir native istemci
-olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.7-Uyumluluk-Test-Kiti.zip` hedef VM'ye
+olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.8-Uyumluluk-Test-Kiti.zip` hedef VM'ye
 kopyalanıp açılır; müşterinin sistemindeki .NET sürümü yalnız raporlanır ve sonuç kapısı değildir.
 Depo kurmadan ön kontrol başlatmak için örneğin:
 
@@ -104,3 +104,12 @@ kısayolu için `Stage=native-taskbar-invoke-ok` beklenir. `native-*-pattern-una
 `native-*-failed` veya `shell-*-failed` aşamalarından biri görülürse ilgili `Error`, `Class`
 ve `Name` alanlarıyla birlikte raporlanmalıdır. Otomasyon başarı satırına ek olarak hedef
 arayüzdeki gerçek seçme/açma davranışı da gözle doğrulanmalıdır.
+
+Native.8 testinde masaüstü simgesine tek tıklamada `Stage=native-desktop-msaa-selection-ok`,
+aynı simgeye hızlı ikinci tıklamada `Stage=native-desktop-msaa-invoke-ok`, simge veya masaüstü
+sağ tıklamasında `Stage=native-desktop-context-menu-ok` ya da
+`Stage=native-desktop-background-context-menu-ok` beklenir. Küçültülmüş veya sabitlenmiş görev
+çubuğu uygulamasında `Stage=native-taskbar-msaa-invoke-ok`; modern kabuk yedeğinde
+`Stage=native-taskbar-uia-invoke-ok` görülmelidir. Başarılı aşamanın yanında simgenin gerçekten
+seçilmesi/açılması, sağ tık menüsünün görünmesi ve görev çubuğu penceresinin geri gelmesi gözle
+doğrulanmalıdır.

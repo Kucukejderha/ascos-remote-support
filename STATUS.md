@@ -29,14 +29,14 @@ Güncelleme tarihi: 13 Ağustos 2026
 
 ## Yeni müşteri istemcisi
 
-- Geliştirme sürümü: `1.2.0-native.7`
+- Geliştirme sürümü: `1.2.0-native.8`
 - Teknoloji: x64 Win32/C++20, statik CRT, CLR/.NET bağımlılığı yok
-- Üretilen paket: `RotaLink.exe`, `495.104` bayt
-- SHA-256: `dc1eb8a1425e70eccf24d4b7501be9040b0b45f1e6975922bb18ca7fbd050623`
+- Üretilen paket: `RotaLink.exe`, `496.640` bayt
+- SHA-256: `35d3c4772f5f38250e78589d97c14d5d283481f387db54dbe6f2fd4d054b756c`
 - Paket hedefi: Kurulumsuz tek EXE, en fazla 10 MB
 - Tamamlanan temel: Win32 pencere, DPI farkındalığı, tek örnek kilidi, gerçek Windows sürüm denetimi, Server Core engeli, CNG P-256 cihaz kimliği, REST challenge doğrulaması, gerçek 9 haneli kod, ayrık control/video WinHTTP WebSocket ve PE bağımlılık kapısı
 - Tamamlanan ürün akışı: Tek seferlik UAC yükseltmesi → CNG kimliği → REST challenge → 9 haneli kod → ayrık WebSocket → DXGI/NV12/Media Foundation H.264 (ve WIC/JPEG uyumluluk yolu) görüntü → dinamik `OpenInputDesktop` kullanan atomik `SendInput` ACK akışı.
-- Durum: Native.6 gerçek cihaz kaydı koordinatın doğru olduğunu ve hedefin Explorer `SysListView32` denetimi/PID 14944 olduğunu kanıtladı; fiziksel zamanlama eklense de `SendInput Win32=0` kabuk davranışını üretmedi. Native.7 normal uygulamalarda `SendInput` yolunu korur; masaüstü simgelerinde UI Automation `SelectionItem/Invoke`, görev çubuğunda `Invoke` ve eski kabuk denetimleri için `LegacyIAccessible` varsayılan eylemini kullanır. Kabuk sonucu yalnız otomasyon deseni gerçekten başarılıysa kabul edilir. GitHub Actions x64 Release, CLR yokluğu, statik CRT bağımlılık ve 10 MB kapıları `04c489dd16b4e280d7963e959f016ad7cb96f5bf` commitinde başarılıdır.
+- Durum: Native.7 gerçek Server 2019 kaydında `SysListView32` hedeflerini doğru buldu, ancak UI Automation sağlayıcısı masaüstü simgesini `SelectionItem` olarak vermediği için olaylar yeniden etkisiz fiziksel input yoluna düştü. Native.8 masaüstü simgesi ve görev çubuğunda Server 2019 uyumlu MSAA (`AccessibleObjectFromPoint`, `accSelect`, `accDoDefaultAction`) yolunu önceliklendirir; sağ tık seçili kabuk öğesine denetlenebilir `WM_CONTEXTMENU` olarak gönderilir. Normal uygulamalar `SendInput`, modern görev çubuğu UI Automation yedeğiyle çalışmaya devam eder. GitHub Actions x64 Release, CLR yokluğu, statik CRT bağımlılık ve 10 MB kapıları `c63bcc33df0347ee0bac57cd9ef2463bc71beaa4` commitinde başarılıdır.
 
 `alpha.24` gerçek cihaz kaydı, senkron pencere mesajlarının API seviyesinde başarılı dönmesine rağmen masaüstü seçimini, bağlam menüsünün kapanmasını ve bazı görev çubuğu düğmelerinin etkinleşmesini sağlamadığını doğruladı. `alpha.25` bu sahte başarı yolunu kaldırır. Beklenen günlükler `Desktop item selected through UI Automation` ve `Taskbar control invoked through UI Automation` satırlarıdır; boş alanda bu satırlar oluşmaz ve gerçek `SendInput` çalışır.
 
