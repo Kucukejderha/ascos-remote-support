@@ -1,5 +1,5 @@
 #include "NativeShellAutomation.h"
-#include <UIAutomation.h>
+#include <UIAutomationClient.h>
 #include <wrl/client.h>
 #include <algorithm>
 #include <cmath>
