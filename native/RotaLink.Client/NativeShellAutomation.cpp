@@ -1,5 +1,7 @@
 #include "NativeShellAutomation.h"
-#include <UIAutomationClient.h>
+#include <ole2.h>
+#include <oleauto.h>
+#include <UIAutomation.h>
 #include <wrl/client.h>
 #include <algorithm>
 #include <cmath>
