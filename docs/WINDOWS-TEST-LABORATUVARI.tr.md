@@ -20,11 +20,11 @@ Geliştirici, tek dosyalık laboratuvar paketini şu komutla üretir:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1 `
   -NativeClientPath C:\RotaLink-Build\RotaLink.exe `
-  -Version 1.2.0-native.8
+  -Version 1.2.0-native.9
 ```
 
 Paketleyici önce PE dosyasının x64, CLR içermeyen ve 10 MB altında bir native istemci
-olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.8-Uyumluluk-Test-Kiti.zip` hedef VM'ye
+olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.9-Uyumluluk-Test-Kiti.zip` hedef VM'ye
 kopyalanıp açılır; müşterinin sistemindeki .NET sürümü yalnız raporlanır ve sonuç kapısı değildir.
 Depo kurmadan ön kontrol başlatmak için örneğin:
 
@@ -113,3 +113,9 @@ sağ tıklamasında `Stage=native-desktop-context-menu-ok` ya da
 `Stage=native-taskbar-uia-invoke-ok` görülmelidir. Başarılı aşamanın yanında simgenin gerçekten
 seçilmesi/açılması, sağ tık menüsünün görünmesi ve görev çubuğu penceresinin geri gelmesi gözle
 doğrulanmalıdır.
+
+Native.9 testinde sağ tıklama `native-desktop-context-menu-ok` veya
+`native-desktop-background-context-menu-ok` ile kabul edilmelidir; artık zaman aşımı sonucu
+oluşmamalıdır. Açılan menüde bir öğeye tıklama `Stage=native-popup-menu-msaa-invoke-ok`, menü
+dışına tıklama `Stage=native-popup-menu-dismiss-posted` üretmelidir. `Class=#32768` hedefinin
+`native-physical-click-ok` yoluna düşmesi hata kabul edilir.

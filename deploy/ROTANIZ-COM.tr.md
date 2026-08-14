@@ -1,6 +1,6 @@
 # rotaniz.com dağıtımı
 
-## 1.2.0-native.8 — .NET gerektirmeyen tek EXE önizlemesi
+## 1.2.0-native.9 — .NET gerektirmeyen tek EXE önizlemesi
 
 Müşteri bilgisayarına .NET Framework veya Visual C++ Redistributable kurdurmamak için
 istemci statik CRT kullanan x64 Win32/C++20 uygulamasına taşındı. Aynı `RotaLink.exe`;
@@ -8,10 +8,10 @@ görünür kullanıcı arayüzü, geçici SYSTEM servisi ve aktif oturum helper 
 GitHub Actions üzerindeki gerçek Windows derlemesi CLR yokluğu, statik bağımlılık kümesi
 ve 10 MB kesin üst sınır kontrollerinden geçmiştir.
 
-- Dosya: `RotaLink-v1.2.0-native.8.exe`
-- Boyut: `496.640` bayt
-- SHA-256: `35d3c4772f5f38250e78589d97c14d5d283481f387db54dbe6f2fd4d054b756c`
-- CI commit: `c63bcc33df0347ee0bac57cd9ef2463bc71beaa4`
+- Dosya: `RotaLink-v1.2.0-native.9.exe`
+- Boyut: `498.688` bayt
+- SHA-256: `64f3a9f1119baf03ac8551499d2f07987efc8479a23d8b8ef4d8f6e7abd006c0`
+- CI commit: `c4397f00d4b1a03989137aa02c04737d1a34286d`
 - Durum: İmzasız teknik önizleme; hedef Windows VM matrisi tamamlanmadan sitenin
   kararlı `RotaLink.exe` bağlantısının üzerine yazılmaz.
 
@@ -40,6 +40,13 @@ devreye girmedi. Native.8 eski ve yeni Explorer sürümleri için MSAA erişileb
 önceliklendirir. Masaüstünde tek tık `accSelect`, çift tık `accDoDefaultAction`; görev çubuğunda
 varsayılan erişilebilirlik eylemi kullanır. Sağ tık, seçili simgeye veya görev çubuğu hedefine
 `WM_CONTEXTMENU` olarak iletilir. Her yol yalnız API gerçekten başarılıysa olumlu sonuç raporlar.
+
+Native.8 gerçek cihaz kaydında sağ tık sonrasında `#32768` sınıfının görünmesi bağlam menüsünün
+açıldığını, `0x800705B4` sonucunun ise modal menü açıkken senkron çağrının zaman aşımı olduğunu
+kanıtladı. Native.9 menü açma mesajını bloklamadan kuyruğa bırakır. Menü öğelerine sol tıklama
+MSAA varsayılan eylemiyle çalıştırılır; menü dışına tıklama `WM_CANCELMODE` ile açık menüyü
+kapatır. Eski Explorer sürümlerindeki kapsayıcı erişilebilirlik nesneleri `accHitTest` ile gerçek
+simge, görev çubuğu düğmesi veya menü öğesine kadar çözülür.
 
 ## 1.1.0-alpha.25 Explorer kabuğu için UI Automation
 
