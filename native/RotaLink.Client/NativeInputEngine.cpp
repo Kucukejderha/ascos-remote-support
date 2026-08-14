@@ -44,6 +44,51 @@ bool Send(std::vector<INPUT>& inputs, NativeInputResult& result) {
     return false;
 }
 
+void LogClickTarget() noexcept {
+    POINT point{};
+    if (!GetCursorPos(&point)) {
+        Diagnostics::Write(L"Native click target query failed. Stage=cursor-position, Win32=" +
+            std::to_wstring(GetLastError()) + L".");
+        return;
+    }
+    const HWND window = WindowFromPoint(point);
+    wchar_t className[256]{};
+    wchar_t windowText[32]{};
+    DWORD processId = 0;
+    if (window) {
+        GetClassNameW(window, className, static_cast<int>(_countof(className)));
+        GetWindowThreadProcessId(window, &processId);
+    }
+    swprintf_s(windowText, L"%p", window);
+    Diagnostics::Write(L"Native physical click target. X=" + std::to_wstring(point.x) + L", Y=" +
+        std::to_wstring(point.y) + L", Window=" + std::wstring(windowText) +
+        L", Class=" + std::wstring(className[0] ? className : L"<none>") + L", ProcessId=" +
+        std::to_wstring(processId) + L".");
+}
+
+bool SendPhysicalClick(double x, double y, DWORD down, DWORD up, NativeInputResult& result) {
+    std::vector<INPUT> move{Mouse(x, y, MouseMove)};
+    if (!Send(move, result)) return false;
+
+    // Explorer's desktop and taskbar controls update their hover/hit-test state on
+    // their own input queues. A zero-duration move+down+up batch can be accepted by
+    // SendInput yet be consumed before those shell controls observe the new target.
+    Sleep(16);
+    LogClickTarget();
+
+    std::vector<INPUT> press{Mouse(x, y, down)};
+    if (!Send(press, result)) return false;
+    Sleep(32);
+
+    std::vector<INPUT> release{Mouse(x, y, up)};
+    if (Send(release, result)) return true;
+
+    // Best-effort release prevents a failed final call from leaving a mouse button held.
+    INPUT emergency = Mouse(x, y, up);
+    SendInput(1, &emergency, sizeof(INPUT));
+    return false;
+}
+
 bool IsNormalized(double value) { return std::isfinite(value) && value >= 0.0 && value <= 1.0; }
 
 bool DesktopName(HDESK desktop, std::wstring& name, DWORD& error) noexcept {
@@ -163,7 +208,9 @@ NativeInputResult NativeInputEngine::Dispatch(std::string_view json) {
                 else { result.stage = "button-invalid"; return result; }
                 inputs.push_back(Mouse(x, y, MouseMove));
                 if (type == "click") {
-                    inputs.push_back(Mouse(x, y, down)); inputs.push_back(Mouse(x, y, up));
+                    result.accepted = SendPhysicalClick(x, y, down, up, result);
+                    if (result.accepted) result.stage = "native-physical-click-ok";
+                    return result;
                 } else inputs.push_back(Mouse(x, y,
                     JsonLite::BooleanValue(json, "down", false) ? down : up));
             } else { result.stage = "event-invalid"; return result; }

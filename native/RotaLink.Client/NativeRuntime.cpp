@@ -273,7 +273,7 @@ void NativeRuntime::StartForCurrentClient() {
     wchar_t programFiles[MAX_PATH]{};
     if (!GetEnvironmentVariableW(L"ProgramFiles", programFiles, ARRAYSIZE(programFiles)))
         ThrowWin32("GetEnvironmentVariableW(ProgramFiles)");
-    const std::filesystem::path directory = std::filesystem::path(programFiles) / L"RotaLink" / L"Runtime" / L"1.2.0-native.5";
+    const std::filesystem::path directory = std::filesystem::path(programFiles) / L"RotaLink" / L"Runtime" / L"1.2.0-native.6";
     std::filesystem::create_directories(directory);
     const std::filesystem::path installed = directory / L"RotaLink.exe";
     installedRuntime_ = installed;
