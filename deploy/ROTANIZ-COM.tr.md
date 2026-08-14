@@ -1,6 +1,6 @@
 # rotaniz.com dağıtımı
 
-## 1.2.0-native.5 — .NET gerektirmeyen tek EXE önizlemesi
+## 1.2.0-native.6 — .NET gerektirmeyen tek EXE önizlemesi
 
 Müşteri bilgisayarına .NET Framework veya Visual C++ Redistributable kurdurmamak için
 istemci statik CRT kullanan x64 Win32/C++20 uygulamasına taşındı. Aynı `RotaLink.exe`;
@@ -8,10 +8,10 @@ görünür kullanıcı arayüzü, geçici SYSTEM servisi ve aktif oturum helper 
 GitHub Actions üzerindeki gerçek Windows derlemesi CLR yokluğu, statik bağımlılık kümesi
 ve 10 MB kesin üst sınır kontrollerinden geçmiştir.
 
-- Dosya: `RotaLink-v1.2.0-native.5.exe`
-- Boyut: `484.864` bayt
-- SHA-256: `b19c306c71507b7ef70412cbdfc46bb6515e41f6377a60fb0bf7f7e1fb3cf7f0`
-- CI commit: `190d60524d51f5f892c8b5992685047e4dca6058`
+- Dosya: `RotaLink-v1.2.0-native.6.exe`
+- Boyut: `488.448` bayt
+- SHA-256: `cf0be73983f954ffae9e151fbf435e78937c1bc31f49d6a3a51bee310fce7932`
+- CI commit: `d651f6a14ff65cad8fc187df319875523eee6d23`
 - Durum: İmzasız teknik önizleme; hedef Windows VM matrisi tamamlanmadan sitenin
   kararlı `RotaLink.exe` bağlantısının üzerine yazılmaz.
 
@@ -20,6 +20,13 @@ sürecinin PID'si de `7164` idi. Kök neden input veya WebSocket değildi: doğr
 gereksiz `OpenProcess` canlılık kontrolündeki erişim reddi nedeniyle yanlışlıkla kapatılıyordu.
 Native.5 yerel pipe bağlantısını Windows çekirdeğinin bildirdiği PID ve oturum kimliğiyle
 doğrular; uzak pipe bağlantıları kapalı kalır ve başka süreç/oturum kabul edilmez.
+
+Native.5 gerçek cihaz testi normal pencere başlık düğmelerinin çalıştığını, Explorer masaüstü
+ve görev çubuğu hedeflerinin ise API başarısına rağmen tepki vermediğini gösterdi. Native.6,
+önceki sıfır süreli tek `move + down + up` paketini fiziksel fare zamanlamasına ayırır. İmleç
+taşındıktan sonra Explorer input kuyruğunun hedefi güncellemesi için 16 ms, basma ile bırakma
+arasında 32 ms beklenir. Günlük her tıklama için koordinatı, pencere sınıfını ve süreç PID'sini
+`Native physical click target` satırında kaydeder.
 
 ## 1.1.0-alpha.25 Explorer kabuğu için UI Automation
 

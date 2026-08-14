@@ -20,11 +20,11 @@ Geliştirici, tek dosyalık laboratuvar paketini şu komutla üretir:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1 `
   -NativeClientPath C:\RotaLink-Build\RotaLink.exe `
-  -Version 1.2.0-native.5
+  -Version 1.2.0-native.6
 ```
 
 Paketleyici önce PE dosyasının x64, CLR içermeyen ve 10 MB altında bir native istemci
-olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.5-Uyumluluk-Test-Kiti.zip` hedef VM'ye
+olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.6-Uyumluluk-Test-Kiti.zip` hedef VM'ye
 kopyalanıp açılır; müşterinin sistemindeki .NET sürümü yalnız raporlanır ve sonuç kapısı değildir.
 Depo kurmadan ön kontrol başlatmak için örneğin:
 
@@ -90,3 +90,10 @@ Native.5 testinde ilk uzak input sonrasında günlükte
 PID ana `RotaLink` sürecinin PID'siyle, `Session` ise aktif etkileşimli oturumla aynı olmalıdır.
 `Rejected input pipe client` görülürse satırdaki `Stage`, `ExpectedPid`, `ActualPid`,
 `PipeSession`, `HelperSession` ve `Win32` alanlarının tamamı hata raporuna eklenmelidir.
+
+Native.6 testinde masaüstü simgesi, görev çubuğundaki küçültülmüş uygulama ve sabitlenmiş
+kısayol ayrı ayrı tıklanmalıdır. Her denemede `Native physical click target` ve hemen ardından
+`Stage=native-physical-click-ok` görülmelidir. Hedef sınıfın (`SysListView32`,
+`MSTaskListWClass`, `Shell_TrayWnd` veya gözlenen başka sınıf) bulunduğu satır test sonucuna
+eklenmelidir. API sonucu başarılı olduğu halde arayüz değişmiyorsa bu gözlem ayrıca açıkça
+belirtilmelidir; yalnız `Accepted=true` kullanıcı davranışının gerçekleştiği kanıtı sayılmaz.

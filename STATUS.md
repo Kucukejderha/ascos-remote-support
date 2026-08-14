@@ -29,14 +29,14 @@ Güncelleme tarihi: 13 Ağustos 2026
 
 ## Yeni müşteri istemcisi
 
-- Geliştirme sürümü: `1.2.0-native.5`
+- Geliştirme sürümü: `1.2.0-native.6`
 - Teknoloji: x64 Win32/C++20, statik CRT, CLR/.NET bağımlılığı yok
-- Üretilen paket: `RotaLink.exe`, `484.864` bayt
-- SHA-256: `b19c306c71507b7ef70412cbdfc46bb6515e41f6377a60fb0bf7f7e1fb3cf7f0`
+- Üretilen paket: `RotaLink.exe`, `488.448` bayt
+- SHA-256: `cf0be73983f954ffae9e151fbf435e78937c1bc31f49d6a3a51bee310fce7932`
 - Paket hedefi: Kurulumsuz tek EXE, en fazla 10 MB
 - Tamamlanan temel: Win32 pencere, DPI farkındalığı, tek örnek kilidi, gerçek Windows sürüm denetimi, Server Core engeli, CNG P-256 cihaz kimliği, REST challenge doğrulaması, gerçek 9 haneli kod, ayrık control/video WinHTTP WebSocket ve PE bağımlılık kapısı
 - Tamamlanan ürün akışı: Tek seferlik UAC yükseltmesi → CNG kimliği → REST challenge → 9 haneli kod → ayrık WebSocket → DXGI/NV12/Media Foundation H.264 (ve WIC/JPEG uyumluluk yolu) görüntü → dinamik `OpenInputDesktop` kullanan atomik `SendInput` ACK akışı.
-- Durum: Native.4 ana UI, SYSTEM servis ve etkileşimli helper günlüklerini kullanıcının çalıştırdığı EXE'nin yanındaki tek `RotaLink-Native.log` dosyasında birleştirir. Native.4 gerçek Server 2019 kaydı, çekirdeğin bildirdiği pipe istemci PID'si beklenen ana süreç PID'siyle aynı olduğu halde helper'ın ikinci `OpenProcess` denetiminde geçerli istemciyi reddettiğini kanıtladı. Native.5 bu hatalı denetimi kaldırır; yerel pipe istemcisini çekirdeğin verdiği kesin PID ve oturum kimliğiyle doğrular. GitHub Actions Windows Server 2022 üzerindeki x64 Release, CLR yokluğu, statik CRT bağımlılık ve 10 MB kapıları `190d60524d51f5f892c8b5992685047e4dca6058` commitinde başarılıdır.
+- Durum: Native.5, doğru pipe istemcisinin hatalı `OpenProcess` denetimi nedeniyle reddedilmesini giderdi. Server 2019 gerçek cihaz kaydında IPC kimlik doğrulaması, `Desktop=Default` ve `SendInput Win32=0` doğrulandı; normal pencere başlık düğmeleri çalıştı. Masaüstü simgeleri ve görev çubuğu, sıfır süreli tek `move + down + up` paketine tepki vermedi. Native.6 tıklamayı fiziksel fare ritmine ayırır: konumlandırma, 16 ms hedef yerleşmesi, basma, 32 ms basılı kalma ve bırakma. Her tıklamada gerçek pencere sınıfı/PID/koordinat kaydedilir. GitHub Actions x64 Release, CLR yokluğu, statik CRT bağımlılık ve 10 MB kapıları `d651f6a14ff65cad8fc187df319875523eee6d23` commitinde başarılıdır.
 
 `alpha.24` gerçek cihaz kaydı, senkron pencere mesajlarının API seviyesinde başarılı dönmesine rağmen masaüstü seçimini, bağlam menüsünün kapanmasını ve bazı görev çubuğu düğmelerinin etkinleşmesini sağlamadığını doğruladı. `alpha.25` bu sahte başarı yolunu kaldırır. Beklenen günlükler `Desktop item selected through UI Automation` ve `Taskbar control invoked through UI Automation` satırlarıdır; boş alanda bu satırlar oluşmaz ve gerçek `SendInput` çalışır.
 
