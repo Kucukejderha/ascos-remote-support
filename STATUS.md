@@ -29,14 +29,14 @@ Güncelleme tarihi: 13 Ağustos 2026
 
 ## Yeni müşteri istemcisi
 
-- Geliştirme sürümü: `1.2.0-native.9`
+- Geliştirme sürümü: `1.2.0-native.10`
 - Teknoloji: x64 Win32/C++20, statik CRT, CLR/.NET bağımlılığı yok
 - Üretilen paket: `RotaLink.exe`, `498.688` bayt
 - SHA-256: `64f3a9f1119baf03ac8551499d2f07987efc8479a23d8b8ef4d8f6e7abd006c0`
 - Paket hedefi: Kurulumsuz tek EXE, en fazla 10 MB
 - Tamamlanan temel: Win32 pencere, DPI farkındalığı, tek örnek kilidi, gerçek Windows sürüm denetimi, Server Core engeli, CNG P-256 cihaz kimliği, REST challenge doğrulaması, gerçek 9 haneli kod, ayrık control/video WinHTTP WebSocket ve PE bağımlılık kapısı
 - Tamamlanan ürün akışı: Tek seferlik UAC yükseltmesi → CNG kimliği → REST challenge → 9 haneli kod → ayrık WebSocket → DXGI/NV12/Media Foundation H.264 (ve WIC/JPEG uyumluluk yolu) görüntü → dinamik `OpenInputDesktop` kullanan atomik `SendInput` ACK akışı.
-- Durum: Native.8 gerçek Server 2019 kaydında sağ tık menüsünün açıldığını (`#32768`) kanıtladı; ancak modal `WM_CONTEXTMENU` çağrısı `0x800705B4` zaman aşımı olarak raporlanıyor ve menü içi tıklamalar tekrar etkisiz fiziksel input yoluna düşüyordu. Native.9 bağlam menüsünü bloklamadan gönderir, açık Explorer menüsündeki öğeyi MSAA ile çalıştırır ve menü dışı tıklamada `WM_CANCELMODE` ile menüyü kapatır. Ayrıca eski Explorer erişilebilirlik sağlayıcılarında kapsayıcıdan gerçek öğeye inmek için yinelemeli `accHitTest` kullanır. GitHub Actions x64 Release, CLR yokluğu, statik CRT bağımlılık ve 10 MB kapıları `c4397f00d4b1a03989137aa02c04737d1a34286d` commitinde başarılıdır.
+- Durum: Native.9 gerçek Server 2019 kaydında görev çubuğu MSAA eylemlerinin ve normal pencere tıklamalarının çalıştığını kanıtladı. 17:18:10 sonrasında servis ve IPC sağlıklı kalmasına rağmen tüm tıklama paketleri aynı `X=988,Y=71` noktasına gönderildi; ayrıca `#32768` menü sağlayıcısı öğe yerine `Context` kapsayıcısını döndürdü. Native.10 operatör hareket ACK kilidini 250 ms watchdog ile kurtarır, tıklamada güvenilir `pointerdown` koordinatını kullanır, yalnızca sol tuşu belirgin hareketten sonra sürüklemeye çevirir ve odak kaybında basılı tuşları bırakır. Açılır menü öğeleri MSAA çözemediğinde UI Automation/LegacyIAccessible ile çalıştırılır. Her tıklama günlüğüne normalize koordinat ve tuş eklenir.
 
 `alpha.24` gerçek cihaz kaydı, senkron pencere mesajlarının API seviyesinde başarılı dönmesine rağmen masaüstü seçimini, bağlam menüsünün kapanmasını ve bazı görev çubuğu düğmelerinin etkinleşmesini sağlamadığını doğruladı. `alpha.25` bu sahte başarı yolunu kaldırır. Beklenen günlükler `Desktop item selected through UI Automation` ve `Taskbar control invoked through UI Automation` satırlarıdır; boş alanda bu satırlar oluşmaz ve gerçek `SendInput` çalışır.
 

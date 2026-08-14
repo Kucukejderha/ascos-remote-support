@@ -11,6 +11,9 @@ struct NativeInputResult final {
     std::string stage;
     std::string desktop;
     std::string eventType;
+    double normalizedX{-1.0};
+    double normalizedY{-1.0};
+    int button{-1};
 };
 
 class NativeInputEngine final {

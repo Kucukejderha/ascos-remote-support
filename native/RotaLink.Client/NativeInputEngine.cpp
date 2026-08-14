@@ -179,6 +179,8 @@ NativeInputResult NativeInputEngine::Dispatch(std::string_view json) {
         if (!AttachInputDesktop(result)) return result;
         const double x = JsonLite::NumberValue(json, "normalizedX", -1.0);
         const double y = JsonLite::NumberValue(json, "normalizedY", -1.0);
+        result.normalizedX = x;
+        result.normalizedY = y;
         std::vector<INPUT> inputs;
         if (type == "key") {
             const WORD key = MapKey(JsonLite::StringValue(json, "code"));
@@ -201,6 +203,7 @@ NativeInputResult NativeInputEngine::Dispatch(std::string_view json) {
                 inputs.push_back(Mouse(x, y, MouseMove | MouseWheel, static_cast<DWORD>(delta)));
             } else if (type == "button" || type == "click") {
                 const int button = static_cast<int>(JsonLite::NumberValue(json, "button", -1));
+                result.button = button;
                 DWORD down = 0, up = 0;
                 if (button == 0) { down = MouseLeftDown; up = MouseLeftUp; }
                 else if (button == 1) { down = MouseMiddleDown; up = MouseMiddleUp; }

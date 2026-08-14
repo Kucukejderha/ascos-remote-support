@@ -182,7 +182,10 @@ int InputPipeServer::Run() {
                         std::wstring(result.stage.begin(), result.stage.end()) + L", Win32=" +
                         std::to_wstring(result.error) + L", Desktop=" +
                         std::wstring(result.desktop.begin(), result.desktop.end()) + L", Event=" +
-                        std::wstring(result.eventType.begin(), result.eventType.end()) + L".");
+                        std::wstring(result.eventType.begin(), result.eventType.end()) + L", NormalizedX=" +
+                        std::to_wstring(result.normalizedX) + L", NormalizedY=" +
+                        std::to_wstring(result.normalizedY) + L", Button=" +
+                        std::to_wstring(result.button) + L".");
                 }
                 if (!WriteMessage(pipe, ResultJson(result))) break;
             }

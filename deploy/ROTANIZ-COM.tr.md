@@ -1,6 +1,6 @@
 # rotaniz.com dağıtımı
 
-## 1.2.0-native.9 — .NET gerektirmeyen tek EXE önizlemesi
+## 1.2.0-native.10 — .NET gerektirmeyen tek EXE önizlemesi
 
 Müşteri bilgisayarına .NET Framework veya Visual C++ Redistributable kurdurmamak için
 istemci statik CRT kullanan x64 Win32/C++20 uygulamasına taşındı. Aynı `RotaLink.exe`;
@@ -8,7 +8,7 @@ görünür kullanıcı arayüzü, geçici SYSTEM servisi ve aktif oturum helper 
 GitHub Actions üzerindeki gerçek Windows derlemesi CLR yokluğu, statik bağımlılık kümesi
 ve 10 MB kesin üst sınır kontrollerinden geçmiştir.
 
-- Dosya: `RotaLink-v1.2.0-native.9.exe`
+- Dosya: `RotaLink-v1.2.0-native.10.exe`
 - Boyut: `498.688` bayt
 - SHA-256: `64f3a9f1119baf03ac8551499d2f07987efc8479a23d8b8ef4d8f6e7abd006c0`
 - CI commit: `c4397f00d4b1a03989137aa02c04737d1a34286d`
@@ -47,6 +47,13 @@ kanıtladı. Native.9 menü açma mesajını bloklamadan kuyruğa bırakır. Men
 MSAA varsayılan eylemiyle çalıştırılır; menü dışına tıklama `WM_CANCELMODE` ile açık menüyü
 kapatır. Eski Explorer sürümlerindeki kapsayıcı erişilebilirlik nesneleri `accHitTest` ile gerçek
 simge, görev çubuğu düğmesi veya menü öğesine kadar çözülür.
+
+Native.9 gerçek cihaz kaydında kontrol kanalı ve helper çalışmayı sürdürürken 17:18:10'dan sonra
+bütün tıklamaların aynı `X=988,Y=71` koordinatına dönüştüğü görüldü. Native.10 operatör
+tarayıcısında yanıtı kaybolan fare hareketini 250 ms içinde kurtarır; kısa hareketleri yanlışlıkla
+sürükleme saymaz ve sıradan tıklamayı güvenilir basma koordinatına uygular. Sağ tık menüsünde MSAA
+yalnız `Context` kapsayıcısını döndürürse UI Automation/LegacyIAccessible öğesi çalıştırılır. Yeni
+istemci günlüğü her tıklamada normalize koordinatı ve fare tuşunu da gösterir.
 
 ## 1.1.0-alpha.25 Explorer kabuğu için UI Automation
 

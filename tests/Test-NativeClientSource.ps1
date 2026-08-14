@@ -15,6 +15,7 @@ $gdiCapture = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\
 $runtime = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeRuntime.cpp") -Raw
 $inputPipe = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\InputPipe.cpp") -Raw
 $diagnostics = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\Diagnostics.cpp") -Raw
+$operatorPage = Get-Content -LiteralPath (Join-Path $root "server\RemoteSupport.Signaling\OperatorPage.cs") -Raw
 
 $checks = @(
     @{ Id="static-crt"; Passed=$cmake.Contains('CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded') },
@@ -47,7 +48,9 @@ $checks = @(
     @{ Id="portable-runtime-cleanup"; Passed=($runtime.Contains('DeleteFileW(installedRuntime_') -and $runtime.Contains('RemoveDirectoryW(versionDirectory')) },
     @{ Id="atomic-sendinput"; Passed=($inputEngine.Contains('SendInput(') -and $inputEngine.Contains('sent == expected')) },
     @{ Id="physical-click-cadence"; Passed=($inputEngine.Contains('SendPhysicalClick') -and $inputEngine.Contains('Sleep(16)') -and $inputEngine.Contains('Sleep(32)') -and $inputEngine.Contains('WindowFromPoint') -and $inputEngine.Contains('native-physical-click-ok')) },
-    @{ Id="native-shell-automation"; Passed=($cmake.Contains('NativeShellAutomation.cpp') -and $cmake.Contains('uiautomationcore') -and $cmake.Contains('oleacc') -and $shellAutomation.Contains('AccessibleObjectFromPoint') -and $shellAutomation.Contains('accHitTest') -and $shellAutomation.Contains('accSelect') -and $shellAutomation.Contains('accDoDefaultAction') -and $shellAutomation.Contains('WM_CONTEXTMENU') -and $shellAutomation.Contains('WM_CANCELMODE') -and $shellAutomation.Contains('native-popup-menu-msaa-invoke-ok') -and $shellAutomation.Contains('UIA_InvokePatternId') -and $inputEngine.Contains('Native shell automation result')) },
+    @{ Id="native-shell-automation"; Passed=($cmake.Contains('NativeShellAutomation.cpp') -and $cmake.Contains('uiautomationcore') -and $cmake.Contains('oleacc') -and $shellAutomation.Contains('AccessibleObjectFromPoint') -and $shellAutomation.Contains('accHitTest') -and $shellAutomation.Contains('accSelect') -and $shellAutomation.Contains('accDoDefaultAction') -and $shellAutomation.Contains('WM_CONTEXTMENU') -and $shellAutomation.Contains('WM_CANCELMODE') -and $shellAutomation.Contains('native-popup-menu-msaa-invoke-ok') -and $shellAutomation.Contains('native-popup-menu-uia-invoke-ok') -and $shellAutomation.Contains('UIA_InvokePatternId') -and $inputEngine.Contains('Native shell automation result')) },
+    @{ Id="operator-pointer-recovery"; Passed=($operatorPage.Contains('moveAckTimer') -and $operatorPage.Contains('DRAG_THRESHOLD=10') -and $operatorPage.Contains('state.button===0') -and $operatorPage.Contains(':state.point') -and $operatorPage.Contains("window.addEventListener('blur',releasePointers)")) },
+    @{ Id="input-coordinate-diagnostics"; Passed=($inputPipe.Contains('NormalizedX=') -and $inputPipe.Contains('NormalizedY=') -and $inputPipe.Contains('Button=')) },
     @{ Id="truthful-input-result"; Passed=($inputPipe.Contains('result.accepted ? "true" : "false"') -and $inputEngine.Contains('result.accepted = Send(inputs, result)') -and $sessionRuntime.Contains('native-helper-ipc-unavailable')) },
     @{ Id="native-dxgi-video"; Passed=($sessionRuntime.Contains('DesktopDuplicator duplicator') -and $sessionRuntime.Contains('H264Encoder encoder') -and $sessionRuntime.Contains('socket.SendBinary(packet)')) },
     @{ Id="native-jpeg-fallback"; Passed=($sessionRuntime.Contains('GdiVideoLoop(socket)') -and $gdiCapture.Contains('GUID_ContainerFormatJpeg') -and $gdiCapture.Contains('StretchBlt')) },

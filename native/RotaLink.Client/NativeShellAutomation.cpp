@@ -261,6 +261,27 @@ ShellAutomationResult NativeShellAutomation::TryHandleClick(POINT point, unsigne
                 "native-popup-menu-msaa-invoke-failed";
             return result;
         }
+
+        // Server-era Explorer popup providers often return the #32768 menu
+        // container instead of the concrete item. UI Automation resolves the
+        // element underneath it and invokes either Invoke or LegacyIAccessible.
+        if (button == 0) {
+            ComPtr<IUIAutomation> automation;
+            HRESULT operation = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
+                IID_PPV_ARGS(automation.GetAddressOf()));
+            if (SUCCEEDED(operation) && automation) {
+                ComPtr<IUIAutomationElement> element;
+                operation = automation->ElementFromPoint(point, element.GetAddressOf());
+                if (SUCCEEDED(operation) && element) {
+                    operation = InvokeElement(automation.Get(), element.Get(), true, result.targetName);
+                    if (SUCCEEDED(operation)) {
+                        result.status = ShellAutomationStatus::Handled;
+                        result.stage = "native-popup-menu-uia-invoke-ok";
+                        return result;
+                    }
+                }
+            }
+        }
         accessibleOperation = DismissPopupMenu(hit);
         result.status = SUCCEEDED(accessibleOperation) ? ShellAutomationStatus::Handled : ShellAutomationStatus::Failed;
         result.error = SUCCEEDED(accessibleOperation) ? ERROR_SUCCESS : ErrorCode(accessibleOperation);
