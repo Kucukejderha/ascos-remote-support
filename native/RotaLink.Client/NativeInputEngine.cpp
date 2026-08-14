@@ -208,6 +208,29 @@ NativeInputResult NativeInputEngine::Dispatch(std::string_view json) {
                 else { result.stage = "button-invalid"; return result; }
                 inputs.push_back(Mouse(x, y, MouseMove));
                 if (type == "click") {
+                    if (button == 0) {
+                        std::vector<INPUT> move{Mouse(x, y, MouseMove)};
+                        if (!Send(move, result)) return result;
+                        Sleep(16);
+                        POINT point{};
+                        if (!GetCursorPos(&point)) {
+                            result.error = GetLastError();
+                            result.stage = "shell-cursor-query-failed";
+                            return result;
+                        }
+                        const ShellAutomationResult shell = shellAutomation_.TryHandleLeftClick(point);
+                        if (shell.status != ShellAutomationStatus::NotShell) {
+                            result.accepted = shell.status == ShellAutomationStatus::Handled;
+                            result.error = shell.error;
+                            result.stage = shell.stage;
+                            Diagnostics::Write(L"Native shell automation result. Accepted=" +
+                                std::wstring(result.accepted ? L"true" : L"false") + L", Stage=" +
+                                std::wstring(shell.stage.begin(), shell.stage.end()) + L", Error=" +
+                                std::to_wstring(shell.error) + L", Class=" + shell.targetClass + L", Name=" +
+                                shell.targetName + L".");
+                            return result;
+                        }
+                    }
                     result.accepted = SendPhysicalClick(x, y, down, up, result);
                     if (result.accepted) result.stage = "native-physical-click-ok";
                     return result;

@@ -10,6 +10,7 @@ $signaling = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\S
 $identity = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\CngDeviceIdentity.cpp") -Raw
 $sessionRuntime = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\SessionRuntime.cpp") -Raw
 $inputEngine = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeInputEngine.cpp") -Raw
+$shellAutomation = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeShellAutomation.cpp") -Raw
 $gdiCapture = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\GdiJpegCapture.cpp") -Raw
 $runtime = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\NativeRuntime.cpp") -Raw
 $inputPipe = Get-Content -LiteralPath (Join-Path $root "native\RotaLink.Client\InputPipe.cpp") -Raw
@@ -46,6 +47,7 @@ $checks = @(
     @{ Id="portable-runtime-cleanup"; Passed=($runtime.Contains('DeleteFileW(installedRuntime_') -and $runtime.Contains('RemoveDirectoryW(versionDirectory')) },
     @{ Id="atomic-sendinput"; Passed=($inputEngine.Contains('SendInput(') -and $inputEngine.Contains('sent == expected')) },
     @{ Id="physical-click-cadence"; Passed=($inputEngine.Contains('SendPhysicalClick') -and $inputEngine.Contains('Sleep(16)') -and $inputEngine.Contains('Sleep(32)') -and $inputEngine.Contains('WindowFromPoint') -and $inputEngine.Contains('native-physical-click-ok')) },
+    @{ Id="native-shell-automation"; Passed=($cmake.Contains('NativeShellAutomation.cpp') -and $cmake.Contains('uiautomationcore') -and $shellAutomation.Contains('UIA_SelectionItemPatternId') -and $shellAutomation.Contains('UIA_InvokePatternId') -and $shellAutomation.Contains('UIA_LegacyIAccessiblePatternId') -and $inputEngine.Contains('Native shell automation result')) },
     @{ Id="truthful-input-result"; Passed=($inputPipe.Contains('result.accepted ? "true" : "false"') -and $inputEngine.Contains('result.accepted = Send(inputs, result)') -and $sessionRuntime.Contains('native-helper-ipc-unavailable')) },
     @{ Id="native-dxgi-video"; Passed=($sessionRuntime.Contains('DesktopDuplicator duplicator') -and $sessionRuntime.Contains('H264Encoder encoder') -and $sessionRuntime.Contains('socket.SendBinary(packet)')) },
     @{ Id="native-jpeg-fallback"; Passed=($sessionRuntime.Contains('GdiVideoLoop(socket)') -and $gdiCapture.Contains('GUID_ContainerFormatJpeg') -and $gdiCapture.Contains('StretchBlt')) },

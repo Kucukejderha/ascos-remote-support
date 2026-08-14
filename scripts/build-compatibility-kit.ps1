@@ -1,6 +1,6 @@
 param(
     [string]$NativeClientPath = "",
-    [string]$Version = "1.2.0-native.6"
+    [string]$Version = "1.2.0-native.7"
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot

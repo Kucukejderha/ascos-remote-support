@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include "NativeShellAutomation.h"
 #include <string>
 #include <string_view>
 
@@ -23,4 +24,5 @@ private:
     [[nodiscard]] bool AttachInputDesktop(NativeInputResult& result);
     [[nodiscard]] static WORD MapKey(std::string_view code);
     HDESK desktop_{};
+    NativeShellAutomation shellAutomation_;
 };
