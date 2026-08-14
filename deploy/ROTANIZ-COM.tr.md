@@ -1,6 +1,6 @@
 # rotaniz.com dağıtımı
 
-## 1.2.0-native.6 — .NET gerektirmeyen tek EXE önizlemesi
+## 1.2.0-native.7 — .NET gerektirmeyen tek EXE önizlemesi
 
 Müşteri bilgisayarına .NET Framework veya Visual C++ Redistributable kurdurmamak için
 istemci statik CRT kullanan x64 Win32/C++20 uygulamasına taşındı. Aynı `RotaLink.exe`;
@@ -8,10 +8,10 @@ görünür kullanıcı arayüzü, geçici SYSTEM servisi ve aktif oturum helper 
 GitHub Actions üzerindeki gerçek Windows derlemesi CLR yokluğu, statik bağımlılık kümesi
 ve 10 MB kesin üst sınır kontrollerinden geçmiştir.
 
-- Dosya: `RotaLink-v1.2.0-native.6.exe`
-- Boyut: `488.448` bayt
-- SHA-256: `cf0be73983f954ffae9e151fbf435e78937c1bc31f49d6a3a51bee310fce7932`
-- CI commit: `d651f6a14ff65cad8fc187df319875523eee6d23`
+- Dosya: `RotaLink-v1.2.0-native.7.exe`
+- Boyut: `495.104` bayt
+- SHA-256: `dc1eb8a1425e70eccf24d4b7501be9040b0b45f1e6975922bb18ca7fbd050623`
+- CI commit: `04c489dd16b4e280d7963e959f016ad7cb96f5bf`
 - Durum: İmzasız teknik önizleme; hedef Windows VM matrisi tamamlanmadan sitenin
   kararlı `RotaLink.exe` bağlantısının üzerine yazılmaz.
 
@@ -27,6 +27,12 @@ ve görev çubuğu hedeflerinin ise API başarısına rağmen tepki vermediğini
 taşındıktan sonra Explorer input kuyruğunun hedefi güncellemesi için 16 ms, basma ile bırakma
 arasında 32 ms beklenir. Günlük her tıklama için koordinatı, pencere sınıfını ve süreç PID'sini
 `Native physical click target` satırında kaydeder.
+
+Native.6 Server 2019 kaydı, koordinatın ve Explorer hedefinin doğru olmasına rağmen fiziksel
+input enjeksiyonunun `SysListView32` üzerinde etkisiz kaldığını doğruladı. Native.7 kabuk
+yüzeylerini ayrı işler: masaüstü simgelerinde UI Automation seçim/açma desenleri, görev
+çubuğu düğmelerinde çalıştırma deseni ve eski denetimlerde erişilebilirlik varsayılan eylemi
+kullanılır. Normal uygulama pencereleri gerçek `SendInput` yolunda kalır.
 
 ## 1.1.0-alpha.25 Explorer kabuğu için UI Automation
 

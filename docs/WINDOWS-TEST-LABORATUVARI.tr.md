@@ -20,11 +20,11 @@ Geliştirici, tek dosyalık laboratuvar paketini şu komutla üretir:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1 `
   -NativeClientPath C:\RotaLink-Build\RotaLink.exe `
-  -Version 1.2.0-native.6
+  -Version 1.2.0-native.7
 ```
 
 Paketleyici önce PE dosyasının x64, CLR içermeyen ve 10 MB altında bir native istemci
-olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.6-Uyumluluk-Test-Kiti.zip` hedef VM'ye
+olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.7-Uyumluluk-Test-Kiti.zip` hedef VM'ye
 kopyalanıp açılır; müşterinin sistemindeki .NET sürümü yalnız raporlanır ve sonuç kapısı değildir.
 Depo kurmadan ön kontrol başlatmak için örneğin:
 
@@ -97,3 +97,10 @@ kısayol ayrı ayrı tıklanmalıdır. Her denemede `Native physical click targe
 `MSTaskListWClass`, `Shell_TrayWnd` veya gözlenen başka sınıf) bulunduğu satır test sonucuna
 eklenmelidir. API sonucu başarılı olduğu halde arayüz değişmiyorsa bu gözlem ayrıca açıkça
 belirtilmelidir; yalnız `Accepted=true` kullanıcı davranışının gerçekleştiği kanıtı sayılmaz.
+
+Native.7 testinde masaüstü tek tıklaması için `Stage=native-desktop-selection-ok`, aynı simgeye
+hızlı ikinci tıklama için `Stage=native-desktop-invoke-ok`, görev çubuğu uygulaması veya
+kısayolu için `Stage=native-taskbar-invoke-ok` beklenir. `native-*-pattern-unavailable`,
+`native-*-failed` veya `shell-*-failed` aşamalarından biri görülürse ilgili `Error`, `Class`
+ve `Name` alanlarıyla birlikte raporlanmalıdır. Otomasyon başarı satırına ek olarak hedef
+arayüzdeki gerçek seçme/açma davranışı da gözle doğrulanmalıdır.
