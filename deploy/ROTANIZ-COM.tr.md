@@ -1,6 +1,6 @@
 # rotaniz.com dağıtımı
 
-## 1.2.0-native.4 — .NET gerektirmeyen tek EXE önizlemesi
+## 1.2.0-native.5 — .NET gerektirmeyen tek EXE önizlemesi
 
 Müşteri bilgisayarına .NET Framework veya Visual C++ Redistributable kurdurmamak için
 istemci statik CRT kullanan x64 Win32/C++20 uygulamasına taşındı. Aynı `RotaLink.exe`;
@@ -8,12 +8,18 @@ görünür kullanıcı arayüzü, geçici SYSTEM servisi ve aktif oturum helper 
 GitHub Actions üzerindeki gerçek Windows derlemesi CLR yokluğu, statik bağımlılık kümesi
 ve 10 MB kesin üst sınır kontrollerinden geçmiştir.
 
-- Dosya: `RotaLink-v1.2.0-native.4.exe`
-- Boyut: `483.840` bayt
-- SHA-256: `c4b134e3c78fa41fd9529568acfd150c311b6166bfdff181ae81cf058c31b648`
-- CI commit: `3f614bbd142c0804efaf25d268fe962725e95240`
+- Dosya: `RotaLink-v1.2.0-native.5.exe`
+- Boyut: `484.864` bayt
+- SHA-256: `b19c306c71507b7ef70412cbdfc46bb6515e41f6377a60fb0bf7f7e1fb3cf7f0`
+- CI commit: `190d60524d51f5f892c8b5992685047e4dca6058`
 - Durum: İmzasız teknik önizleme; hedef Windows VM matrisi tamamlanmadan sitenin
   kararlı `RotaLink.exe` bağlantısının üzerine yazılmaz.
+
+Native.4 Server 2019 günlüğünde helper `Pid=7164` istemcisini reddederken ana RotaLink
+sürecinin PID'si de `7164` idi. Kök neden input veya WebSocket değildi: doğru pipe istemcisi,
+gereksiz `OpenProcess` canlılık kontrolündeki erişim reddi nedeniyle yanlışlıkla kapatılıyordu.
+Native.5 yerel pipe bağlantısını Windows çekirdeğinin bildirdiği PID ve oturum kimliğiyle
+doğrular; uzak pipe bağlantıları kapalı kalır ve başka süreç/oturum kabul edilmez.
 
 ## 1.1.0-alpha.25 Explorer kabuğu için UI Automation
 

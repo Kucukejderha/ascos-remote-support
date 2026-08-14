@@ -20,11 +20,11 @@ Geliştirici, tek dosyalık laboratuvar paketini şu komutla üretir:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-compatibility-kit.ps1 `
   -NativeClientPath C:\RotaLink-Build\RotaLink.exe `
-  -Version 1.2.0-native.4
+  -Version 1.2.0-native.5
 ```
 
 Paketleyici önce PE dosyasının x64, CLR içermeyen ve 10 MB altında bir native istemci
-olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.4-Uyumluluk-Test-Kiti.zip` hedef VM'ye
+olduğunu doğrular. Oluşan `RotaLink-1.2.0-native.5-Uyumluluk-Test-Kiti.zip` hedef VM'ye
 kopyalanıp açılır; müşterinin sistemindeki .NET sürümü yalnız raporlanır ve sonuç kapısı değildir.
 Depo kurmadan ön kontrol başlatmak için örneğin:
 
@@ -84,3 +84,9 @@ Native.4 ile ana uygulama, geçici SYSTEM servisi ve etkileşimli helper bütün
 satırlarını müşterinin çalıştırdığı `RotaLink.exe` dosyasının yanındaki tek
 `RotaLink-Native.log` dosyasına yazar. EXE klasöründe yazma izni yoksa uygulama bunu açılışta
 görünür hata olarak bildirir; başka bir profile veya Program Files altına sessiz log bırakmaz.
+
+Native.5 testinde ilk uzak input sonrasında günlükte
+`Native input IPC client authenticated by kernel identity` satırı görülmelidir. Bu satırdaki
+PID ana `RotaLink` sürecinin PID'siyle, `Session` ise aktif etkileşimli oturumla aynı olmalıdır.
+`Rejected input pipe client` görülürse satırdaki `Stage`, `ExpectedPid`, `ActualPid`,
+`PipeSession`, `HelperSession` ve `Win32` alanlarının tamamı hata raporuna eklenmelidir.
