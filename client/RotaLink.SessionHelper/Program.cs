@@ -1,3 +1,5 @@
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Microsoft.Win32.SafeHandles;
@@ -6,8 +8,39 @@ namespace RotaLink.SessionHelper;
 
 internal static class Program
 {
+    /// <summary>
+    /// Loads the embedded RemoteSupport.Protocol.dll (and its System.Memory
+    /// dependencies) so the helper stays a single executable without
+    /// side-by-side DLL files.
+    /// </summary>
+    private static readonly string[] EmbeddedAssemblyNames =
+    {
+        "RemoteSupport.Protocol", "System.Memory", "System.Buffers",
+        "System.Runtime.CompilerServices.Unsafe", "System.Numerics.Vectors"
+    };
+
+    private static Assembly? ResolveEmbeddedAssemblies(object sender, ResolveEventArgs args)
+    {
+        try
+        {
+            var requested = new AssemblyName(args.Name).Name;
+            if (requested is null || Array.IndexOf(EmbeddedAssemblyNames, requested) < 0) return null;
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream("RotaLink.Runtime." + requested + ".dll");
+            if (stream is null) return null;
+            using var memory = new MemoryStream();
+            stream.CopyTo(memory);
+            return Assembly.Load(memory.ToArray());
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static int Main(string[] args)
     {
+        AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedAssemblies;
         var sessionId = ParseSessionId(args);
         if (!ProcessIdToSessionId((uint)System.Diagnostics.Process.GetCurrentProcess().Id, out var actualSessionId) || actualSessionId != sessionId)
             return 11;

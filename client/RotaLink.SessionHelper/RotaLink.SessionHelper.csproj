@@ -24,6 +24,11 @@
     <ProjectReference Include="..\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\RemoteSupport.Protocol\bin\$(Configuration)\net48\*.dll"
+                      LogicalName="RotaLink.Runtime.%(Filename)%(Extension)"
+                      Condition="Exists('..\RemoteSupport.Protocol\bin\$(Configuration)\net48\System.Memory.dll')" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 </Project>
