@@ -31,6 +31,15 @@ internal sealed class InputEngine : IDisposable
     private const uint WmRightUp = 0x0205;
     private const uint WmLeftDown = 0x0201;
     private const uint WmLeftUp = 0x0202;
+    private const uint WmNcHitTest = 0x0084;
+    private const uint WmNcLButtonDown = 0x00A1;
+    private const uint WmNcLButtonUp = 0x00A2;
+    private const uint WmNcMButtonDown = 0x00A7;
+    private const uint WmNcMButtonUp = 0x00A8;
+    private const uint WmNcRButtonDown = 0x00A4;
+    private const uint WmNcRButtonUp = 0x00A5;
+    private const int HtClient = 1;
+    private uint _lastKeyDown;
     private bool _fallbackLogged;
     private readonly BlockingCollection<WorkItem> _queue = new(new ConcurrentQueue<WorkItem>(), 512);
     private readonly Thread _thread;
@@ -179,6 +188,13 @@ internal sealed class InputEngine : IDisposable
                         (2, true) => WmRightDown, (2, false) => WmRightUp,
                         _ => 0u
                     };
+                    var nonClientMessage = (packet.Data, packet.Down) switch
+                    {
+                        (0, true) => WmNcLButtonDown, (0, false) => WmNcLButtonUp,
+                        (1, true) => WmNcMButtonDown, (1, false) => WmNcMButtonUp,
+                        (2, true) => WmNcRButtonDown, (2, false) => WmNcRButtonUp,
+                        _ => 0u
+                    };
                     if (message == 0) return false;
 
                     var mouseFlag = (packet.Data, packet.Down) switch
@@ -198,7 +214,7 @@ internal sealed class InputEngine : IDisposable
                             return true;
                         }
                     }
-                    if (PostButton(point, message))
+                    if (PostButton(point, message, nonClientMessage))
                     {
                         LogFallback("PostMessage button");
                         return true;
@@ -214,6 +230,15 @@ internal sealed class InputEngine : IDisposable
                 return false;
             case InputEventKind.Key:
                 {
+                    if (packet.Down)
+                    {
+                        if (_lastKeyDown == packet.KeyCode) return true;
+                        _lastKeyDown = packet.KeyCode;
+                    }
+                    else if (_lastKeyDown == packet.KeyCode)
+                    {
+                        _lastKeyDown = 0;
+                    }
                     var target = GetForegroundWindow();
                     if (target != IntPtr.Zero && PostMessage(target, packet.Down ? WmKeyDown : WmKeyUp, new IntPtr(unchecked((long)packet.KeyCode)), IntPtr.Zero))
                     {
@@ -227,10 +252,16 @@ internal sealed class InputEngine : IDisposable
         }
     }
 
-    private bool PostButton(VirtualDesktopPoint point, uint message)
+    private bool PostButton(VirtualDesktopPoint point, uint message, uint nonClientMessage)
     {
         var target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
         if (target == IntPtr.Zero) return false;
+        var screenLParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
+        var hit = SendMessage(target, WmNcHitTest, IntPtr.Zero, screenLParam);
+        if (hit != IntPtr.Zero && hit.ToInt32() != HtClient && nonClientMessage != 0)
+        {
+            return PostMessage(target, nonClientMessage, hit, screenLParam);
+        }
         var clientPoint = new NativePoint(point.PixelX, point.PixelY);
         ScreenToClient(target, ref clientPoint);
         var lParam = new IntPtr((clientPoint.Y << 16) | (clientPoint.X & 0xFFFF));
@@ -318,6 +349,7 @@ internal sealed class InputEngine : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; public NativePoint(int x, int y) { X = x; Y = y; } }
 }
