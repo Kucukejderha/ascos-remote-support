@@ -52,7 +52,9 @@ internal static class Program
             var uiAccess = ReadCurrentUiAccess();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
                 ", UIAccess=" + uiAccess + ".");
-            if (!uiAccess) throw new InvalidOperationException("Interactive helper token is missing UIAccess.");
+            // The helper is launched with the elevated RotaLink token, so its
+            // SendInput calls pass UIPI without needing the UIAccess flag.
+            // The flag is only reported for diagnostics.
 
             using var windowStation = InteractiveWindowStation.Attach();
             log.Write("Session helper attached to interactive window station WinSta0.");

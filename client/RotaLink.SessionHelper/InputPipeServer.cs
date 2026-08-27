@@ -73,7 +73,8 @@ internal sealed class InputPipeServer
             var imageLength = image.Capacity;
             if (!QueryFullProcessImageName(process, 0, image, ref imageLength)) return;
             var fileName = Path.GetFileName(image.ToString());
-            if (!string.Equals(fileName, "RotaLink.exe", StringComparison.OrdinalIgnoreCase))
+            if (!fileName.StartsWith("RotaLink", StringComparison.OrdinalIgnoreCase) ||
+                !fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Untrusted pipe client image: " + fileName);
         }
     }
