@@ -179,7 +179,26 @@ internal sealed class InputEngine : IDisposable
                         (2, true) => WmRightDown, (2, false) => WmRightUp,
                         _ => 0u
                     };
-                    if (message != 0 && PostToWindow(point, message, 0))
+                    if (message == 0) return false;
+
+                    var mouseFlag = (packet.Data, packet.Down) switch
+                    {
+                        (0, true) => 0x0002u, (0, false) => 0x0004u,
+                        (1, true) => 0x0020u, (1, false) => 0x0040u,
+                        (2, true) => 0x0008u, (2, false) => 0x0010u,
+                        _ => 0u
+                    };
+                    if (SetCursorPos(point.PixelX, point.PixelY))
+                    {
+                        SetLastError(0);
+                        mouse_event(mouseFlag, 0, 0, 0, UIntPtr.Zero);
+                        if (Marshal.GetLastWin32Error() == 0)
+                        {
+                            LogFallback("mouse_event button");
+                            return true;
+                        }
+                    }
+                    if (PostButton(point, message))
                     {
                         LogFallback("PostMessage button");
                         return true;
@@ -208,11 +227,28 @@ internal sealed class InputEngine : IDisposable
         }
     }
 
+    private bool PostButton(VirtualDesktopPoint point, uint message)
+    {
+        var target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
+        if (target == IntPtr.Zero) return false;
+        var clientPoint = new NativePoint(point.PixelX, point.PixelY);
+        ScreenToClient(target, ref clientPoint);
+        var lParam = new IntPtr((clientPoint.Y << 16) | (clientPoint.X & 0xFFFF));
+        if (message is WmLeftDown or WmMiddleDown or WmRightDown)
+        {
+            PostMessage(target, 0x0200 /* WM_MOUSEMOVE */, IntPtr.Zero, lParam);
+            PostMessage(target, 0x0021 /* WM_MOUSEACTIVATE */, new IntPtr(1), lParam);
+        }
+        return PostMessage(target, message, IntPtr.Zero, lParam);
+    }
+
     private bool PostToWindow(VirtualDesktopPoint point, uint message, uint wParam)
     {
         var target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
         if (target == IntPtr.Zero) return false;
-        var lParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
+        var clientPoint = new NativePoint(point.PixelX, point.PixelY);
+        ScreenToClient(target, ref clientPoint);
+        var lParam = new IntPtr((clientPoint.Y << 16) | (clientPoint.X & 0xFFFF));
         return PostMessage(target, message, new IntPtr(unchecked((long)wParam)), lParam);
     }
 
@@ -273,7 +309,12 @@ internal sealed class InputEngine : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(NativePoint point);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ScreenToClient(IntPtr window, ref NativePoint point);
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
