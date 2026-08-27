@@ -14,7 +14,7 @@ internal sealed class SessionHelperVideoClient : IDisposable
     public static SessionHelperVideoClient? TryConnect()
     {
         using var process = Process.GetCurrentProcess();
-        var pipe = new NamedPipeClientStream(".", "RotaLink.SessionHelper." + process.SessionId + ".Video.v1",
+        var pipe = new NamedPipeClientStream(".", "Global\\RotaLink.SessionHelper." + process.SessionId + ".Video.v1",
             PipeDirection.In, PipeOptions.Asynchronous);
         try
         {

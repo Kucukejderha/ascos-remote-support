@@ -1,9 +1,7 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Security.Principal;
 using System.Text;
-using Microsoft.Win32.SafeHandles;
 using RemoteSupport.Protocol;
 
 namespace RotaLink.SessionHelper;
@@ -90,27 +88,6 @@ internal sealed class InputEngine : IDisposable
         }
     }
 
-    /// <summary>
-    /// Writes one-time environment diagnostics. Called at helper startup on a
-    /// separate thread so a slow query can never stall input dispatch.
-    /// </summary>
-    public static void LogDiagnostics(HelperLog log)
-    {
-        try
-        {
-            var identity = WindowsIdentity.GetCurrent().Name;
-            var integrityRid = ReadIntegrityRid();
-            var threadDesktop = GetDesktopName(GetThreadDesktop(GetCurrentThreadId()));
-            var inputDesktop = GetDesktopName(OpenInputDesktop(0, false, 0x0001 | 0x0002 | 0x0004 | 0x0080 | 0x0100));
-            log.Write("Input diagnostics: Identity=" + identity + ", IntegrityRid=0x" + integrityRid.ToString("X4") +
-                ", ThreadDesktop=" + threadDesktop + ", InputDesktop=" + inputDesktop + ".");
-        }
-        catch (Exception exception)
-        {
-            log.Write("Input diagnostics failed: " + exception.Message);
-        }
-    }
-
     private void LogForeground()
     {
         try
@@ -125,44 +102,6 @@ internal sealed class InputEngine : IDisposable
         {
             _log.Write("Foreground diagnostics failed: " + exception.Message);
         }
-    }
-
-    private static int ReadIntegrityRid()
-    {
-        if (!OpenProcessToken(GetCurrentProcess(), 0x0008, out var token))
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenProcessToken failed.");
-        using (token)
-        {
-            GetTokenInformation(token, 25, IntPtr.Zero, 0, out var required);
-            var buffer = Marshal.AllocHGlobal(required);
-            try
-            {
-                if (!GetTokenInformation(token, 25, buffer, required, out _))
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "GetTokenInformation(TokenIntegrityLevel) failed.");
-                var sidPtr = Marshal.ReadIntPtr(buffer);
-                var sid = new SecurityIdentifier(sidPtr);
-                var binary = new byte[sid.BinaryLength];
-                sid.GetBinaryForm(binary, 0);
-                return BitConverter.ToInt32(binary, binary.Length - 4);
-            }
-            finally { Marshal.FreeHGlobal(buffer); }
-        }
-    }
-
-    private static string GetDesktopName(IntPtr desktop)
-    {
-        var length = 0;
-        GetUserObjectInformation(desktop, 2, IntPtr.Zero, 0, ref length);
-        var buffer = Marshal.AllocHGlobal(length);
-        try
-        {
-            if (!GetUserObjectInformation(desktop, 2, buffer, length, ref length))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "GetUserObjectInformation failed.");
-            // UOI_NAME returns a UNICODE_STRING: Length(2) + MaximumLength(2) + Buffer pointer.
-            var nameBuffer = Marshal.ReadIntPtr(buffer, IntPtr.Size == 8 ? 8 : 4);
-            return Marshal.PtrToStringUni(nameBuffer) ?? "<null>";
-        }
-        finally { Marshal.FreeHGlobal(buffer); }
     }
 
     private bool Inject(InputPacket packet)
@@ -328,19 +267,6 @@ internal sealed class InputEngine : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
     [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
-    [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
-    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool OpenProcessToken(IntPtr process, uint desiredAccess, out SafeAccessTokenHandle token);
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass, IntPtr information, int informationLength, out int returnLength);
-    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr GetThreadDesktop(uint threadId);
-    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint desiredAccess);
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetUserObjectInformation(IntPtr handle, int index, IntPtr info, int length, ref int needed);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr window, StringBuilder text, int maxCount);

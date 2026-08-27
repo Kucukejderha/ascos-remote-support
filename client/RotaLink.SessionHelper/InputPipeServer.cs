@@ -142,7 +142,7 @@ internal sealed class InputPipeServer
             return identity.User ?? throw new InvalidOperationException("Interactive token has no user SID.");
     }
 
-    private string PipeName => "RotaLink.SessionHelper." + _sessionId + ".Input.v1";
+    private string PipeName => "Global\\RotaLink.SessionHelper." + _sessionId + ".Input.v1";
 
     [DllImport("wtsapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -18,7 +18,7 @@ internal sealed class SessionHelperInputClient : IDisposable
     public SessionHelperInputClient()
     {
         using var process = Process.GetCurrentProcess();
-        _pipeName = "RotaLink.SessionHelper." + process.SessionId + ".Input.v1";
+        _pipeName = "Global\\RotaLink.SessionHelper." + process.SessionId + ".Input.v1";
     }
 
     public SessionHelperInputResult? TrySend(InputMessage message)
@@ -78,15 +78,36 @@ internal sealed class SessionHelperInputClient : IDisposable
             PipeOptions.Asynchronous | PipeOptions.WriteThrough);
         try
         {
-            candidate.Connect(2000);
+            candidate.Connect(0);
+        }
+        catch (TimeoutException exception)
+        {
+            candidate.Dispose();
+            LogUnavailable(exception);
+            return false;
+        }
+        catch (IOException exception)
+        {
+            var win32 = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+            candidate.Dispose();
+            AppDiagnostics.Write("Pipe connect probe failed. Win32Error=" + win32 + ", Pipe=" + _pipeName + ".", exception);
+            LogUnavailable(exception);
+            return false;
+        }
+        try
+        {
             candidate.ReadMode = PipeTransmissionMode.Byte;
             _pipe = candidate;
             _unavailableLogged = false;
             AppDiagnostics.Write("Privileged SessionHelper input IPC connected.");
             return true;
         }
-        catch (TimeoutException exception) { candidate.Dispose(); LogUnavailable(exception); return false; }
-        catch (IOException exception) { candidate.Dispose(); LogUnavailable(exception); return false; }
+        catch (Exception exception)
+        {
+            candidate.Dispose();
+            LogUnavailable(exception);
+            return false;
+        }
     }
 
     private void LogUnavailable(Exception exception)
