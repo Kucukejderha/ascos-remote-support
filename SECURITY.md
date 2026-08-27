@@ -3,11 +3,11 @@
 - The host must display a native Windows consent dialog for every session.
 - No unattended access, hidden mode, secure-desktop bypass, credential capture, clipboard, or file transfer is implemented.
 - The local user can terminate control at any time; consent expires after 15 minutes.
-- Device authentication uses ECDSA P-256 signed challenges. Support codes are random and rate-limited; once the host is connected, the same code remains usable until the local host ends the session. Each redemption rotates the guest token.
+- Device authentication uses ECDSA P-256 signed challenges. Support codes are random, rate-limited, and single-use: the first redemption consumes the code and each redemption rotates the guest token. The code is invalidated when the local host ends the session.
 - Host and guest WebSockets are separately authenticated and scoped to one session.
 - Browser guest tokens are carried as a WebSocket subprotocol rather than a URL query value.
 - Input messages are allow-listed, size-limited, coordinate-limited, capped at 240 events/second, and ignored before explicit consent.
-- Service IPC messages are length-limited, HMAC authenticated, and replay protected. Production pipe ACLs contain only LocalSystem and the selected interactive user SID.
+- The interactive input pipe is ACL-restricted to the interactive user (and SYSTEM); the connecting process identity and image name are verified, and per-connection sequence numbers reject replay.
 - Production deployment must use HTTPS/WSS. Plain HTTP is for loopback development only.
 
 ## Known MVP limits

@@ -34,7 +34,7 @@ Sürüm tarihi: 2026-08-05
 - Fare hareketlerini 30 Hz ile sınırlama ve dolu WebSocket kuyruğunda eski hareketleri atma
 - `SendInput` sonucu doğrulanır; başarısız enjeksiyonlar yedek API'lerle başarı gibi raporlanmaz
 - Operatörde görüntü ve gerçek kontrol kabulünü ayrı durumlar olarak gösterme
-- HMAC doğrulamalı Named Pipe paketleme ve tekrar saldırısı engelleme
+- Interaktif input pipe'ı ACL ile etkileşimli kullanıcıya sınırlar; ayrıca bağlanan process kimliği ve görüntü adı doğrulanır; bağlantı başına sıra numaraları tekrar saldırısını reddeder
 - Windows DPAPI cihaz kimliği saklama
 - Yerel onaydan önce input reddi
 - Kalıcı güvenlik denetim kayıtları

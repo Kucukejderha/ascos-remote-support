@@ -23,11 +23,17 @@ internal sealed class NativeCaptureBridge : IDisposable
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        var executable = Path.Combine(AppContext.BaseDirectory, "RotaLink.NativeCapture.exe");
+        if (!File.Exists(executable))
+        {
+            _log.Write("Native capture executable is missing; DXGI/H.264 video capture is disabled.");
+            return;
+        }
         StartNativeCapture();
         using var frames = SharedFrameReader.Open(_sessionId, TimeSpan.FromSeconds(10), cancellationToken);
         while (!cancellationToken.IsCancellationRequested)
         {
-            await using var pipe = CreateVideoPipe();
+            using var pipe = CreateVideoPipe();
             _log.Write("Waiting for video IPC client.");
             await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
             _log.Write("Video IPC client connected.");
@@ -45,8 +51,8 @@ internal sealed class NativeCaptureBridge : IDisposable
             var packetHeader = new VideoPacketHeader(VideoCodec.H264AnnexB, frame.KeyFrame, frame.Sequence,
                 frame.Timestamp100Nanoseconds, frame.Width, frame.Height, frame.Payload.Length);
             VideoPacketCodec.WriteHeader(header, packetHeader);
-            await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
-            await stream.WriteAsync(frame.Payload, cancellationToken).ConfigureAwait(false);
+            await stream.WriteAsync(header, 0, header.Length, cancellationToken).ConfigureAwait(false);
+            await stream.WriteAsync(frame.Payload, 0, frame.Payload.Length, cancellationToken).ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
     }
@@ -54,7 +60,6 @@ internal sealed class NativeCaptureBridge : IDisposable
     private void StartNativeCapture()
     {
         var executable = Path.Combine(AppContext.BaseDirectory, "RotaLink.NativeCapture.exe");
-        if (!File.Exists(executable)) throw new FileNotFoundException("Native DXGI capture executable is missing.", executable);
         var capture = Process.Start(new ProcessStartInfo
         {
             FileName = executable,
@@ -78,15 +83,17 @@ internal sealed class NativeCaptureBridge : IDisposable
             PipeAccessRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(GetInteractiveUserSid(),
             PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
-        return NamedPipeServerStreamAcl.Create("RotaLink.SessionHelper." + _sessionId + ".Video.v1",
+        var pipe = new NamedPipeServerStream("RotaLink.SessionHelper." + _sessionId + ".Video.v1",
             PipeDirection.Out, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.WriteThrough,
-            0, 64 * 1024, security, HandleInheritability.None, PipeAccessRights.ChangePermissions);
+            0, 64 * 1024);
+        pipe.SetAccessControl(security);
+        return pipe;
     }
 
     private SecurityIdentifier GetInteractiveUserSid()
     {
         if (!WTSQueryUserToken(_sessionId, out var token))
-            throw new Win32Exception(Marshal.GetLastPInvokeError(), "WTSQueryUserToken failed.");
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "WTSQueryUserToken failed.");
         using (token)
         using (var identity = new WindowsIdentity(token.DangerousGetHandle()))
             return identity.User ?? throw new InvalidOperationException("Interactive token has no user SID.");

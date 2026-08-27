@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.Diagnostics;
 using System.Reflection;
+using RemoteSupport.Protocol;
 
 namespace RemoteSupport.SessionAgent;
 
@@ -18,7 +19,10 @@ public sealed class MainForm : Form
     private Task? _sessionTask;
     private SignalingHostClient? _api;
     private HostSession? _session;
-    private ECDsaCng? _identity;
+    private DeviceIdentity? _identity;
+    private readonly DeviceIdentityStore _identityStore = new(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RotaLink", "identity.json"));
     private bool _closing;
 
     public MainForm(string? serverAddress, bool elevated, bool privilegedInputReady)
@@ -137,8 +141,8 @@ public sealed class MainForm : Form
             _code.Text = "Hazırlanıyor…";
             SetStatus("Yeni destek kodu hazırlanıyor…", Color.FromArgb(99, 120, 138));
 
-            _identity ??= new ECDsaCng(ECCurve.NamedCurves.nistP256);
-            _api ??= new SignalingHostClient(_server, _identity);
+            _identity ??= await _identityStore.LoadOrCreateAsync(CancellationToken.None);
+            _api ??= new SignalingHostClient(_server, _identity.SigningKey);
             _session = await _api.CreateSessionAsync(Environment.MachineName, CancellationToken.None);
             if (_closing || IsDisposed) return;
 

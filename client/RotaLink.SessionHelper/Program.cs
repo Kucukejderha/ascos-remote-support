@@ -27,8 +27,18 @@ internal static class Program
             using var stop = new EventWaitHandle(false, EventResetMode.ManualReset,
                 "Global\\RotaLink.SessionHelper.Stop." + sessionId);
             using var engine = new InputEngine(log);
+            using var bridge = new NativeCaptureBridge(sessionId, log);
             var server = new InputPipeServer(sessionId, engine, log);
-            server.Run(stop);
+
+            using var stopSource = new CancellationTokenSource();
+            var stopWatcher = Task.Run(() => { stop.WaitOne(); stopSource.Cancel(); });
+            var inputTask = Task.Run(() => server.Run(stop));
+            var videoTask = bridge.RunAsync(stopSource.Token);
+
+            Task.WaitAny(inputTask, videoTask);
+            stopSource.Cancel();
+            try { Task.WaitAll(inputTask, videoTask); }
+            catch (AggregateException) { }
             return 0;
         }
         catch (Exception exception)

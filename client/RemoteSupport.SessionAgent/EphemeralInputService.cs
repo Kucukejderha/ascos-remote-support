@@ -27,6 +27,10 @@ internal sealed class EphemeralInputService : IDisposable
     private readonly string _directory;
     private bool _disposed;
 
+    private static string RuntimeVersion =>
+        Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? "unknown";
+
     public static bool IsRunning => Volatile.Read(ref _isRunning) != 0;
 
     private EphemeralInputService(SafeServiceHandle manager, SafeServiceHandle service, string directory)
@@ -49,10 +53,11 @@ internal sealed class EphemeralInputService : IDisposable
             }
 
             var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "RotaLink", "SessionRuntime", "1.1.0-alpha.14");
+                "RotaLink", "SessionRuntime", RuntimeVersion);
             Directory.CreateDirectory(directory);
             var servicePath = Path.Combine(directory, "RotaLink.Service.exe");
             var helperPath = Path.Combine(directory, "RotaLink.SessionHelper.exe");
+            var nativeCapturePath = Path.Combine(directory, "RotaLink.NativeCapture.exe");
 
             var manager = OpenSCManager(null, null, ScManagerConnect | ScManagerCreateService);
             if (manager.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenSCManager failed.");
@@ -61,6 +66,8 @@ internal sealed class EphemeralInputService : IDisposable
                 RemoveStaleService(manager);
                 Extract(assembly, "RotaLink.Runtime.Service.exe", servicePath);
                 Extract(assembly, "RotaLink.Runtime.SessionHelper.exe", helperPath);
+                if (assembly.GetManifestResourceInfo("RotaLink.Runtime.NativeCapture.exe") is not null)
+                    Extract(assembly, "RotaLink.Runtime.NativeCapture.exe", nativeCapturePath);
                 var quotedPath = "\"" + servicePath + "\"";
                 var service = CreateService(manager, ServiceName, "RotaLink Interactive Input Runtime",
                     ServiceQueryStatus | ServiceStart | ServiceStop | Delete, ServiceWin32OwnProcess,

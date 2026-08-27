@@ -1,7 +1,7 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <vector>
-#include <wrl/client.h>
+#include "ComPtr.h"
 #include <d3d11.h>
 #include <mfidl.h>
 #include <mftransform.h>
@@ -22,8 +22,9 @@ public:
     EncodedVideoPacket Encode(ID3D11Texture2D* nv12Texture, std::int64_t timestamp100ns);
 private:
     void Configure(ID3D11Device* device);
-    Microsoft::WRL::ComPtr<IMFTransform> transform_;
-    Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> deviceManager_;
+    ComPtr<IMFTransform> transform_;
+    ComPtr<IMFDXGIDeviceManager> deviceManager_;
     std::uint32_t resetToken_{}, width_{}, height_{}, framesPerSecond_{}, bitrate_{};
     bool started_{};
 };
+

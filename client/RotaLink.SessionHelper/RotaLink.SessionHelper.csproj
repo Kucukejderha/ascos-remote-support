@@ -15,9 +15,13 @@
     <Compile Include="Program.cs" />
     <Compile Include="InteractiveWindowStation.cs" />
     <Compile Include="InputDesktop.cs" />
-    <Compile Include="CoordinateTransformationEngine.cs" />
     <Compile Include="InputEngine.cs" />
     <Compile Include="InputPipeServer.cs" />
+    <Compile Include="NativeCaptureBridge.cs" />
+    <Compile Include="SharedFrameReader.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />

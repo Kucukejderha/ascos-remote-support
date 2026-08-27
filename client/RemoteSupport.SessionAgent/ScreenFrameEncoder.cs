@@ -24,7 +24,8 @@ public sealed class ScreenFrameEncoder
         if (pixels.Length != checked(frame.Width * frame.Height * 4))
             throw new ArgumentException("Frame pixel length does not match its dimensions.", nameof(frame));
         if (!forceKeyFrame && _previous is not null && AreEqual(pixels, _previous)) return null;
-        _previous = pixels.ToArray();
+        if (_previous is null || _previous.Length != pixels.Length) _previous = new byte[pixels.Length];
+        Buffer.BlockCopy(pixels, 0, _previous, 0, pixels.Length);
 
         using var bitmap = new Bitmap(frame.Width, frame.Height, PixelFormat.Format32bppArgb);
         var area = new Rectangle(0, 0, frame.Width, frame.Height);
@@ -43,12 +44,12 @@ public sealed class ScreenFrameEncoder
         using var parameters = new EncoderParameters(1);
         parameters.Param[0] = new EncoderParameter(Encoder.Quality, 68L);
         bitmap.Save(jpeg, JpegCodec, parameters);
-        var image = jpeg.ToArray();
-        var packet = new byte[5 + image.Length];
+        var image = jpeg.GetBuffer();
+        var packet = new byte[5 + (int)jpeg.Length];
         packet[0] = ScreenFrameProtocol.JpegFrame;
         packet[1] = (byte)frame.Width; packet[2] = (byte)(frame.Width >> 8);
         packet[3] = (byte)frame.Height; packet[4] = (byte)(frame.Height >> 8);
-        Buffer.BlockCopy(image, 0, packet, 5, image.Length);
+        Buffer.BlockCopy(image, 0, packet, 5, (int)jpeg.Length);
         return packet;
     }
 

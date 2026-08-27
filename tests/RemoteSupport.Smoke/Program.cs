@@ -7,7 +7,6 @@ using System.Text;
 using System.Text.Json;
 using System.IO.Compression;
 using RemoteSupport.Protocol;
-using RemoteSupport.Service;
 using RemoteSupport.SessionAgent;
 using RemoteSupport.Signaling;
 
@@ -25,6 +24,13 @@ if (args is ["--architecture-only"])
     VerifyCoordinateTransformation();
     await VerifyLatestVideoQueueAsync();
     Console.WriteLine("Service/helper protocol, coordinate and drop-frame checks passed.");
+    return;
+}
+
+if (args is ["--store-only"])
+{
+    VerifySecurityStore();
+    Console.WriteLine("Security store expiry, purge and single-use checks passed.");
     return;
 }
 
@@ -139,6 +145,37 @@ static async Task VerifyIpcAsync()
         throw new InvalidOperationException("Named Pipe authentication failed.");
 }
 
+static void VerifySecurityStore()
+{
+    var clock = new FakeClock();
+    var store = new SecurityStore(clock);
+    using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+    var deviceId = store.Register(Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()), "Store Check");
+
+    var challenge = store.CreateChallenge(deviceId);
+    var signature = Convert.ToBase64String(key.SignData(Convert.FromBase64String(challenge.NonceBase64), HashAlgorithmName.SHA256));
+    clock.Now = clock.Now.AddMinutes(3);
+    if (store.PurgeExpired() == 0) throw new InvalidOperationException("Expired challenge was not purged.");
+    try { store.Verify(deviceId, challenge.ChallengeId, signature); throw new InvalidOperationException("Purged challenge was accepted."); }
+    catch (UnauthorizedAccessException) { }
+
+    var code = store.CreateCode(deviceId);
+    var first = store.Redeem(code.Code);
+    if (first.GuestToken.Length != 64) throw new InvalidOperationException("Guest token was not generated.");
+    try { store.Redeem(code.Code); throw new InvalidOperationException("Support code was redeemable twice."); }
+    catch (UnauthorizedAccessException) { }
+
+    var second = store.CreateCode(deviceId);
+    store.MarkHostConnected(second.SessionId);
+    if (store.PurgeExpired() != 0) throw new InvalidOperationException("An active host-connected session was purged.");
+
+    var third = store.CreateCode(deviceId);
+    clock.Now = clock.Now.AddMinutes(20);
+    if (store.PurgeExpired() == 0) throw new InvalidOperationException("Expired session was not purged.");
+    try { store.Redeem(third.Code); throw new InvalidOperationException("Expired code was redeemable."); }
+    catch (UnauthorizedAccessException) { }
+}
+
 static async Task VerifyLatestVideoQueueAsync()
 {
     var broker = new SessionBroker();
@@ -210,10 +247,11 @@ static void VerifyCaptureAndConsentGate()
     var sessionId = Guid.NewGuid();
     var consent = new ConsentStateMachine();
     consent.Request(sessionId, TimeSpan.FromMinutes(1));
-    using var dispatcher = new WindowsInputDispatcher(consent, sessionId);
-    var deniedInput = "{\"type\":\"move\",\"x\":1,\"y\":1}"u8.ToArray();
-    if (dispatcher.TryDispatch(deniedInput, deniedInput.Length))
-        throw new InvalidOperationException("Input was accepted before local consent.");
+    if (consent.IsControlAllowed(sessionId)) throw new InvalidOperationException("Input was allowed before consent.");
+    if (!consent.Decide(sessionId, approved: true)) throw new InvalidOperationException("Consent decision was rejected.");
+    if (!consent.IsControlAllowed(sessionId)) throw new InvalidOperationException("Approved consent did not allow input.");
+    consent.Stop(sessionId);
+    if (consent.IsControlAllowed(sessionId)) throw new InvalidOperationException("Input was allowed after consent was stopped.");
 }
 
 static void VerifyFrameEncoder()
@@ -272,3 +310,9 @@ internal sealed record Challenge(string ChallengeId, string NonceBase64);
 internal sealed record Access(string AccessToken);
 internal sealed record SupportCode(string SessionId, string Code);
 internal sealed record GuestSession(string GuestToken);
+
+internal sealed class FakeClock : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
+    public override DateTimeOffset GetUtcNow() => Now;
+}

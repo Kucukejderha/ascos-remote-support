@@ -36,33 +36,33 @@ public static class InputPacketCodec
         if (!Enum.IsDefined(typeof(InputEventKind), packet.Kind)) throw new ArgumentOutOfRangeException(nameof(packet));
         ValidateNormalized(packet.NormalizedX, nameof(packet.NormalizedX));
         ValidateNormalized(packet.NormalizedY, nameof(packet.NormalizedY));
-        destination[..PacketBytes].Clear();
+        destination.Slice(0, PacketBytes).Clear();
         BinaryPrimitives.WriteUInt32LittleEndian(destination, Magic);
-        BinaryPrimitives.WriteUInt16LittleEndian(destination[4..], Version);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(4, 2), Version);
         destination[6] = (byte)packet.Kind;
         destination[7] = packet.Down ? (byte)1 : (byte)0;
-        BinaryPrimitives.WriteInt64LittleEndian(destination[8..], packet.Sequence);
-        BinaryPrimitives.WriteInt64LittleEndian(destination[16..], BitConverter.DoubleToInt64Bits(packet.NormalizedX));
-        BinaryPrimitives.WriteInt64LittleEndian(destination[24..], BitConverter.DoubleToInt64Bits(packet.NormalizedY));
-        BinaryPrimitives.WriteInt32LittleEndian(destination[32..], packet.Data);
-        BinaryPrimitives.WriteUInt32LittleEndian(destination[36..], packet.KeyCode);
+        BinaryPrimitives.WriteInt64LittleEndian(destination.Slice(8, 8), packet.Sequence);
+        BinaryPrimitives.WriteInt64LittleEndian(destination.Slice(16, 8), BitConverter.DoubleToInt64Bits(packet.NormalizedX));
+        BinaryPrimitives.WriteInt64LittleEndian(destination.Slice(24, 8), BitConverter.DoubleToInt64Bits(packet.NormalizedY));
+        BinaryPrimitives.WriteInt32LittleEndian(destination.Slice(32, 4), packet.Data);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(36, 4), packet.KeyCode);
     }
 
     public static bool TryRead(ReadOnlySpan<byte> source, out InputPacket packet)
     {
         packet = default;
         if (source.Length != PacketBytes || BinaryPrimitives.ReadUInt32LittleEndian(source) != Magic ||
-            BinaryPrimitives.ReadUInt16LittleEndian(source[4..]) != Version) return false;
+            BinaryPrimitives.ReadUInt16LittleEndian(source.Slice(4, 2)) != Version) return false;
         var kind = (InputEventKind)source[6];
         var flags = source[7];
-        var sequence = BinaryPrimitives.ReadInt64LittleEndian(source[8..]);
-        var x = BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(source[16..]));
-        var y = BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(source[24..]));
+        var sequence = BinaryPrimitives.ReadInt64LittleEndian(source.Slice(8, 8));
+        var x = BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(source.Slice(16, 8)));
+        var y = BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(source.Slice(24, 8)));
         if (!Enum.IsDefined(typeof(InputEventKind), kind) || flags > 1 || sequence <= 0 ||
             !IsNormalized(x) || !IsNormalized(y)) return false;
         packet = new InputPacket(kind, flags != 0, sequence, x, y,
-            BinaryPrimitives.ReadInt32LittleEndian(source[32..]),
-            BinaryPrimitives.ReadUInt32LittleEndian(source[36..]));
+            BinaryPrimitives.ReadInt32LittleEndian(source.Slice(32, 4)),
+            BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(36, 4)));
         return true;
     }
 
@@ -87,30 +87,30 @@ public static class VideoPacketCodec
         if (!Enum.IsDefined(typeof(VideoCodec), header.Codec) || header.Sequence <= 0 ||
             header.Width <= 0 || header.Height <= 0 || header.PayloadLength is < 0 or > MaximumPayloadBytes)
             throw new ArgumentOutOfRangeException(nameof(header));
-        destination[..HeaderBytes].Clear();
+        destination.Slice(0, HeaderBytes).Clear();
         BinaryPrimitives.WriteUInt32LittleEndian(destination, Magic);
-        BinaryPrimitives.WriteUInt16LittleEndian(destination[4..], Version);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(4, 2), Version);
         destination[6] = (byte)header.Codec;
         destination[7] = header.KeyFrame ? (byte)1 : (byte)0;
-        BinaryPrimitives.WriteInt64LittleEndian(destination[8..], header.Sequence);
-        BinaryPrimitives.WriteInt64LittleEndian(destination[16..], header.Timestamp100Nanoseconds);
-        BinaryPrimitives.WriteInt32LittleEndian(destination[24..], header.Width);
-        BinaryPrimitives.WriteInt32LittleEndian(destination[28..], header.Height);
-        BinaryPrimitives.WriteInt32LittleEndian(destination[32..], header.PayloadLength);
+        BinaryPrimitives.WriteInt64LittleEndian(destination.Slice(8, 8), header.Sequence);
+        BinaryPrimitives.WriteInt64LittleEndian(destination.Slice(16, 8), header.Timestamp100Nanoseconds);
+        BinaryPrimitives.WriteInt32LittleEndian(destination.Slice(24, 4), header.Width);
+        BinaryPrimitives.WriteInt32LittleEndian(destination.Slice(28, 4), header.Height);
+        BinaryPrimitives.WriteInt32LittleEndian(destination.Slice(32, 4), header.PayloadLength);
     }
 
     public static bool TryReadHeader(ReadOnlySpan<byte> source, out VideoPacketHeader header)
     {
         header = default;
         if (source.Length < HeaderBytes || BinaryPrimitives.ReadUInt32LittleEndian(source) != Magic ||
-            BinaryPrimitives.ReadUInt16LittleEndian(source[4..]) != Version) return false;
+            BinaryPrimitives.ReadUInt16LittleEndian(source.Slice(4, 2)) != Version) return false;
         var codec = (VideoCodec)source[6];
         var flags = source[7];
-        var sequence = BinaryPrimitives.ReadInt64LittleEndian(source[8..]);
-        var timestamp = BinaryPrimitives.ReadInt64LittleEndian(source[16..]);
-        var width = BinaryPrimitives.ReadInt32LittleEndian(source[24..]);
-        var height = BinaryPrimitives.ReadInt32LittleEndian(source[28..]);
-        var payloadLength = BinaryPrimitives.ReadInt32LittleEndian(source[32..]);
+        var sequence = BinaryPrimitives.ReadInt64LittleEndian(source.Slice(8, 8));
+        var timestamp = BinaryPrimitives.ReadInt64LittleEndian(source.Slice(16, 8));
+        var width = BinaryPrimitives.ReadInt32LittleEndian(source.Slice(24, 4));
+        var height = BinaryPrimitives.ReadInt32LittleEndian(source.Slice(28, 4));
+        var payloadLength = BinaryPrimitives.ReadInt32LittleEndian(source.Slice(32, 4));
         if (!Enum.IsDefined(typeof(VideoCodec), codec) || flags > 1 || sequence <= 0 || width <= 0 || height <= 0 ||
             payloadLength is < 0 or > MaximumPayloadBytes) return false;
         header = new VideoPacketHeader(codec, flags != 0, sequence, timestamp, width, height, payloadLength);

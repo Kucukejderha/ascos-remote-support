@@ -2,10 +2,10 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace RemoteSupport.Service;
+namespace RemoteSupport.Protocol;
 
 [SupportedOSPlatform("windows")]
-internal static class WindowsDataProtection
+public static class WindowsDataProtection
 {
     private const int CryptProtectUiForbidden = 0x1;
 

@@ -26,9 +26,9 @@ internal sealed class SharedFrameReader : IDisposable
 
     public static SharedFrameReader Open(uint sessionId, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        var started = Environment.TickCount64;
+        var started = Environment.TickCount;
         Exception? lastError = null;
-        while (Environment.TickCount64 - started < timeout.TotalMilliseconds)
+        while (unchecked(Environment.TickCount - started) < (int)timeout.TotalMilliseconds)
         {
             cancellationToken.ThrowIfCancellationRequested();
             MemoryMappedFile? mapping = null;
@@ -91,4 +91,22 @@ internal sealed class SharedFrameReader : IDisposable
     }
 }
 
-internal sealed record SharedVideoFrame(long Sequence, long Timestamp100Nanoseconds, int Width, int Height, bool KeyFrame, byte[] Payload);
+internal sealed class SharedVideoFrame
+{
+    public SharedVideoFrame(long sequence, long timestamp100Nanoseconds, int width, int height, bool keyFrame, byte[] payload)
+    {
+        Sequence = sequence;
+        Timestamp100Nanoseconds = timestamp100Nanoseconds;
+        Width = width;
+        Height = height;
+        KeyFrame = keyFrame;
+        Payload = payload;
+    }
+
+    public long Sequence { get; }
+    public long Timestamp100Nanoseconds { get; }
+    public int Width { get; }
+    public int Height { get; }
+    public bool KeyFrame { get; }
+    public byte[] Payload { get; }
+}

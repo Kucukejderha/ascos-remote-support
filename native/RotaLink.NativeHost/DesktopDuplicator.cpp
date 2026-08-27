@@ -1,8 +1,7 @@
-#include "DesktopDuplicator.h"
+﻿#include "DesktopDuplicator.h"
 #include <stdexcept>
 #include <string>
 #include <system_error>
-using Microsoft::WRL::ComPtr;
 
 namespace {
 [[noreturn]] void ThrowHr(const char* operation, HRESULT hr) {
@@ -95,3 +94,4 @@ void DesktopDuplicator::ReleaseFrame() noexcept {
     frameHeld_ = false;
 }
 DXGI_OUTDUPL_DESC DesktopDuplicator::Description() const noexcept { return description_; }
+

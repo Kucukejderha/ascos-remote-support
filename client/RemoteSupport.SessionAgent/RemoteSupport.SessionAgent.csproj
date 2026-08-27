@@ -11,11 +11,6 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AssemblyName>RotaLink</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.1.0</Version>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <InformationalVersion>1.1.0-alpha.14</InformationalVersion>
-    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>Assets\RotaLink.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition="'$(PortableBuild)' == 'true'"><DefineConstants>$(DefineConstants);PORTABLE_BUILD</DefineConstants></PropertyGroup>
@@ -25,11 +20,17 @@
   </ItemGroup>
   <ItemGroup><Reference Include="System.Web.Extensions" /><Reference Include="System.Net.Http" /></ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <EmbeddedResource Include="..\RemoteSupport.Service\bin\$(Configuration)\net48\RotaLink.Service.exe"
                       LogicalName="RotaLink.Runtime.Service.exe"
                       Condition="Exists('..\RemoteSupport.Service\bin\$(Configuration)\net48\RotaLink.Service.exe')" />
     <EmbeddedResource Include="..\RotaLink.SessionHelper\bin\$(Configuration)\net48\RotaLink.SessionHelper.exe"
                       LogicalName="RotaLink.Runtime.SessionHelper.exe"
                       Condition="Exists('..\RotaLink.SessionHelper\bin\$(Configuration)\net48\RotaLink.SessionHelper.exe')" />
+    <EmbeddedResource Include="..\..\native\build\x64\RotaLink.NativeCapture.exe"
+                      LogicalName="RotaLink.Runtime.NativeCapture.exe"
+                      Condition="Exists('..\..\native\build\x64\RotaLink.NativeCapture.exe')" />
   </ItemGroup>
 </Project>

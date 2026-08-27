@@ -1,12 +1,12 @@
-#include "H264Encoder.h"
+﻿#include "H264Encoder.h"
 #include <codecapi.h>
 #include <mfapi.h>
 #include <mferror.h>
 #include <mfidl.h>
 #include <stdexcept>
 #include <string>
+#include <strmif.h>
 
-using Microsoft::WRL::ComPtr;
 
 namespace {
 void Check(HRESULT hr, const char* operation) {
@@ -64,14 +64,14 @@ void H264Encoder::Configure(ID3D11Device* device) {
     Check(MFCreateDXGIDeviceManager(&resetToken_, &deviceManager_), "MFCreateDXGIDeviceManager");
     Check(deviceManager_->ResetDevice(device, resetToken_), "ResetDevice");
     transform_->ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, reinterpret_cast<ULONG_PTR>(deviceManager_.Get()));
-    if (ComPtr<ICodecAPI> codec; SUCCEEDED(transform_.As(&codec))) {
+    ComPtr<ICodecAPI> codec;
+    if (SUCCEEDED(transform_.As<ICodecAPI>(&codec))) {
         VARIANT value;
         VariantInit(&value);
         value.vt = VT_BOOL; value.boolVal = VARIANT_TRUE;
-        codec->SetValue(&CODECAPI_AVLowLatencyMode, &value);
+        codec.Get()->SetValue(&CODECAPI_AVLowLatencyMode, &value);
         VariantClear(&value);
     }
-    Check(transform_->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0), "Encoder flush");
     Check(transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0), "Begin streaming");
     Check(transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0), "Start stream");
     started_ = true;
@@ -117,3 +117,4 @@ EncodedVideoPacket H264Encoder::Encode(ID3D11Texture2D* nv12Texture, std::int64_
     contiguous->Unlock();
     return packet;
 }
+

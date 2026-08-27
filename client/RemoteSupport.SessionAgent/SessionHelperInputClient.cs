@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using System.IO.Pipes;
+using RemoteSupport.Protocol;
 
 namespace RemoteSupport.SessionAgent;
 
 internal sealed class SessionHelperInputClient : IDisposable
 {
-    private const int PacketBytes = 40;
     private const int AcknowledgementBytes = 24;
     private const uint AcknowledgementMagic = 0x4F4C5452;
     private readonly object _gate = new();
@@ -43,7 +43,8 @@ internal sealed class SessionHelperInputClient : IDisposable
                     MapStage(acknowledgement[7]),
                     BitConverter.ToInt32(acknowledgement, 16));
             }
-            catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
+            catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException
+                or ArgumentException or ArgumentOutOfRangeException or InvalidDataException)
             {
                 AppDiagnostics.Write("Session helper input pipe disconnected.", exception);
                 Disconnect();
@@ -97,19 +98,19 @@ internal sealed class SessionHelperInputClient : IDisposable
 
     private static byte[] Encode(InputMessage message, long sequence)
     {
-        var packet = new byte[PacketBytes];
-        WriteUInt32(packet, 0, 0x494C5452);
-        WriteUInt16(packet, 4, 1);
-        packet[6] = message.Type switch { "move" => 1, "button" => 2, "wheel" => 3, "key" => 4, _ => (byte)0 };
-        packet[7] = message.Down ? (byte)1 : (byte)0;
-        Buffer.BlockCopy(BitConverter.GetBytes(sequence), 0, packet, 8, 8);
-        var x = message.NormalizedX ?? Math.Max(0d, Math.Min(1d, message.X / 65535d));
-        var y = message.NormalizedY ?? Math.Max(0d, Math.Min(1d, message.Y / 65535d));
-        Buffer.BlockCopy(BitConverter.GetBytes(x), 0, packet, 16, 8);
-        Buffer.BlockCopy(BitConverter.GetBytes(y), 0, packet, 24, 8);
+        var kind = message.Type switch
+        {
+            "move" => InputEventKind.Move,
+            "button" => InputEventKind.Button,
+            "wheel" => InputEventKind.Wheel,
+            "key" => InputEventKind.Key,
+            _ => throw new ArgumentException("Unknown input type: " + message.Type)
+        };
+        var x = Math.Max(0d, Math.Min(1d, message.NormalizedX ?? Math.Max(0d, Math.Min(1d, message.X / 65535d))));
+        var y = Math.Max(0d, Math.Min(1d, message.NormalizedY ?? Math.Max(0d, Math.Min(1d, message.Y / 65535d))));
         var data = message.Type == "button" ? message.Button : message.Delta;
-        Buffer.BlockCopy(BitConverter.GetBytes(data), 0, packet, 32, 4);
-        WriteUInt32(packet, 36, WindowsInputDispatcher.MapKey(message.Code));
+        var packet = new byte[InputPacketCodec.PacketBytes];
+        InputPacketCodec.Write(packet, new InputPacket(kind, message.Down, sequence, x, y, data, WindowsInputDispatcher.MapKey(message.Code)));
         return packet;
     }
 
@@ -133,20 +134,6 @@ internal sealed class SessionHelperInputClient : IDisposable
             if (read == 0) throw new EndOfStreamException();
             offset += read;
         }
-    }
-
-    private static void WriteUInt16(byte[] target, int offset, ushort value)
-    {
-        target[offset] = (byte)value;
-        target[offset + 1] = (byte)(value >> 8);
-    }
-
-    private static void WriteUInt32(byte[] target, int offset, uint value)
-    {
-        target[offset] = (byte)value;
-        target[offset + 1] = (byte)(value >> 8);
-        target[offset + 2] = (byte)(value >> 16);
-        target[offset + 3] = (byte)(value >> 24);
     }
 
     private void Disconnect()

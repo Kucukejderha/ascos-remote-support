@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\client\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" />
-    <ProjectReference Include="..\..\client\RemoteSupport.Service\RemoteSupport.Service.csproj" />
     <ProjectReference Include="..\..\client\RemoteSupport.SessionAgent\RemoteSupport.SessionAgent.csproj" />
     <ProjectReference Include="..\..\server\RemoteSupport.Signaling\RemoteSupport.Signaling.csproj" />
   </ItemGroup>

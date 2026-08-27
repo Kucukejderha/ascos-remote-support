@@ -1,8 +1,7 @@
-#include "GpuColorConverter.h"
+﻿#include "GpuColorConverter.h"
 #include <stdexcept>
 #include <string>
 
-using Microsoft::WRL::ComPtr;
 
 namespace {
 void Check(HRESULT hr, const char* operation) {
@@ -65,3 +64,4 @@ ComPtr<ID3D11Texture2D> GpuColorConverter::Convert(ID3D11Texture2D* bgraTexture)
     Check(videoContext_->VideoProcessorBlt(processor_.Get(), outputView.Get(), 0, 1, &stream), "VideoProcessorBlt");
     return output;
 }
+

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using RemoteSupport.Protocol;
 
 namespace RotaLink.SessionHelper;
 
@@ -23,6 +24,7 @@ internal sealed class InputEngine : IDisposable
     private readonly BlockingCollection<WorkItem> _queue = new(new ConcurrentQueue<WorkItem>(), 512);
     private readonly Thread _thread;
     private readonly HelperLog _log;
+    private readonly CoordinateTransformationEngine _coordinates = new();
 
     public InputEngine(HelperLog log)
     {
@@ -74,9 +76,9 @@ internal sealed class InputEngine : IDisposable
         }
     }
 
-    private static bool Inject(InputPacket packet)
+    private bool Inject(InputPacket packet)
     {
-        var point = new CoordinateTransformationEngine().Transform(packet.NormalizedX, packet.NormalizedY);
+        var point = _coordinates.Transform(packet.NormalizedX, packet.NormalizedY);
         NativeInput input;
         switch (packet.Kind)
         {
@@ -123,15 +125,15 @@ internal sealed class InputEngine : IDisposable
         throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
     }
 
-    private static NativeInput Mouse(AbsolutePoint point, uint flags, uint data) => new()
+    private static NativeInput Mouse(VirtualDesktopPoint point, uint flags, uint data) => new()
     {
         Type = InputMouse,
         Data = new InputUnion
         {
             Mouse = new MouseInput
             {
-                X = point.X,
-                Y = point.Y,
+                X = point.AbsoluteX,
+                Y = point.AbsoluteY,
                 MouseData = data,
                 Flags = MouseAbsolute | MouseVirtualDesktop | flags
             }
@@ -197,28 +199,4 @@ internal readonly struct InputInjectionResult
 
     public static InputInjectionResult Success() => new(true, InputFailureStage.None, 0);
     public static InputInjectionResult Failure(InputFailureStage stage, int errorCode = 0) => new(false, stage, errorCode);
-}
-
-internal enum InputEventKind : byte { Move = 1, Button = 2, Wheel = 3, Key = 4 }
-
-internal sealed class InputPacket
-{
-    public InputPacket(InputEventKind kind, bool down, long sequence, double normalizedX, double normalizedY, int data, uint keyCode)
-    {
-        Kind = kind;
-        Down = down;
-        Sequence = sequence;
-        NormalizedX = normalizedX;
-        NormalizedY = normalizedY;
-        Data = data;
-        KeyCode = keyCode;
-    }
-
-    public InputEventKind Kind { get; }
-    public bool Down { get; }
-    public long Sequence { get; }
-    public double NormalizedX { get; }
-    public double NormalizedY { get; }
-    public int Data { get; }
-    public uint KeyCode { get; }
 }

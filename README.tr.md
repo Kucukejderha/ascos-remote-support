@@ -11,7 +11,7 @@ Windows 10/11 ve Rotaniz sunucusu için kullanıcı onayını zorunlu tutan mod�
 ## Bileşenler
 
 - `server/RemoteSupport.Signaling`: Cihaz kaydı, imzalı doğrulama, destek kodları, hız sınırlama ve host/operatör WebSocket aktarımı.
-- `client/RemoteSupport.Protocol`: Sürüm kontrollü, HMAC doğrulamalı ve tekrar saldırısına karşı korumalı IPC paketleri.
+- `client/RemoteSupport.Protocol`: net8 + net48 için ortak ikili codec'ler ve IPC ilkelleri; net8 doğrulama yüzeyi HMAC doğrulamalı ve tekrar saldırısına karşı korumalı paketler ekler.
 - `client/RemoteSupport.SessionAgent`: Kullanıcı oturumunda ekran yakalama ve onaylanmış input uygulama süreci.
 - `client/RemoteSupport.Service`: Windows servis sınırı ve cihaz kimliği yaşam döngüsü. Session 0 içinden ekran yakalamaz.
 
@@ -40,10 +40,10 @@ Bu yapı metin okunabilirliğini artırırken masaüstü kullanımındaki bant g
 
 ```powershell
 dotnet build AscosRemoteSupport.sln
-powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1
+powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-Hafif istemci `artifacts/RotaLink.exe` olarak üretilir. Windows 10/11 ile birlikte gelen .NET Framework 4.8'i ve standart Windows iletişim pencerelerini kullanır; ayrıca .NET kurulumu, çalışma zamanı gömme veya üçüncü taraf EXE birleştiricisi gerektirmez.
+Yalnız taşınabilir istemci için `build.ps1` yeterlidir; kurulum paketi dahil tam sürüm için `build.ps1 -Full` çalıştırın. Hafif istemci `artifacts/RotaLink.exe` olarak üretilir. Windows 10/11 ile birlikte gelen .NET Framework 4.8'i ve standart Windows iletişim pencerelerini kullanır; ayrıca .NET kurulumu, çalışma zamanı gömme veya üçüncü taraf EXE birleştiricisi gerektirmez.
 
 Canlı operatör: https://45.87.173.201.nip.io/operator
 

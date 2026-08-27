@@ -22,7 +22,7 @@ Release date: 2026-08-04
 - Separate host and guest WSS authentication
 - Browser WebSocket subprotocol token handling
 - Lossless 960×540 compressed key/delta frame transport at up to 10 FPS, with unchanged-frame suppression
-- Authenticated Named Pipe framing and replay rejection
+- Interactive input pipe restricted to the interactive user by ACL and additionally verified by connecting process identity and image name; per-connection sequence numbers reject replay
 - Windows DPAPI device identity round-trip
 - Input rejected before explicit local consent
 - Persistent security audit entries

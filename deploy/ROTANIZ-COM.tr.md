@@ -1,23 +1,33 @@
 # rotaniz.com dağıtımı
 
-Müşterinin kurulum gerektirmeden çalıştırdığı Windows istemcisi aşağıdaki sabit adreste yayınlanır:
+Müşterinin kurulum gerektirmeden çalıştırdığı Windows istemcisi kontrol sunucusunda yayınlanır:
 
-`https://rotaniz.com/downloads/RotaLink.exe`
+`https://45.87.173.201.nip.io/downloads/RotaLink.exe`
 
-Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button.php` örneğini kullanır. Yayın dosyası `artifacts/RotaLink.exe` ile aynı derlemedir.
+`rotaniz.com` üzerinde ayrı bir dosya barındırılmaz; ana sayfadaki indirme düğmesi doğrudan yukarıdaki adresi gösterir. Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button.php` örneğini kullanır. Yayın dosyası `server/RemoteSupport.Signaling/downloads/RotaLink.exe` ile `artifacts/RotaLink.exe` aynı derlemedir.
 
 ## Güncelleme kontrol listesi
 
-1. Taşınabilir istemciyi `RotaLink.exe` adıyla üretin.
-2. Dosyayı `public_html/downloads/RotaLink.exe` üzerine yazın.
-3. Ana sayfadaki düğmenin `/downloads/RotaLink.exe` adresini gösterdiğini doğrulayın.
-4. Yayınlanan dosyanın boyutunu ve SHA-256 özetini sürüm notuna ekleyin.
+1. Taşınabilir istemciyi `RotaLink.exe` adıyla üretin (`scripts/build.ps1`).
+2. Dosyayı `server/RemoteSupport.Signaling/downloads/RotaLink.exe` üzerine yazın.
+3. Sunucuda `/opt/ascos-remote-support` altındaki sinyal imajını yeniden derleyip konteyneri yeniden başlatın (`docker compose up -d --build`).
+4. `https://45.87.173.201.nip.io/downloads/RotaLink.exe` adresinin yeni dosyayı verdiğini doğrulayın.
+5. Yayınlanan dosyanın boyutunu ve SHA-256 özetini sürüm notuna ekleyin.
 
-## 1.1.0-alpha.14
+Sürümlü indirme bağlantıları (`RotaLink-vX.Y.Z-*.exe`) kaldırılmıştır; yalnızca sabit `RotaLink.exe` yayınlanır. Sürüm notlarındaki eski sürümlü bağlantı satırları artık geçersizdir.
+
+## 1.1.0-alpha.15 (güncel derleme)
+
+`alpha.15`, güvenlik ve operasyonel iyileştirmeleri içerir: input pipe istemci kimliği doğrulaması, tek kullanımlık destek kodu, süresi dolan sunucu kayıtlarının periyodik temizliği, video kanalının host yeniden bağlanmasında kurtarılması, kalıcı DPAPI cihaz kimliğinin istemcide aktifleştirilmesi, HTTP retry ve `build.ps1` ile birleştirilmiş derleme akışı.
+
+- Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
+- Dosya boyutu: `193.536` bayt
+- SHA-256: `a1971ce3d16f34a2b8ea5eb994f48ad4e3d84af239edcb36779a7eb2eabd1869`
+
+## 1.1.0-alpha.14 (önceki derleme)
 
 `alpha.14`, kullanıcı-tokenlı SessionHelper'ın SYSTEM sahipli günlük dosyasına erişemediği ve pipe ACL'sinde LocalSystem'e özel `WTSQueryUserToken` kullandığı için sürekli kapanmasını düzeltir. Helper günlüğü `%LOCALAPPDATA%` altındadır ve birleşik tanılamaya eklenir.
 
-- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.14.exe`
 - Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
 - Beklenen helper başlangıcı: `Identity=<etkileşimli kullanıcı>, UIAccess=True`
 - Beklenen IPC kaydı: `Privileged SessionHelper input IPC connected`
@@ -26,7 +36,6 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 
 `alpha.13`, SessionHelper'ı SYSTEM servis tokenından değil `WTSQueryUserToken` ile aktif kullanıcının gerçek etkileşimli logon tokenından üretir. SYSTEM servis bu tokena doğrulanmış `TokenUIAccess=1` ekleyerek helper'ı `WinSta0` üzerinde başlatır.
 
-- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.13.exe`
 - Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
 - Beklenen helper başlangıcı: `Identity=<etkileşimli kullanıcı>, UIAccess=True`
 - Beklenen başarılı kontrol durumu: `system-helper-ok`
@@ -35,8 +44,6 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 
 `alpha.12`, SYSTEM servisinin etkileşimli SessionHelper tokenına `TokenUIAccess=1` atamasını ve başlatılan helper içinde bu bayrağın tekrar doğrulanmasını ekler. Amaç, `alpha.11` birleşik günlüğünde SYSTEM/Session 1/WinSta0/aktif desktop zinciri doğru olduğu hâlde `SendInput` çağrısının UIPI tarafından `ERROR_ACCESS_DENIED (5)` ile reddedilmesini gidermektir.
 
-- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.12.exe`
-- Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
 - Beklenen helper başlangıcı: `Identity=NT AUTHORITY\\SYSTEM, UIAccess=True`
 - Beklenen başarılı kontrol durumu: `system-helper-ok`
 
@@ -44,8 +51,6 @@ Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button
 
 `alpha.11`, SYSTEM SessionHelper sürecini input iş parçacığı başlamadan önce etkileşimli `WinSta0` pencere istasyonuna bağlar. Named-pipe tekrar bağlantılarında sıra numarası yeniden başlayabildiği için geçerli girdileri reddeden süreç-geneli replay kontrolü bağlantı kapsamına alınmıştır. Helper cevap protokolü gerçek hata aşamasını ve Win32 hata kodunu operatöre taşır.
 
-- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.11.exe`
-- Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
 - Beklenen başarılı kontrol durumu: `system-helper-ok`
 
 ## 1.1.0-alpha.10
@@ -56,11 +61,10 @@ Windows Service Control Manager kayıt adı ile gömülü servis dispatch adı a
 
 `alpha.10`, named pipe üzerinde desteklenmeyen `ReadTimeout`/`WriteTimeout` özelliklerinin ilk input paketinde uzak oturumu kapatmasını düzeltir. Acknowledgement okuması asynchronous pipe üzerinde iki saniyelik deadline kullanır ve IPC hatası oturum çökmesi yerine açık kontrol sonucu olarak raporlanır.
 
-- Kontrol sunucusu sabit bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
-- Kontrol sunucusu sürümlü bağlantısı: `https://45.87.173.201.nip.io/downloads/RotaLink-v1.1.0-alpha.10.exe`
+- Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
 - Dosya boyutu: `187.904` bayt
 - SHA-256: `37ca4ff6270afdead8f8e25da8fcf308d8d8359ece4364b7b2ed978e0574817a`
 
-`rotaniz.com` üzerindeki sabit dosya, cPanel/hosting aktarımı tamamlandıktan sonra aynı SHA-256 değerini vermelidir.
+`rotaniz.com` kendi dosya kopyasını barındırmaz; WordPress düğmesi kontrol sunucusu adresine yönlendirir.
 
 İstemci bağlantı tanılama günlüğünü `%LocalAppData%\RotaLink\rotalink.log` dosyasına; SYSTEM servis ve helper günlüklerini `%ProgramData%\RotaLink\Logs` dizinine yazar.

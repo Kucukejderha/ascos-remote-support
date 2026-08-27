@@ -1,12 +1,12 @@
 using System.Diagnostics;
 using System.IO.Pipes;
+using RemoteSupport.Protocol;
 
 namespace RemoteSupport.SessionAgent;
 
 internal sealed class SessionHelperVideoClient : IDisposable
 {
     private const int HeaderBytes = 40;
-    private const int MaximumPayload = 16 * 1024 * 1024;
     private readonly NamedPipeClientStream _pipe;
 
     private SessionHelperVideoClient(NamedPipeClientStream pipe) => _pipe = pipe;
@@ -30,23 +30,19 @@ internal sealed class SessionHelperVideoClient : IDisposable
     {
         var header = new byte[HeaderBytes];
         await ReadExactlyAsync(_pipe, header, cancellationToken);
-        if (ReadUInt32(header, 0) != 0x564C5452 || ReadUInt16(header, 4) != 1 || header[6] != 3 || header[7] > 1)
+        if (!VideoPacketCodec.TryReadHeader(header, out var decoded) || decoded.Codec != VideoCodec.H264AnnexB)
             throw new InvalidDataException("Invalid SessionHelper video packet header.");
-        var timestamp = BitConverter.ToInt64(header, 16);
-        var width = BitConverter.ToInt32(header, 24);
-        var height = BitConverter.ToInt32(header, 28);
-        var length = BitConverter.ToInt32(header, 32);
-        if (width <= 0 || height <= 0 || length is <= 0 or > MaximumPayload)
-            throw new InvalidDataException("Invalid SessionHelper video packet dimensions.");
-        var payload = new byte[length];
+        if (decoded.PayloadLength is <= 0 or > VideoPacketCodec.MaximumPayloadBytes)
+            throw new InvalidDataException("Invalid SessionHelper video packet payload length.");
+        var payload = new byte[decoded.PayloadLength];
         await ReadExactlyAsync(_pipe, payload, cancellationToken);
 
         var packet = new byte[14 + payload.Length];
         packet[0] = 4; // RotaLink browser H.264 packet.
-        packet[1] = header[7];
-        WriteUInt16(packet, 2, checked((ushort)width));
-        WriteUInt16(packet, 4, checked((ushort)height));
-        Buffer.BlockCopy(BitConverter.GetBytes(timestamp), 0, packet, 6, 8);
+        packet[1] = decoded.KeyFrame ? (byte)1 : (byte)0;
+        WriteUInt16(packet, 2, checked((ushort)decoded.Width));
+        WriteUInt16(packet, 4, checked((ushort)decoded.Height));
+        Buffer.BlockCopy(BitConverter.GetBytes(decoded.Timestamp100Nanoseconds), 0, packet, 6, 8);
         Buffer.BlockCopy(payload, 0, packet, 14, payload.Length);
         return packet;
     }
@@ -62,8 +58,6 @@ internal sealed class SessionHelperVideoClient : IDisposable
         }
     }
 
-    private static ushort ReadUInt16(byte[] data, int offset) => (ushort)(data[offset] | data[offset + 1] << 8);
-    private static uint ReadUInt32(byte[] data, int offset) => (uint)(data[offset] | data[offset + 1] << 8 | data[offset + 2] << 16 | data[offset + 3] << 24);
     private static void WriteUInt16(byte[] data, int offset, ushort value) { data[offset] = (byte)value; data[offset + 1] = (byte)(value >> 8); }
     public void Dispose() => _pipe.Dispose();
 }

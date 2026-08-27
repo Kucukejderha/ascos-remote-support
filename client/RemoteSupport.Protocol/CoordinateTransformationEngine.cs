@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace RemoteSupport.SessionAgent;
+namespace RemoteSupport.Protocol;
 
 public readonly struct VirtualDesktopPoint
 {

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Web.Script.Serialization;
+using RemoteSupport.Protocol;
 
 namespace RemoteSupport.SessionAgent;
 

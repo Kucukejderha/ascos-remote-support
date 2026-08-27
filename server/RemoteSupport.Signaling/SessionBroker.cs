@@ -69,25 +69,40 @@ public sealed class SessionBroker
 
     public void PublishLatestVideo(string sessionId, byte[] frame)
     {
-        var video = _video.GetOrAdd(sessionId, _ => Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1)
+        var video = _video.GetOrAdd(sessionId, _ => CreateVideoChannel());
+        if (!video.Writer.TryWrite(frame))
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-            SingleWriter = true
-        }));
-        video.Writer.TryWrite(frame);
+            // The channel was completed because the previous host detached. A
+            // completed channel silently rejects writes, so swap in a fresh one.
+            _video.TryRemove(sessionId, out _);
+            video = _video.GetOrAdd(sessionId, _ => CreateVideoChannel());
+            video.Writer.TryWrite(frame);
+        }
     }
 
     public async ValueTask<byte[]> ReadLatestVideoAsync(string sessionId, CancellationToken token)
     {
-        var video = _video.GetOrAdd(sessionId, _ => Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1)
+        var video = _video.GetOrAdd(sessionId, _ => CreateVideoChannel());
+        byte[] frame;
+        try
+        {
+            frame = await video.Reader.ReadAsync(token);
+        }
+        catch (ChannelClosedException) when (_video.TryGetValue(sessionId, out var replacement) && !ReferenceEquals(replacement, video))
+        {
+            // The host disconnected and reconnected, so the guest is still
+            // reading the completed channel. Follow the replacement channel.
+            frame = await replacement.Reader.ReadAsync(token);
+        }
+        while (video.Reader.TryRead(out var newer)) frame = newer;
+        return frame;
+    }
+
+    private static Channel<byte[]> CreateVideoChannel() =>
+        Channel.CreateBounded<byte[]>(new BoundedChannelOptions(1)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
             SingleWriter = true
-        }));
-        var frame = await video.Reader.ReadAsync(token);
-        while (video.Reader.TryRead(out var newer)) frame = newer;
-        return frame;
-    }
+        });
 }

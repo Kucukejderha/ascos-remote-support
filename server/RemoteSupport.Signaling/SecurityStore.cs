@@ -103,7 +103,9 @@ public sealed class SecurityStore
 
     public RedeemSupportCodeResponse Redeem(string code)
     {
-        if (!_codes.TryGetValue(code, out var item)) throw new UnauthorizedAccessException();
+        // The code is single-use: the first redeem consumes it, so a code that
+        // was already used (or that never existed) cannot be redeemed again.
+        if (!_codes.TryRemove(code, out var item)) throw new UnauthorizedAccessException();
         if (!_sessions.TryGetValue(item.SessionId, out var session)) throw new UnauthorizedAccessException();
         lock (session.Gate)
         {
@@ -112,6 +114,31 @@ public sealed class SecurityStore
             session.GuestToken = guestToken;
             return new(session.Id, session.HostDeviceId, guestToken, session.ExpiresAt);
         }
+    }
+
+    public int PurgeExpired()
+    {
+        var now = _clock.GetUtcNow();
+        var removed = 0;
+        foreach (var entry in _challenges)
+            if (entry.Value.ExpiresAt <= now && _challenges.TryRemove(entry.Key, out _)) removed++;
+        foreach (var entry in _tokens)
+            if (entry.Value.ExpiresAt <= now && _tokens.TryRemove(entry.Key, out _)) removed++;
+        foreach (var entry in _codes)
+            if (entry.Value.ExpiresAt <= now && _codes.TryRemove(entry.Key, out _)) removed++;
+        foreach (var entry in _sessions)
+        {
+            var session = entry.Value;
+            bool expired;
+            lock (session.Gate)
+                expired = !session.HostConnected && session.ExpiresAt <= now;
+            if (expired && _sessions.TryRemove(entry.Key, out var removedSession))
+            {
+                _codes.TryRemove(removedSession.Code, out _);
+                removed++;
+            }
+        }
+        return removed;
     }
 
     public void MarkHostConnected(string sessionId)

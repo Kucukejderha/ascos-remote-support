@@ -26,6 +26,7 @@ public sealed class GdiScreenCapture : IDisposable
     private IntPtr _bitmap;
     private IntPtr _oldBitmap;
     private IntPtr _bits;
+    private byte[]? _pixelBuffer;
     private readonly BlockingCollection<CaptureRequest> _requests = new();
     private readonly ManualResetEventSlim _initialized = new(false);
     private readonly Thread _desktopThread;
@@ -75,9 +76,9 @@ public sealed class GdiScreenCapture : IDisposable
             throw new Win32Exception(Marshal.GetLastWin32Error());
         if (!StretchBlt(_memoryDc, 0, 0, _width, _height, _sourceDc, 0, 0, _sourceWidth, _sourceHeight, 0x00CC0020))
             throw new Win32Exception(Marshal.GetLastWin32Error());
-        var pixels = new byte[_width * _height * 4];
-        Marshal.Copy(_bits, pixels, 0, pixels.Length);
-        return new CapturedFrame(_width, _height, pixels);
+        _pixelBuffer ??= new byte[_width * _height * 4];
+        Marshal.Copy(_bits, _pixelBuffer, 0, _pixelBuffer.Length);
+        return new CapturedFrame(_width, _height, _pixelBuffer);
     }
 
     private void DesktopThreadMain()

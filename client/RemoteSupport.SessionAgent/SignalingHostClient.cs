@@ -43,20 +43,44 @@ public sealed class SignalingHostClient : IDisposable
     public async Task<ClientWebSocket> ConnectHostSocketAsync(HostSession session, string channel, CancellationToken token)
     {
         if (channel != "control" && channel != "video") throw new ArgumentOutOfRangeException(nameof(channel));
-        var socket = new ClientWebSocket();
-        socket.Options.SetRequestHeader("Authorization", $"Bearer {session.AccessToken}");
-        socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(10);
-        var builder = new UriBuilder(_baseUri) { Scheme=_baseUri.Scheme=="https"?"wss":"ws", Path=$"/v1/sessions/{session.SessionId}/signal", Query=$"role=host&channel={channel}" };
-        try { await socket.ConnectAsync(builder.Uri, token); return socket; } catch { socket.Dispose(); throw; }
+        var builder = new UriBuilder(_baseUri) { Scheme = _baseUri.Scheme == "https" ? "wss" : "ws", Path = $"/v1/sessions/{session.SessionId}/signal", Query = $"role=host&channel={channel}" };
+        for (var attempt = 0; ; attempt++)
+        {
+            var socket = new ClientWebSocket();
+            socket.Options.SetRequestHeader("Authorization", $"Bearer {session.AccessToken}");
+            socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+            try
+            {
+                await socket.ConnectAsync(builder.Uri, token);
+                return socket;
+            }
+            catch
+            {
+                socket.Dispose();
+                if (attempt >= 2 || token.IsCancellationRequested) throw;
+                await Task.Delay(TimeSpan.FromMilliseconds(500 * (1 << attempt)), token);
+            }
+        }
     }
 
     private async Task<T> PostAsync<T>(string path, object body, CancellationToken token)
     {
-        using var content = new StringContent(_json.Serialize(body), Encoding.UTF8, "application/json");
-        using var response = await _http.PostAsync(path, content, token);
-        response.EnsureSuccessStatusCode();
-        var text = await response.Content.ReadAsStringAsync();
-        return _json.Deserialize<T>(text) ?? throw new InvalidDataException("Sunucu boş yanıt döndürdü.");
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                using var content = new StringContent(_json.Serialize(body), Encoding.UTF8, "application/json");
+                using var response = await _http.PostAsync(path, content, token);
+                response.EnsureSuccessStatusCode();
+                var text = await response.Content.ReadAsStringAsync();
+                return _json.Deserialize<T>(text) ?? throw new InvalidDataException("Sunucu boş yanıt döndürdü.");
+            }
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidDataException)
+            {
+                if (attempt >= 2 || token.IsCancellationRequested) throw;
+                await Task.Delay(TimeSpan.FromMilliseconds(500 * (1 << attempt)), token);
+            }
+        }
     }
 
     private byte[] ExportPublicKeySpki()
