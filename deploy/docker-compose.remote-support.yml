@@ -15,12 +15,12 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    pids_limit: 128
     deploy:
       resources:
         limits:
           cpus: '1.0'
           memory: 256M
+          pids: 128
     logging:
       driver: json-file
       options:

@@ -18,13 +18,14 @@ Sürümlü indirme bağlantıları (`RotaLink-vX.Y.Z-*.exe`) kaldırılmıştır
 
 ## 1.1.0-alpha.15 (güncel derleme)
 
-`alpha.15`, güvenlik ve operasyonel iyileştirmeleri içerir: input pipe istemci kimliği doğrulaması, tek kullanımlık destek kodu, süresi dolan sunucu kayıtlarının periyodik temizliği, video kanalının host yeniden bağlanmasında kurtarılması, kalıcı DPAPI cihaz kimliğinin istemcide aktifleştirilmesi, HTTP retry, DXGI/H.264 native yakalama motorunun gömülmesi ve `build.ps1` ile birleştirilmiş derleme akışı.
+`alpha.15`, güvenlik ve operasyonel iyileştirmeleri içerir: input pipe istemci kimliği doğrulaması, tek kullanımlık destek kodu, süresi dolan sunucu kayıtlarının periyodik temizliği, video kanalının host yeniden bağlanmasında kurtarılması, kalıcı DPAPI cihaz kimliğinin istemcide aktifleştirilmesi, HTTP retry, DXGI/H.264 native yakalama motorunun gömülmesi, otomatik güncelleme (self-update) ve `build.ps1` ile birleştirilmiş derleme akışı.
 
 - Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
-- Dosya boyutu: `501.760` bayt
-- SHA-256: `c82a73cca65e0c1fb447d522dccc0e538bb4aebdee6d2804590a31043e804048`
+- Sürüm bildirimi: `https://45.87.173.201.nip.io/downloads/version.json`
+- Dosya boyutu: `508.928` bayt
+- SHA-256: `fed44704e24963a910626f2f00fe5ef8ccdf5f006f7fba8a1c5dabd685ed293e`
 - Canlı sunucuya dağıtım: 2026-08-27
-- Düzeltme: elevated istemciye input pipe kimlik doğrulaması (bütünlük seviyesi engeli) — process açılamıyorsa bağlantı ACL + oturum eşleşmesiyle kabul edilir
+- Otomatik güncelleme: istemci açılışta `version.json`'u denetler; yeni sürüm varsa indirir, SHA-256 doğrular, çalışan exe'yi değiştirip yeniden başlatır. `build.ps1` sürüm bildirimini otomatik üretir.
 
 ## 1.1.0-alpha.14 (önceki derleme)
 

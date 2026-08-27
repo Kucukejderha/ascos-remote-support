@@ -139,6 +139,15 @@ public sealed class MainForm : Form
         {
             _copy.Enabled = false;
             _code.Text = "Hazırlanıyor…";
+            SetStatus("Güncelleme denetleniyor…", Color.FromArgb(99, 120, 138));
+
+            if (await SelfUpdate.TryUpdateAsync(_server, CancellationToken.None))
+            {
+                SetStatus("Yeni sürüm yüklendi — yeniden başlatılıyor…", Blue);
+                Application.Exit();
+                return;
+            }
+
             SetStatus("Yeni destek kodu hazırlanıyor…", Color.FromArgb(99, 120, 138));
 
             _identity ??= await _identityStore.LoadOrCreateAsync(CancellationToken.None);

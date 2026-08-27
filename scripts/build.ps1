@@ -106,6 +106,16 @@ Write-Host "RotaLink created: $output"
 Write-Host "Size: $((Get-Item $output).Length) bytes"
 Write-Host "SHA-256: $portableHash"
 
+# Publish the executable and its version manifest into the server's static
+# downloads folder so the self-update endpoint stays in sync with the build.
+$serverDownloads = Join-Path $root 'server\RemoteSupport.Signaling\downloads'
+Copy-Item -LiteralPath $output -Destination (Join-Path $serverDownloads 'RotaLink.exe') -Force
+$propsContent = Get-Content (Join-Path $root 'Directory.Build.props') -Raw
+$informationalVersion = [regex]::Match($propsContent, '<InformationalVersion>(.*?)</InformationalVersion>').Groups[1].Value.Trim()
+$manifestJson = @{ version = $informationalVersion; fileName = 'RotaLink.exe'; sha256 = $portableHash } | ConvertTo-Json
+[System.IO.File]::WriteAllText((Join-Path $serverDownloads 'version.json'), $manifestJson, (New-Object System.Text.UTF8Encoding($false)))
+Write-Host "Version manifest written: version=$informationalVersion"
+
 if ($SignThumbprint) {
     Sign-File $output $SignThumbprint
 }

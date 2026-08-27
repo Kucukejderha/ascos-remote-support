@@ -40,6 +40,13 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ascos-rem
 app.MapGet("/operator", () => Results.Content(OperatorPage.Html, "text/html; charset=utf-8"));
 app.MapGet("/downloads/RotaLink.exe", (HttpContext context, IWebHostEnvironment environment) =>
     CreateClientDownload(context, environment));
+app.MapGet("/downloads/version.json", (HttpContext context, IWebHostEnvironment environment) =>
+{
+    var versionPath = Path.Combine(environment.ContentRootPath, "downloads", "version.json");
+    if (!File.Exists(versionPath)) return Results.NotFound();
+    context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+    return Results.File(versionPath, "application/json");
+});
 
 app.MapPost("/v1/devices", (RegisterDeviceRequest request, SecurityStore store) =>
 {
