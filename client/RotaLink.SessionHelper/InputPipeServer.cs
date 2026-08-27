@@ -15,9 +15,6 @@ internal sealed class InputPipeServer
     private const int AcknowledgementBytes = 24;
     private const uint AcknowledgementMagic = 0x4F4C5452;
     private const uint ProcessQueryLimitedInformation = 0x1000;
-    private const uint TokenQuery = 0x0008;
-    private const int TokenUser = 1;
-    private const uint MaximumSidBufferBytes = 256;
     private readonly uint _sessionId;
     private readonly InputEngine _engine;
     private readonly HelperLog _log;
@@ -53,49 +50,32 @@ internal sealed class InputPipeServer
     /// <summary>
     /// Authenticates the pipe client before any input is accepted. The named
     /// pipe ACL already restricts connections to the interactive user and
-    /// SYSTEM; this additionally verifies that the connected process is the
-    /// RotaLink agent running under the interactive user's identity.
+    /// SYSTEM; this additionally verifies that the connected process runs in
+    /// the helper's session. Process image verification is best-effort: the
+    /// unelevated helper cannot open an elevated RotaLink.exe (integrity
+    /// level), so a failed open is accepted instead of breaking control.
     /// </summary>
     private void VerifyClientIdentity(NamedPipeServerStream pipe)
     {
         if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var clientProcessId) || clientProcessId == 0)
             throw new InvalidDataException("Pipe client process could not be resolved.");
+        if (!ProcessIdToSessionId(clientProcessId, out var clientSession) || clientSession != _sessionId)
+            throw new InvalidDataException("Pipe client is not in the interactive session.");
+
         using (var process = OpenProcess(ProcessQueryLimitedInformation, false, clientProcessId))
         {
             if (process.IsInvalid)
-                throw new InvalidDataException("Pipe client process could not be opened.");
+            {
+                _log.Write("Input IPC client process could not be opened for image verification; accepting based on pipe ACL and session match.");
+                return;
+            }
             var image = new StringBuilder(512);
             var imageLength = image.Capacity;
-            if (!QueryFullProcessImageName(process, 0, image, ref imageLength))
-                throw new InvalidDataException("Pipe client image could not be resolved.");
+            if (!QueryFullProcessImageName(process, 0, image, ref imageLength)) return;
             var fileName = Path.GetFileName(image.ToString());
             if (!string.Equals(fileName, "RotaLink.exe", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Untrusted pipe client image: " + fileName);
-            if (!OpenProcessToken(process, TokenQuery, out var token))
-                throw new InvalidDataException("Pipe client token could not be opened.");
-            using (token)
-            {
-                var clientUser = ReadTokenUserSid(token);
-                if (!clientUser.Equals(GetInteractiveUserSid()))
-                    throw new InvalidDataException("Pipe client identity does not match the interactive user.");
-            }
         }
-    }
-
-    private static SecurityIdentifier ReadTokenUserSid(SafeAccessTokenHandle token)
-    {
-        GetTokenInformation(token, TokenUser, IntPtr.Zero, 0, out var required);
-        if (required <= 0 || required > MaximumSidBufferBytes)
-            throw new InvalidDataException("Pipe client token user information is invalid.");
-        var buffer = Marshal.AllocHGlobal(required);
-        try
-        {
-            if (!GetTokenInformation(token, TokenUser, buffer, required, out _))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "GetTokenInformation(TokenUser) failed.");
-            var user = Marshal.PtrToStructure<TokenUserStructure>(buffer);
-            return new SecurityIdentifier(user.User.Sid);
-        }
-        finally { Marshal.FreeHGlobal(buffer); }
     }
 
     private void ProcessClient(Stream stream, EventWaitHandle stop)
@@ -164,9 +144,6 @@ internal sealed class InputPipeServer
 
     private string PipeName => "RotaLink.SessionHelper." + _sessionId + ".Input.v1";
 
-    [StructLayout(LayoutKind.Sequential)] private struct TokenUserStructure { public SidAndAttributesStructure User; }
-    [StructLayout(LayoutKind.Sequential)] private struct SidAndAttributesStructure { public IntPtr Sid; public uint Attributes; }
-
     [DllImport("wtsapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WTSQueryUserToken(uint sessionId, out SafeAccessTokenHandle token);
@@ -174,14 +151,11 @@ internal sealed class InputPipeServer
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetNamedPipeClientProcessId(SafePipeHandle pipe, out uint clientProcessId);
     [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ProcessIdToSessionId(uint processId, out uint sessionId);
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern Microsoft.Win32.SafeHandles.SafeProcessHandle OpenProcess(uint desiredAccess, bool inheritHandle, uint processId);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool QueryFullProcessImageName(Microsoft.Win32.SafeHandles.SafeProcessHandle process, uint flags, StringBuilder imageName, ref int size);
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool OpenProcessToken(Microsoft.Win32.SafeHandles.SafeProcessHandle process, uint desiredAccess, out SafeAccessTokenHandle token);
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass, IntPtr information, int informationLength, out int returnLength);
 }
