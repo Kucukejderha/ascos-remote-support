@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -167,6 +168,8 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
                 app.Logger.LogInformation("First relayed message: session={SessionId}, from={Role}, type={MessageType}, bytes={Bytes}", sessionId, role, result.MessageType, result.Count);
                 firstRelayedMessage = false;
             }
+            if (channel == "control" && role == "host" && result.MessageType == WebSocketMessageType.Text)
+                await TryRecordControlResultAsync(audit, sessionId, context, buffer.AsSpan(0, result.Count).ToArray());
         }
     }
     finally
@@ -197,6 +200,31 @@ static IResult CreateClientDownload(HttpContext context, IWebHostEnvironment env
     context.Response.Headers.Pragma = "no-cache";
     context.Response.Headers.Expires = "0";
     return Results.File(downloadPath, "application/vnd.microsoft.portable-executable", "RotaLink.exe", enableRangeProcessing: true);
+}
+
+/// <summary>
+/// Records failed host input acknowledgements ("control-result" with ok=false)
+/// into the audit trail so control failures can be diagnosed from the server
+/// side without touching the host machine.
+/// </summary>
+static async Task TryRecordControlResultAsync(AuditLog audit, string sessionId, HttpContext context, byte[] json)
+{
+    try
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        if (!root.TryGetProperty("type", out var typeElement) || typeElement.GetString() != "control-result") return;
+        if (root.TryGetProperty("ok", out var okElement) && okElement.GetBoolean()) return;
+        string? stage = null;
+        string? desktop = null;
+        if (root.TryGetProperty("stage", out var stageElement)) stage = stageElement.GetString();
+        if (root.TryGetProperty("desktop", out var desktopElement)) desktop = desktopElement.GetString();
+        var error = root.TryGetProperty("error", out var errorElement) ? errorElement.GetInt32() : 0;
+        await audit.WriteAsync("control_result", null, sessionId, context.Connection.RemoteIpAddress?.ToString(), CancellationToken.None,
+            new { ok = false, stage, error, desktop });
+    }
+    catch (JsonException) { }
+    catch (FormatException) { }
 }
 
 public partial class Program;

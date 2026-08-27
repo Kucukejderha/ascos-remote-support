@@ -17,10 +17,10 @@ public sealed class AuditLog
         _clock = clock;
     }
 
-    public async Task WriteAsync(string eventName, string? deviceId, string? sessionId, string? remoteAddress, CancellationToken cancellationToken)
+    public async Task WriteAsync(string eventName, string? deviceId, string? sessionId, string? remoteAddress, CancellationToken cancellationToken, object? details = null)
     {
         if (string.IsNullOrWhiteSpace(_path)) return;
-        var entry = JsonSerializer.Serialize(new { timestamp = _clock.GetUtcNow(), eventName, deviceId, sessionId, remoteAddress }) + Environment.NewLine;
+        var entry = JsonSerializer.Serialize(new { timestamp = _clock.GetUtcNow(), eventName, deviceId, sessionId, remoteAddress, details }) + Environment.NewLine;
         await _gate.WaitAsync(cancellationToken);
         try
         {
