@@ -50,6 +50,9 @@ internal sealed class ElevatedSessionHelper : IDisposable
     {
         try
         {
+            var sessionId = (uint)Process.GetCurrentProcess().SessionId;
+            StopExistingHelpers(sessionId);
+
             var assembly = Assembly.GetExecutingAssembly();
             if (assembly.GetManifestResourceInfo("RotaLink.Runtime.SessionHelper.exe") is null)
             {
@@ -66,9 +69,14 @@ internal sealed class ElevatedSessionHelper : IDisposable
             RemoveStaleService();
             Extract(assembly, "RotaLink.Runtime.SessionHelper.exe", helperPath);
             if (assembly.GetManifestResourceInfo("RotaLink.Runtime.NativeCapture.exe") is not null)
-                Extract(assembly, "RotaLink.Runtime.NativeCapture.exe", nativeCapturePath);
+            {
+                try { Extract(assembly, "RotaLink.Runtime.NativeCapture.exe", nativeCapturePath); }
+                catch (Exception exception)
+                {
+                    AppDiagnostics.Write("Native capture extraction failed; video will use the GDI fallback.", exception);
+                }
+            }
 
-            var sessionId = (uint)Process.GetCurrentProcess().SessionId;
             var helperProcess = LaunchHelper(helperPath, sessionId, out var processId);
             Volatile.Write(ref _isRunning, 1);
             AppDiagnostics.Write("Elevated SessionHelper started in session " + sessionId + ", process " + processId + ".");
@@ -132,6 +140,44 @@ internal sealed class ElevatedSessionHelper : IDisposable
         using (var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None)) source.CopyTo(output);
         if (File.Exists(destination)) File.Delete(destination);
         File.Move(temporary, destination);
+    }
+
+    private static void StopExistingHelpers(uint sessionId)
+    {
+        try
+        {
+            using var stopEvent = OpenEvent(0x0002, false, "Global\\RotaLink.SessionHelper.Stop." + sessionId);
+            if (!stopEvent.IsInvalid) SetEvent(stopEvent);
+        }
+        catch (Exception exception)
+        {
+            AppDiagnostics.Write("Existing helper stop event failed.", exception);
+        }
+        foreach (var process in Process.GetProcessesByName("RotaLink.SessionHelper"))
+        {
+            try
+            {
+                if (!process.WaitForExit(1500)) { process.Kill(); process.WaitForExit(2000); }
+            }
+            catch (Exception exception)
+            {
+                AppDiagnostics.Write("Existing helper cleanup failed.", exception);
+            }
+            finally { process.Dispose(); }
+        }
+        foreach (var process in Process.GetProcessesByName("RotaLink.NativeCapture"))
+        {
+            try
+            {
+                process.Kill();
+                process.WaitForExit(2000);
+            }
+            catch (Exception exception)
+            {
+                AppDiagnostics.Write("Existing native capture cleanup failed.", exception);
+            }
+            finally { process.Dispose(); }
+        }
     }
 
     private static void RemoveStaleService()

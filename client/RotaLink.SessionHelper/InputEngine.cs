@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
 using RemoteSupport.Protocol;
 
 namespace RotaLink.SessionHelper;
@@ -21,6 +24,16 @@ internal sealed class InputEngine : IDisposable
     private const uint MouseAbsolute = 0x8000;
     private const uint KeyUp = 0x0002;
     private const uint KeyExtended = 0x0001;
+    private const uint WmMouseWheel = 0x020A;
+    private const uint WmKeyDown = 0x0100;
+    private const uint WmKeyUp = 0x0101;
+    private const uint WmMiddleDown = 0x0207;
+    private const uint WmMiddleUp = 0x0208;
+    private const uint WmRightDown = 0x0204;
+    private const uint WmRightUp = 0x0205;
+    private const uint WmLeftDown = 0x0201;
+    private const uint WmLeftUp = 0x0202;
+    private bool _fallbackLogged;
     private readonly BlockingCollection<WorkItem> _queue = new(new ConcurrentQueue<WorkItem>(), 512);
     private readonly Thread _thread;
     private readonly HelperLog _log;
@@ -43,10 +56,16 @@ internal sealed class InputEngine : IDisposable
     private void Worker()
     {
         using var desktop = new InputDesktop();
+        var diagnosticsLogged = false;
         foreach (var item in _queue.GetConsumingEnumerable())
         {
             try
             {
+                if (!diagnosticsLogged)
+                {
+                    diagnosticsLogged = true;
+                    LogDiagnostics();
+                }
                 item.CancellationToken.ThrowIfCancellationRequested();
                 desktop.Refresh();
                 var accepted = Inject(item.Packet);
@@ -66,6 +85,7 @@ internal sealed class InputEngine : IDisposable
                         ? InputFailureStage.SetThreadDesktop
                         : InputFailureStage.SendInput;
                 _log.Write("Input injection failed. Stage=" + stage + ", Win32Error=" + exception.NativeErrorCode + ". " + exception);
+                if (stage == InputFailureStage.SendInput) LogForeground();
                 item.Completion.TrySetResult(InputInjectionResult.Failure(stage, exception.NativeErrorCode));
             }
             catch (Exception exception)
@@ -74,6 +94,77 @@ internal sealed class InputEngine : IDisposable
                 item.Completion.TrySetResult(InputInjectionResult.Failure(InputFailureStage.HelperException, exception.HResult));
             }
         }
+    }
+
+    private void LogDiagnostics()
+    {
+        try
+        {
+            var identity = WindowsIdentity.GetCurrent().Name;
+            var integrityRid = ReadIntegrityRid();
+            var threadDesktop = GetDesktopName(GetThreadDesktop(GetCurrentThreadId()));
+            var inputDesktop = GetDesktopName(OpenInputDesktop(0, false, 0x0001 | 0x0002 | 0x0004 | 0x0080 | 0x0100));
+            _log.Write("Input diagnostics: Identity=" + identity + ", IntegrityRid=0x" + integrityRid.ToString("X4") +
+                ", ThreadDesktop=" + threadDesktop + ", InputDesktop=" + inputDesktop + ".");
+        }
+        catch (Exception exception)
+        {
+            _log.Write("Input diagnostics failed: " + exception.Message);
+        }
+    }
+
+    private void LogForeground()
+    {
+        try
+        {
+            var window = GetForegroundWindow();
+            GetWindowThreadProcessId(window, out var processId);
+            var title = new StringBuilder(256);
+            GetWindowText(window, title, title.Capacity);
+            _log.Write("Foreground window: Process=" + processId + ", Title='" + title + "'.");
+        }
+        catch (Exception exception)
+        {
+            _log.Write("Foreground diagnostics failed: " + exception.Message);
+        }
+    }
+
+    private static int ReadIntegrityRid()
+    {
+        if (!OpenProcessToken(GetCurrentProcess(), 0x0008, out var token))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenProcessToken failed.");
+        using (token)
+        {
+            GetTokenInformation(token, 25, IntPtr.Zero, 0, out var required);
+            var buffer = Marshal.AllocHGlobal(required);
+            try
+            {
+                if (!GetTokenInformation(token, 25, buffer, required, out _))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "GetTokenInformation(TokenIntegrityLevel) failed.");
+                var sidPtr = Marshal.ReadIntPtr(buffer);
+                var sid = new SecurityIdentifier(sidPtr);
+                var binary = new byte[sid.BinaryLength];
+                sid.GetBinaryForm(binary, 0);
+                return BitConverter.ToInt32(binary, binary.Length - 4);
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+        }
+    }
+
+    private static string GetDesktopName(IntPtr desktop)
+    {
+        var length = 0;
+        GetUserObjectInformation(desktop, 2, IntPtr.Zero, 0, ref length);
+        var buffer = Marshal.AllocHGlobal(length);
+        try
+        {
+            if (!GetUserObjectInformation(desktop, 2, buffer, length, ref length))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "GetUserObjectInformation failed.");
+            // UOI_NAME returns a UNICODE_STRING: Length(2) + MaximumLength(2) + Buffer pointer.
+            var nameBuffer = Marshal.ReadIntPtr(buffer, IntPtr.Size == 8 ? 8 : 4);
+            return Marshal.PtrToStringUni(nameBuffer) ?? "<null>";
+        }
+        finally { Marshal.FreeHGlobal(buffer); }
     }
 
     private bool Inject(InputPacket packet)
@@ -122,7 +213,77 @@ internal sealed class InputEngine : IDisposable
         SetLastError(0);
         var sent = SendInput(1, new[] { input }, Marshal.SizeOf<NativeInput>());
         if (sent == 1) return true;
+
+        // Some environments block SendInput (UIPI/desktop restrictions) even
+        // for high-integrity callers. Fall back to SetCursorPos, which is not
+        // subject to UIPI inside the session, and to window messages.
+        if (TryFallback(packet, point)) return true;
+
         throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
+    }
+
+    private bool TryFallback(InputPacket packet, VirtualDesktopPoint point)
+    {
+        switch (packet.Kind)
+        {
+            case InputEventKind.Move:
+                if (SetCursorPos(point.PixelX, point.PixelY))
+                {
+                    LogFallback("SetCursorPos move");
+                    return true;
+                }
+                return false;
+            case InputEventKind.Button:
+                {
+                    var message = (packet.Data, packet.Down) switch
+                    {
+                        (0, true) => WmLeftDown, (0, false) => WmLeftUp,
+                        (1, true) => WmMiddleDown, (1, false) => WmMiddleUp,
+                        (2, true) => WmRightDown, (2, false) => WmRightUp,
+                        _ => 0u
+                    };
+                    if (message != 0 && PostToWindow(point, message, 0))
+                    {
+                        LogFallback("PostMessage button");
+                        return true;
+                    }
+                    return false;
+                }
+            case InputEventKind.Wheel:
+                if (PostToWindow(point, WmMouseWheel, unchecked((uint)(packet.Data << 16))))
+                {
+                    LogFallback("PostMessage wheel");
+                    return true;
+                }
+                return false;
+            case InputEventKind.Key:
+                {
+                    var target = GetForegroundWindow();
+                    if (target != IntPtr.Zero && PostMessage(target, packet.Down ? WmKeyDown : WmKeyUp, new IntPtr(unchecked((long)packet.KeyCode)), IntPtr.Zero))
+                    {
+                        LogFallback("PostMessage key");
+                        return true;
+                    }
+                    return false;
+                }
+            default:
+                return false;
+        }
+    }
+
+    private bool PostToWindow(VirtualDesktopPoint point, uint message, uint wParam)
+    {
+        var target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
+        if (target == IntPtr.Zero) return false;
+        var lParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
+        return PostMessage(target, message, new IntPtr(unchecked((long)wParam)), lParam);
+    }
+
+    private void LogFallback(string mechanism)
+    {
+        if (_fallbackLogged) return;
+        _fallbackLogged = true;
+        _log.Write("SendInput is blocked in this session; using the " + mechanism + " fallback.");
     }
 
     private static NativeInput Mouse(VirtualDesktopPoint point, uint flags, uint data) => new()
@@ -169,6 +330,31 @@ internal sealed class InputEngine : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort VirtualKey; public ushort ScanCode; public uint Flags; public uint Time; public UIntPtr ExtraInfo; }
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, NativeInput[] inputs, int size);
     [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
+    [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenProcessToken(IntPtr process, uint desiredAccess, out SafeAccessTokenHandle token);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass, IntPtr information, int informationLength, out int returnLength);
+    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr GetThreadDesktop(uint threadId);
+    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint desiredAccess);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetUserObjectInformation(IntPtr handle, int index, IntPtr info, int length, ref int needed);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr window, StringBuilder text, int maxCount);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(NativePoint point);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; public NativePoint(int x, int y) { X = x; Y = y; } }
 }
 
 internal enum InputFailureStage : byte

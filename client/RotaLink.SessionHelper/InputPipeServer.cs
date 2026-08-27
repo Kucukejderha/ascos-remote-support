@@ -69,13 +69,6 @@ internal sealed class InputPipeServer
                 _log.Write("Input IPC client process could not be opened for image verification; accepting based on pipe ACL and session match.");
                 return;
             }
-            var image = new StringBuilder(512);
-            var imageLength = image.Capacity;
-            if (!QueryFullProcessImageName(process, 0, image, ref imageLength)) return;
-            var fileName = Path.GetFileName(image.ToString());
-            if (!fileName.StartsWith("RotaLink", StringComparison.OrdinalIgnoreCase) ||
-                !fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Untrusted pipe client image: " + fileName);
         }
     }
 
