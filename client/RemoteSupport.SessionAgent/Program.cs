@@ -12,6 +12,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedProtocol;
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         using var singleInstance = SingleInstanceGuard.TryAcquire();
         if (singleInstance is null)
@@ -45,6 +46,36 @@ internal static class Program
         catch (EntryPointNotFoundException) { }
 
         SetProcessDPIAware();
+    }
+
+    /// <summary>
+    /// Loads embedded runtime DLLs (the common protocol project and its
+    /// System.Memory dependencies) so the portable client stays a single
+    /// executable without side-by-side DLL files.
+    /// </summary>
+    private static readonly string[] EmbeddedAssemblyNames =
+    {
+        "RemoteSupport.Protocol", "System.Memory", "System.Buffers",
+        "System.Runtime.CompilerServices.Unsafe", "System.Numerics.Vectors"
+    };
+
+    private static Assembly? ResolveEmbeddedProtocol(object sender, ResolveEventArgs args)
+    {
+        try
+        {
+            var requested = new AssemblyName(args.Name).Name;
+            if (requested is null || Array.IndexOf(EmbeddedAssemblyNames, requested) < 0) return null;
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream("RotaLink.Runtime." + requested + ".dll");
+            if (stream is null) return null;
+            using var memory = new MemoryStream();
+            stream.CopyTo(memory);
+            return Assembly.Load(memory.ToArray());
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static bool IsProcessElevated()

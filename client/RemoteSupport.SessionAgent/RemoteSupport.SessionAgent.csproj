@@ -32,5 +32,8 @@
     <EmbeddedResource Include="..\..\native\build\x64\RotaLink.NativeCapture.exe"
                       LogicalName="RotaLink.Runtime.NativeCapture.exe"
                       Condition="Exists('..\..\native\build\x64\RotaLink.NativeCapture.exe')" />
+    <EmbeddedResource Include="..\RemoteSupport.Protocol\bin\$(Configuration)\net48\*.dll"
+                      LogicalName="RotaLink.Runtime.%(Filename)%(Extension)"
+                      Condition="Exists('..\RemoteSupport.Protocol\bin\$(Configuration)\net48\System.Memory.dll')" />
   </ItemGroup>
 </Project>
