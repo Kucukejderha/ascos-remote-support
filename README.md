@@ -57,7 +57,7 @@ For zero-install support, distribute `artifacts/RotaLink.exe`. It is a self-cont
 Extract `artifacts/Rotaniz-Remote-Support-Windows.zip` and run:
 
 ```powershell
-.\Install-ASCOS-RemoteSupport.ps1 -ServerUrl https://45.87.173.201.nip.io
+.\Install-ASCOS-RemoteSupport.ps1 -ServerUrl https://ascos.rotaniz.com
 ```
 
 The installer is per-user, creates a visible desktop shortcut, and does not install hidden persistence or unattended access.

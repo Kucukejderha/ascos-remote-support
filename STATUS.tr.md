@@ -4,9 +4,10 @@ Sürüm tarihi: 2026-08-05
 
 ## Canlı hizmet
 
-- Operatör arayüzü: https://45.87.173.201.nip.io/operator
-- Sağlık kontrolü: https://45.87.173.201.nip.io/health
-- Host sunucu adresi: `https://45.87.173.201.nip.io`
+- Operatör arayüzü: https://ascos.rotaniz.com/operator
+- Sağlık kontrolü: https://ascos.rotaniz.com/health
+- Host sunucu adresi: `https://ascos.rotaniz.com`
+- Yedek adres: `https://45.87.173.201.nip.io` (geçiş dönemi)
 - Sunucu dizini: `/opt/ascos-remote-support`
 - Konteynerler: `ascos_remote_support`, `ascos_remote_support_proxy`
 - TLS: Caddy üzerinden otomatik Let’s Encrypt sertifikası

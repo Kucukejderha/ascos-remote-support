@@ -2,7 +2,7 @@
 
 Müşterinin kurulum gerektirmeden çalıştırdığı Windows istemcisi kontrol sunucusunda yayınlanır:
 
-`https://45.87.173.201.nip.io/downloads/RotaLink.exe`
+`https://ascos.rotaniz.com/downloads/RotaLink.exe`
 
 `rotaniz.com` üzerinde ayrı bir dosya barındırılmaz; ana sayfadaki indirme düğmesi doğrudan yukarıdaki adresi gösterir. Canlı WordPress temasındaki indirme düğmesi `website/rotaniz-download-button.php` örneğini kullanır. Yayın dosyası `server/RemoteSupport.Signaling/downloads/RotaLink.exe` ile `artifacts/RotaLink.exe` aynı derlemedir.
 
@@ -11,7 +11,7 @@ Müşterinin kurulum gerektirmeden çalıştırdığı Windows istemcisi kontrol
 1. Taşınabilir istemciyi `RotaLink.exe` adıyla üretin (`scripts/build.ps1`).
 2. Dosyayı `server/RemoteSupport.Signaling/downloads/RotaLink.exe` üzerine yazın.
 3. Sunucuda `/opt/ascos-remote-support` altındaki sinyal imajını yeniden derleyip konteyneri yeniden başlatın (`docker compose up -d --build`).
-4. `https://45.87.173.201.nip.io/downloads/RotaLink.exe` adresinin yeni dosyayı verdiğini doğrulayın.
+4. `https://ascos.rotaniz.com/downloads/RotaLink.exe` adresinin yeni dosyayı verdiğini doğrulayın.
 5. Yayınlanan dosyanın boyutunu ve SHA-256 özetini sürüm notuna ekleyin.
 
 Sürümlü indirme bağlantıları (`RotaLink-vX.Y.Z-*.exe`) kaldırılmıştır; yalnızca sabit `RotaLink.exe` yayınlanır. Sürüm notlarındaki eski sürümlü bağlantı satırları artık geçersizdir.
@@ -20,8 +20,8 @@ Sürümlü indirme bağlantıları (`RotaLink-vX.Y.Z-*.exe`) kaldırılmıştır
 
 `alpha.15`, güvenlik ve operasyonel iyileştirmeleri içerir: input pipe istemci kimliği doğrulaması, tek kullanımlık destek kodu, süresi dolan sunucu kayıtlarının periyodik temizliği, video kanalının host yeniden bağlanmasında kurtarılması, kalıcı DPAPI cihaz kimliğinin istemcide aktifleştirilmesi, HTTP retry, DXGI/H.264 native yakalama motorunun gömülmesi, otomatik güncelleme (self-update) ve `build.ps1` ile birleştirilmiş derleme akışı.
 
-- Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
-- Sürüm bildirimi: `https://45.87.173.201.nip.io/downloads/version.json`
+- Sabit bağlantı: `https://ascos.rotaniz.com/downloads/RotaLink.exe`
+- Sürüm bildirimi: `https://ascos.rotaniz.com/downloads/version.json`
 - Dosya boyutu: `508.928` bayt
 - SHA-256: `fed44704e24963a910626f2f00fe5ef8ccdf5f006f7fba8a1c5dabd685ed293e`
 - Canlı sunucuya dağıtım: 2026-08-27

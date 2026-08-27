@@ -27,7 +27,7 @@ public sealed class MainForm : Form
 
     public MainForm(string? serverAddress, bool elevated, bool privilegedInputReady)
     {
-        _server = new Uri(serverAddress ?? "https://45.87.173.201.nip.io");
+        _server = new Uri(serverAddress ?? "https://ascos.rotaniz.com");
         Text = "Rotaniz Remote Support — RotaLink";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         StartPosition = FormStartPosition.CenterScreen;

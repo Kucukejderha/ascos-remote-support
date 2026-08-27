@@ -4,9 +4,10 @@ Release date: 2026-08-04
 
 ## Live service
 
-- Operator UI: https://45.87.173.201.nip.io/operator
-- Health: https://45.87.173.201.nip.io/health
-- Host server argument: `https://45.87.173.201.nip.io`
+- Operator UI: https://ascos.rotaniz.com/operator
+- Health: https://ascos.rotaniz.com/health
+- Host server argument: `https://ascos.rotaniz.com`
+- Fallback address: `https://45.87.173.201.nip.io` (transition period)
 - Deployment path: `/opt/ascos-remote-support`
 - Containers: `ascos_remote_support`, `ascos_remote_support_proxy`
 - TLS: automatic Let's Encrypt certificate through Caddy

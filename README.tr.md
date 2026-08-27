@@ -45,6 +45,6 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1
 
 Yalnız taşınabilir istemci için `build.ps1` yeterlidir; kurulum paketi dahil tam sürüm için `build.ps1 -Full` çalıştırın. Hafif istemci `artifacts/RotaLink.exe` olarak üretilir. Windows 10/11 ile birlikte gelen .NET Framework 4.8'i ve standart Windows iletişim pencerelerini kullanır; ayrıca .NET kurulumu, çalışma zamanı gömme veya üçüncü taraf EXE birleştiricisi gerektirmez.
 
-Canlı operatör: https://45.87.173.201.nip.io/operator
+Canlı operatör: https://ascos.rotaniz.com/operator
 
 Güvenlik ayrıntıları için [SECURITY.tr.md](SECURITY.tr.md), sürüm durumu için [STATUS.tr.md](STATUS.tr.md) dosyasına bakın.
