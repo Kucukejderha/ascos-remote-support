@@ -78,7 +78,7 @@ internal sealed class SessionHelperInputClient : IDisposable
             PipeOptions.Asynchronous | PipeOptions.WriteThrough);
         try
         {
-            candidate.Connect(150);
+            candidate.Connect(2000);
             candidate.ReadMode = PipeTransmissionMode.Byte;
             _pipe = candidate;
             _unavailableLogged = false;

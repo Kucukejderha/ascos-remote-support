@@ -18,7 +18,7 @@ internal sealed class SessionHelperVideoClient : IDisposable
             PipeDirection.In, PipeOptions.Asynchronous);
         try
         {
-            pipe.Connect(300);
+            pipe.Connect(2000);
             AppDiagnostics.Write("DXGI/H.264 SessionHelper video IPC connected.");
             return new SessionHelperVideoClient(pipe);
         }
