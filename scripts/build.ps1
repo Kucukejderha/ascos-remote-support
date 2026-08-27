@@ -1,7 +1,8 @@
 param(
     [string]$Configuration = 'Release',
     [switch]$Full,
-    [string]$SignThumbprint = ''
+    [string]$SignThumbprint = '',
+    [switch]$Deploy
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -19,6 +20,33 @@ function Get-ShortPath([string]$path) {
     $fso = New-Object -ComObject Scripting.FileSystemObject
     if (Test-Path -LiteralPath $resolved -PathType Container) { return $fso.GetFolder($resolved).ShortPath }
     return $fso.GetFile($resolved).ShortPath
+}
+
+function Deploy-ToServer([string]$root) {
+    $sshHost = '45.87.173.201'
+    $sshUser = 'root'
+    $hostkey = 'SHA256:Zi6JPVk1oRIdHobINCCLpWK/Azc1wrrk6Xs5B2+eUeY'
+    $password = $env:ROTALINK_SSH_PASSWORD
+    if (-not $password) {
+        Write-Warning 'ROTALINK_SSH_PASSWORD ortam degiskeni tanimli degil; sunucuya deploy atlandi.'
+        return
+    }
+    $plink = 'C:\Program Files\PuTTY\plink.exe'
+    $pscp = 'C:\Program Files\PuTTY\pscp.exe'
+    if (-not (Test-Path -LiteralPath $plink) -or -not (Test-Path -LiteralPath $pscp)) {
+        Write-Warning 'PuTTY (plink/pscp) bulunamadi; sunucuya deploy atlandi.'
+        return
+    }
+    $serverDownloads = Join-Path $root 'server\RemoteSupport.Signaling\downloads'
+    $exe = Join-Path $serverDownloads 'RotaLink.exe'
+    $manifest = Join-Path $serverDownloads 'version.json'
+
+    cmd /c "`"$pscp`" -batch -hostkey `"$hostkey`" -pw `"$password`" `"$exe`" `"$manifest`" ${sshUser}@${sshHost}:/opt/ascos-remote-support/server/RemoteSupport.Signaling/downloads/" 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Sunucuya dosya yukleme basarisiz.' }
+
+    cmd /c "`"$plink`" -ssh -batch -hostkey `"$hostkey`" -pw `"$password`" ${sshUser}@${sshHost} `"cd /opt/ascos-remote-support && docker compose -f deploy/docker-compose.remote-support.yml up -d --build 2>&1 | tail -3`"" 2>&1 | Select-Object -Last 3
+    if ($LASTEXITCODE -ne 0) { throw 'Sunucu imaj yeniden derleme basarisiz.' }
+    Write-Host 'Deploy tamamlandi: https://45.87.173.201.nip.io/downloads/RotaLink.exe'
 }
 
 function Build-NativeCapture {
@@ -120,6 +148,10 @@ if ($SignThumbprint) {
     Sign-File $output $SignThumbprint
 }
 
+if ($Deploy) {
+    Deploy-ToServer $root
+}
+
 if (-not $Full) { return }
 
 $hostOutput = Join-Path $artifacts 'windows-host'
@@ -151,6 +183,10 @@ $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installerFile).Ha
 @{ file = (Split-Path -Leaf $archive); sha256 = $hash; installerFile = (Split-Path -Leaf $installerFile); installerSha256 = $installerHash; portableFile = (Split-Path -Leaf $output); portableSha256 = $portableHash; createdAt = [DateTimeOffset]::UtcNow.ToString('O') } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $artifacts 'release-manifest.json') -Encoding UTF8
 Write-Host "Release created: $archive"
+
+if ($Deploy) {
+    Deploy-ToServer $root
+}
 
 function Sign-File([string]$filePath, [string]$thumbprint) {
     $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
