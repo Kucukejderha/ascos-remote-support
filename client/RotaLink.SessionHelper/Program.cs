@@ -41,6 +41,7 @@ internal static class Program
     public static int Main(string[] args)
     {
         AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedAssemblies;
+        EnablePhysicalPixelCoordinates();
         var sessionId = ParseSessionId(args);
         if (!ProcessIdToSessionId((uint)System.Diagnostics.Process.GetCurrentProcess().Id, out var actualSessionId) || actualSessionId != sessionId)
             return 11;
@@ -52,6 +53,10 @@ internal static class Program
             var uiAccess = ReadCurrentUiAccess();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
                 ", UIAccess=" + uiAccess + ".");
+            // The helper must use the same physical pixel space as the DPI-aware
+            // agent that captures the screen, otherwise injected coordinates drift.
+            log.Write("Screen metrics: virtual origin=" + GetSystemMetrics(76) + "," + GetSystemMetrics(77) +
+                ", size=" + GetSystemMetrics(78) + "x" + GetSystemMetrics(79) + ".");
             // The helper is launched with the elevated RotaLink token, so its
             // SendInput calls pass UIPI without needing the UIAccess flag.
             // The flag is only reported for diagnostics.
@@ -81,6 +86,16 @@ internal static class Program
             log.Write("Fatal helper error: " + exception);
             return 1;
         }
+    }
+
+    private static void EnablePhysicalPixelCoordinates()
+    {
+        try
+        {
+            if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return;
+        }
+        catch (EntryPointNotFoundException) { }
+        SetProcessDPIAware();
     }
 
     private static uint ParseSessionId(string[] args)
@@ -116,6 +131,13 @@ internal static class Program
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass,
         out int information, int informationLength, out int returnLength);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
 }
 
 internal sealed class HelperLog

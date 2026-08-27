@@ -83,7 +83,19 @@ internal sealed class NativeCaptureBridge : IDisposable
         }) ?? throw new InvalidOperationException("Native capture process could not be started.");
         _capture = capture;
         capture.EnableRaisingEvents = true;
-        capture.Exited += (_, _) => _log.Write("Native capture exited with code " + capture.ExitCode + ".");
+        capture.Exited += (_, _) =>
+        {
+            try
+            {
+                var errorOutput = capture.StandardError.ReadToEnd();
+                _log.Write("Native capture exited with code " + capture.ExitCode + "." +
+                    (string.IsNullOrWhiteSpace(errorOutput) ? "" : " stderr: " + errorOutput.Trim()));
+            }
+            catch (Exception exception)
+            {
+                _log.Write("Native capture exited with code " + capture.ExitCode + "; stderr unavailable: " + exception.Message);
+            }
+        };
         _log.Write("Native DXGI capture started. Process=" + capture.Id + ".");
     }
 
