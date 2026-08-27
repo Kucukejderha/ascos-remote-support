@@ -65,6 +65,7 @@ internal static class Program
             using var bridge = new NativeCaptureBridge(sessionId, log);
             var server = new InputPipeServer(sessionId, engine, log);
 
+            Task.Run(() => InputEngine.LogDiagnostics(log));
             using var stopSource = new CancellationTokenSource();
             var stopWatcher = Task.Run(() => { stop.WaitOne(); stopSource.Cancel(); });
             var inputTask = Task.Run(() => server.Run(stop));

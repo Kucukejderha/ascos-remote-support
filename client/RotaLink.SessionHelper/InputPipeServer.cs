@@ -77,11 +77,17 @@ internal sealed class InputPipeServer
         var packetBytes = new byte[PacketBytes];
         var acknowledgement = new byte[AcknowledgementBytes];
         long lastSequence = 0;
+        var firstPacket = true;
         while (!stop.WaitOne(0))
         {
             ReadExactly(stream, packetBytes);
             if (!InputPacketCodec.TryRead(packetBytes, out var packet))
                 throw new InvalidDataException("Malformed RotaLink input packet.");
+            if (firstPacket)
+            {
+                firstPacket = false;
+                _log.Write("First input packet received. Kind=" + packet.Kind + ", Sequence=" + packet.Sequence + ".");
+            }
             var result = packet.Sequence <= lastSequence
                 ? InputInjectionResult.Failure(InputFailureStage.SequenceRejected)
                 : _engine.InjectAsync(packet, CancellationToken.None).GetAwaiter().GetResult();

@@ -56,16 +56,10 @@ internal sealed class InputEngine : IDisposable
     private void Worker()
     {
         using var desktop = new InputDesktop();
-        var diagnosticsLogged = false;
         foreach (var item in _queue.GetConsumingEnumerable())
         {
             try
             {
-                if (!diagnosticsLogged)
-                {
-                    diagnosticsLogged = true;
-                    LogDiagnostics();
-                }
                 item.CancellationToken.ThrowIfCancellationRequested();
                 desktop.Refresh();
                 var accepted = Inject(item.Packet);
@@ -96,7 +90,11 @@ internal sealed class InputEngine : IDisposable
         }
     }
 
-    private void LogDiagnostics()
+    /// <summary>
+    /// Writes one-time environment diagnostics. Called at helper startup on a
+    /// separate thread so a slow query can never stall input dispatch.
+    /// </summary>
+    public static void LogDiagnostics(HelperLog log)
     {
         try
         {
@@ -104,12 +102,12 @@ internal sealed class InputEngine : IDisposable
             var integrityRid = ReadIntegrityRid();
             var threadDesktop = GetDesktopName(GetThreadDesktop(GetCurrentThreadId()));
             var inputDesktop = GetDesktopName(OpenInputDesktop(0, false, 0x0001 | 0x0002 | 0x0004 | 0x0080 | 0x0100));
-            _log.Write("Input diagnostics: Identity=" + identity + ", IntegrityRid=0x" + integrityRid.ToString("X4") +
+            log.Write("Input diagnostics: Identity=" + identity + ", IntegrityRid=0x" + integrityRid.ToString("X4") +
                 ", ThreadDesktop=" + threadDesktop + ", InputDesktop=" + inputDesktop + ".");
         }
         catch (Exception exception)
         {
-            _log.Write("Input diagnostics failed: " + exception.Message);
+            log.Write("Input diagnostics failed: " + exception.Message);
         }
     }
 

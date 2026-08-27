@@ -30,15 +30,27 @@ internal sealed class NativeCaptureBridge : IDisposable
             return;
         }
         StartNativeCapture();
-        using var frames = SharedFrameReader.Open(_sessionId, TimeSpan.FromSeconds(10), cancellationToken);
-        while (!cancellationToken.IsCancellationRequested)
+        SharedFrameReader frames;
+        try
         {
-            using var pipe = CreateVideoPipe();
-            _log.Write("Waiting for video IPC client.");
-            await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-            _log.Write("Video IPC client connected.");
-            try { await PumpFramesAsync(frames, pipe, cancellationToken).ConfigureAwait(false); }
-            catch (IOException exception) { _log.Write("Video IPC disconnected: " + exception.Message); }
+            frames = SharedFrameReader.Open(_sessionId, TimeSpan.FromSeconds(10), cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _log.Write("Native frame source unavailable; video capture is disabled: " + exception.Message);
+            return;
+        }
+        using (frames)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                using var pipe = CreateVideoPipe();
+                _log.Write("Waiting for video IPC client.");
+                await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+                _log.Write("Video IPC client connected.");
+                try { await PumpFramesAsync(frames, pipe, cancellationToken).ConfigureAwait(false); }
+                catch (IOException exception) { _log.Write("Video IPC disconnected: " + exception.Message); }
+            }
         }
     }
 
