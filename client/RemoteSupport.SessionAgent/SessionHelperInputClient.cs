@@ -64,6 +64,7 @@ internal sealed class SessionHelperInputClient : IDisposable
         6 => "packet-invalid",
         7 => "helper-exception",
         8 => "helper-cancelled",
+        9 => "desktop-locked",
         _ => "helper-stage-unknown"
     };
 

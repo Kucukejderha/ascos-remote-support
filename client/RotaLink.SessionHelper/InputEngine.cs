@@ -84,7 +84,9 @@ internal sealed class InputEngine : IDisposable
                     ? InputFailureStage.OpenInputDesktop
                     : exception.Message.StartsWith("SetThreadDesktop", StringComparison.Ordinal)
                         ? InputFailureStage.SetThreadDesktop
-                        : InputFailureStage.SendInput;
+                        : exception.Message.StartsWith("DesktopLocked", StringComparison.Ordinal)
+                            ? InputFailureStage.DesktopLocked
+                            : InputFailureStage.SendInput;
                 _log.Write("Input injection failed. Stage=" + stage + ", Win32Error=" + exception.NativeErrorCode + ". " + exception);
                 if (stage == InputFailureStage.SendInput) LogForeground();
                 item.Completion.TrySetResult(InputInjectionResult.Failure(stage, exception.NativeErrorCode));
@@ -164,6 +166,9 @@ internal sealed class InputEngine : IDisposable
         // for high-integrity callers. Fall back to SetCursorPos, which is not
         // subject to UIPI inside the session, and to window messages.
         if (TryFallback(packet, point)) return true;
+
+        if (GetForegroundWindow() == IntPtr.Zero)
+            throw new Win32Exception(5, "DesktopLocked: the interactive desktop has no foreground window (locked or secure desktop).");
 
         throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
     }
@@ -364,7 +369,8 @@ internal enum InputFailureStage : byte
     SendInput = 5,
     PacketInvalid = 6,
     HelperException = 7,
-    Cancelled = 8
+    Cancelled = 8,
+    DesktopLocked = 9
 }
 
 internal readonly struct InputInjectionResult
