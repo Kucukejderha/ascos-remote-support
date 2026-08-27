@@ -78,7 +78,10 @@ internal static class Program
             Task.WaitAny(inputTask, videoTask);
             stopSource.Cancel();
             try { Task.WaitAll(inputTask, videoTask); }
-            catch (AggregateException) { }
+            catch (AggregateException exception)
+            {
+                log.Write("Helper task stopped with errors: " + exception.Flatten());
+            }
             return 0;
         }
         catch (Exception exception)

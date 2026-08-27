@@ -65,6 +65,9 @@ internal sealed class SessionHelperInputClient : IDisposable
         7 => "helper-exception",
         8 => "helper-cancelled",
         9 => "desktop-locked",
+        10 => "fallback-setcursorpos-ok",
+        11 => "fallback-mouseevent-ok",
+        12 => "fallback-postmessage-ok",
         _ => "helper-stage-unknown"
     };
 

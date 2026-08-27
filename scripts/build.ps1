@@ -129,6 +129,19 @@ $bin = Join-Path $root "client\RemoteSupport.SessionAgent\bin\$Configuration\net
 $output = Join-Path $artifacts 'RotaLink.exe'
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 Copy-Item -LiteralPath (Join-Path $bin 'RotaLink.exe') -Destination $output -Force
+
+# Verify the mandatory embedded resources before publishing anything.
+$embeddedChecks = @('RotaLink.Runtime.SessionHelper.exe', 'RotaLink.Runtime.RemoteSupport.Protocol.dll', 'RotaLink.Runtime.System.Memory.dll')
+foreach ($required in $embeddedChecks) {
+    if (-not (Select-String -Path $output -Pattern $required -SimpleMatch -Quiet)) {
+        throw "Release build is missing the embedded resource '$required'; the client would be broken."
+    }
+}
+
+# Sign the final binary first, then hash the signed file and copy it out.
+if ($SignThumbprint) {
+    Sign-File $output $SignThumbprint
+}
 $portableHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $output).Hash.ToLowerInvariant()
 Write-Host "RotaLink created: $output"
 Write-Host "Size: $((Get-Item $output).Length) bytes"
@@ -143,10 +156,6 @@ $informationalVersion = [regex]::Match($propsContent, '<InformationalVersion>(.*
 $manifestJson = @{ version = $informationalVersion; fileName = 'RotaLink.exe'; sha256 = $portableHash } | ConvertTo-Json
 [System.IO.File]::WriteAllText((Join-Path $serverDownloads 'version.json'), $manifestJson, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "Version manifest written: version=$informationalVersion"
-
-if ($SignThumbprint) {
-    Sign-File $output $SignThumbprint
-}
 
 if ($Deploy) {
     Deploy-ToServer $root

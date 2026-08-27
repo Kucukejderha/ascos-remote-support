@@ -69,10 +69,7 @@ internal sealed class InputEngine : IDisposable
             {
                 item.CancellationToken.ThrowIfCancellationRequested();
                 desktop.Refresh();
-                var accepted = Inject(item.Packet);
-                item.Completion.TrySetResult(accepted
-                    ? InputInjectionResult.Success()
-                    : InputInjectionResult.Failure(InputFailureStage.PacketInvalid));
+                item.Completion.TrySetResult(Inject(item.Packet));
             }
             catch (OperationCanceledException)
             {
@@ -115,7 +112,7 @@ internal sealed class InputEngine : IDisposable
         }
     }
 
-    private bool Inject(InputPacket packet)
+    private InputInjectionResult Inject(InputPacket packet)
     {
         var point = _coordinates.Transform(packet.NormalizedX, packet.NormalizedY);
         NativeInput input;
@@ -132,15 +129,15 @@ internal sealed class InputEngine : IDisposable
                     (2, true) => MouseRightDown, (2, false) => MouseRightUp,
                     _ => 0u
                 };
-                if (buttonFlag == 0) return false;
+                if (buttonFlag == 0) return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
                 input = Mouse(point, MouseMove | buttonFlag, 0);
                 break;
             case InputEventKind.Wheel:
-                if (packet.Data is < -1200 or > 1200) return false;
+                if (packet.Data is < -1200 or > 1200) return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
                 input = Mouse(point, MouseMove | MouseWheel, unchecked((uint)packet.Data));
                 break;
             case InputEventKind.Key:
-                if (packet.KeyCode is 0 or > 0xFF) return false;
+                if (packet.KeyCode is 0 or > 0xFF) return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
                 var extended = IsExtendedKey(packet.KeyCode) ? KeyExtended : 0u;
                 input = new NativeInput
                 {
@@ -155,17 +152,20 @@ internal sealed class InputEngine : IDisposable
                     }
                 };
                 break;
-            default: return false;
+            default: return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
         }
 
         SetLastError(0);
         var sent = SendInput(1, new[] { input }, Marshal.SizeOf<NativeInput>());
-        if (sent == 1) return true;
+        if (sent == 1) return InputInjectionResult.Success();
 
         // Some environments block SendInput (UIPI/desktop restrictions) even
         // for high-integrity callers. Fall back to SetCursorPos, which is not
-        // subject to UIPI inside the session, and to window messages.
-        if (TryFallback(packet, point)) return true;
+        // subject to UIPI inside the session, and to window messages. The
+        // fallback mechanism is reported as its own stage so operators see
+        // exactly how the input was delivered.
+        var fallback = TryFallback(packet, point);
+        if (fallback != 0) return InputInjectionResult.Fallback((InputFailureStage)fallback);
 
         if (GetForegroundWindow() == IntPtr.Zero)
             throw new Win32Exception(5, "DesktopLocked: the interactive desktop has no foreground window (locked or secure desktop).");
@@ -173,7 +173,7 @@ internal sealed class InputEngine : IDisposable
         throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
     }
 
-    private bool TryFallback(InputPacket packet, VirtualDesktopPoint point)
+    private int TryFallback(InputPacket packet, VirtualDesktopPoint point)
     {
         switch (packet.Kind)
         {
@@ -181,9 +181,9 @@ internal sealed class InputEngine : IDisposable
                 if (SetCursorPos(point.PixelX, point.PixelY))
                 {
                     LogFallback("SetCursorPos move");
-                    return true;
+                    return (int)InputFailureStage.FallbackSetCursorPos;
                 }
-                return false;
+                return 0;
             case InputEventKind.Button:
                 {
                     var message = (packet.Data, packet.Down) switch
@@ -200,7 +200,7 @@ internal sealed class InputEngine : IDisposable
                         (2, true) => WmNcRButtonDown, (2, false) => WmNcRButtonUp,
                         _ => 0u
                     };
-                    if (message == 0) return false;
+                    if (message == 0) return 0;
 
                     var mouseFlag = (packet.Data, packet.Down) switch
                     {
@@ -216,28 +216,28 @@ internal sealed class InputEngine : IDisposable
                         if (Marshal.GetLastWin32Error() == 0)
                         {
                             LogFallback("mouse_event button");
-                            return true;
+                            return (int)InputFailureStage.FallbackMouseEvent;
                         }
                     }
                     if (PostButton(point, message, nonClientMessage))
                     {
                         LogFallback("PostMessage button");
-                        return true;
+                        return (int)InputFailureStage.FallbackPostMessage;
                     }
-                    return false;
+                    return 0;
                 }
             case InputEventKind.Wheel:
                 if (PostToWindow(point, WmMouseWheel, unchecked((uint)(packet.Data << 16))))
                 {
                     LogFallback("PostMessage wheel");
-                    return true;
+                    return (int)InputFailureStage.FallbackPostMessage;
                 }
-                return false;
+                return 0;
             case InputEventKind.Key:
                 {
                     if (packet.Down)
                     {
-                        if (_lastKeyDown == packet.KeyCode) return true;
+                        if (_lastKeyDown == packet.KeyCode) return (int)InputFailureStage.FallbackPostMessage;
                         _lastKeyDown = packet.KeyCode;
                     }
                     else if (_lastKeyDown == packet.KeyCode)
@@ -248,12 +248,12 @@ internal sealed class InputEngine : IDisposable
                     if (target != IntPtr.Zero && PostMessage(target, packet.Down ? WmKeyDown : WmKeyUp, new IntPtr(unchecked((long)packet.KeyCode)), IntPtr.Zero))
                     {
                         LogFallback("PostMessage key");
-                        return true;
+                        return (int)InputFailureStage.FallbackPostMessage;
                     }
-                    return false;
+                    return 0;
                 }
             default:
-                return false;
+                return 0;
         }
     }
 
@@ -370,7 +370,10 @@ internal enum InputFailureStage : byte
     PacketInvalid = 6,
     HelperException = 7,
     Cancelled = 8,
-    DesktopLocked = 9
+    DesktopLocked = 9,
+    FallbackSetCursorPos = 10,
+    FallbackMouseEvent = 11,
+    FallbackPostMessage = 12
 }
 
 internal readonly struct InputInjectionResult
@@ -388,4 +391,5 @@ internal readonly struct InputInjectionResult
 
     public static InputInjectionResult Success() => new(true, InputFailureStage.None, 0);
     public static InputInjectionResult Failure(InputFailureStage stage, int errorCode = 0) => new(false, stage, errorCode);
+    public static InputInjectionResult Fallback(InputFailureStage stage) => new(true, stage, 0);
 }

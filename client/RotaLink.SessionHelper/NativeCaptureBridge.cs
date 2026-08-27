@@ -116,6 +116,11 @@ internal sealed class NativeCaptureBridge : IDisposable
 
     private SecurityIdentifier GetInteractiveUserSid()
     {
+        // The helper normally runs with the elevated interactive user token
+        // (not SYSTEM); WTSQueryUserToken is only valid for LocalSystem.
+        using var currentIdentity = WindowsIdentity.GetCurrent();
+        if (!currentIdentity.IsSystem)
+            return currentIdentity.User ?? throw new InvalidOperationException("Helper token has no user SID.");
         if (!WTSQueryUserToken(_sessionId, out var token))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "WTSQueryUserToken failed.");
         using (token)

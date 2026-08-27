@@ -1,11 +1,16 @@
 ﻿#include "DesktopDuplicator.h"
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 
 namespace {
 [[noreturn]] void ThrowHr(const char* operation, HRESULT hr) {
-    throw std::runtime_error(std::string(operation) + " failed, HRESULT=" + std::to_string(static_cast<unsigned long>(hr)));
+    std::ostringstream message;
+    message << operation << " failed, HRESULT=0x" << std::uppercase << std::hex << std::setfill('0') << std::setw(8)
+        << static_cast<unsigned long>(hr);
+    throw std::runtime_error(message.str());
 }
 }
 
@@ -37,7 +42,7 @@ void DesktopDuplicator::Initialize() {
     AttachInputDesktop();
     constexpr D3D_FEATURE_LEVEL requested[] = { D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0 };
     D3D_FEATURE_LEVEL selected{};
-    const UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    const UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT;
     HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, requested,
         ARRAYSIZE(requested), D3D11_SDK_VERSION, &device_, &selected, &context_);
     if (FAILED(hr)) ThrowHr("D3D11CreateDevice", hr);

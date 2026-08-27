@@ -53,7 +53,7 @@ public sealed class WindowsInputDispatcher : IDisposable
         {
             var result = helperResult.Value;
             return new InputDispatchReport(result.Accepted,
-                result.Accepted ? "system-helper-ok" : "system-helper-" + result.Stage,
+                "system-helper-" + result.Stage,
                 result.ErrorCode, "SYSTEM helper / WinSta0", message.Type);
         }
         if (ElevatedSessionHelper.IsRunning)

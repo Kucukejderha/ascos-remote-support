@@ -35,11 +35,19 @@ internal static class SelfUpdate
                 if (manifest is null) return false;
                 if (string.Equals(current, manifest.Version, StringComparison.Ordinal))
                 {
-                    AppDiagnostics.Write("Self-update: installed version " + current + " is current.");
-                    return false;
+                    // Same version: only update when the published build differs.
+                    var currentPath = Assembly.GetExecutingAssembly().Location;
+                    if (File.Exists(currentPath) && Sha256Matches(currentPath, manifest.Sha256))
+                    {
+                        AppDiagnostics.Write("Self-update: installed version " + current + " is current.");
+                        return false;
+                    }
+                    AppDiagnostics.Write("Self-update: version " + current + " matches but the published build differs; downloading the newer build.");
                 }
-
-                AppDiagnostics.Write("Self-update: newer version " + manifest.Version + " found (installed " + current + "); downloading.");
+                else
+                {
+                    AppDiagnostics.Write("Self-update: newer version " + manifest.Version + " found (installed " + current + "); downloading.");
+                }
                 var temporary = Path.Combine(Path.GetTempPath(), "RotaLink-update-" + Guid.NewGuid().ToString("N") + ".exe");
                 try
                 {
