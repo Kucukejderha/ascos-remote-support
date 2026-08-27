@@ -18,11 +18,12 @@ Sürümlü indirme bağlantıları (`RotaLink-vX.Y.Z-*.exe`) kaldırılmıştır
 
 ## 1.1.0-alpha.15 (güncel derleme)
 
-`alpha.15`, güvenlik ve operasyonel iyileştirmeleri içerir: input pipe istemci kimliği doğrulaması, tek kullanımlık destek kodu, süresi dolan sunucu kayıtlarının periyodik temizliği, video kanalının host yeniden bağlanmasında kurtarılması, kalıcı DPAPI cihaz kimliğinin istemcide aktifleştirilmesi, HTTP retry ve `build.ps1` ile birleştirilmiş derleme akışı.
+`alpha.15`, güvenlik ve operasyonel iyileştirmeleri içerir: input pipe istemci kimliği doğrulaması, tek kullanımlık destek kodu, süresi dolan sunucu kayıtlarının periyodik temizliği, video kanalının host yeniden bağlanmasında kurtarılması, kalıcı DPAPI cihaz kimliğinin istemcide aktifleştirilmesi, HTTP retry, DXGI/H.264 native yakalama motorunun gömülmesi ve `build.ps1` ile birleştirilmiş derleme akışı.
 
 - Sabit bağlantı: `https://45.87.173.201.nip.io/downloads/RotaLink.exe`
-- Dosya boyutu: `193.536` bayt
-- SHA-256: `a1971ce3d16f34a2b8ea5eb994f48ad4e3d84af239edcb36779a7eb2eabd1869`
+- Dosya boyutu: `502.784` bayt
+- SHA-256: `5878385aeee1df3b543227d8a02bb62104778a58855373887e891628250b0289`
+- Canlı sunucuya dağıtım: 2026-08-27
 
 ## 1.1.0-alpha.14 (önceki derleme)
 
