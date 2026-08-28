@@ -57,9 +57,15 @@ public sealed class GdiScreenCapture : IDisposable
         _oldSourceBitmap = SelectObject(_sourceDc, _sourceBitmap);
         _oldBitmap = SelectObject(_memoryDc, _bitmap);
         SetStretchBltMode(_memoryDc, 4);
-        AppDiagnostics.Write("GDI capture source: virtual origin=" + GetSystemMetrics(76) + "," + GetSystemMetrics(77) +
-            ", size=" + _sourceWidth + "x" + _sourceHeight + ".");
+        if (!_sourceLogged)
+        {
+            _sourceLogged = true;
+            AppDiagnostics.Write("GDI capture source: virtual origin=" + GetSystemMetrics(76) + "," + GetSystemMetrics(77) +
+                ", size=" + _sourceWidth + "x" + _sourceHeight + ".");
+        }
     }
+
+    private static bool _sourceLogged;
 
     public CapturedFrame Capture()
     {

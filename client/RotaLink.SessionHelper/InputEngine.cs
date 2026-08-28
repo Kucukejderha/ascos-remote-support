@@ -303,6 +303,22 @@ internal sealed class InputEngine : IDisposable
                 return 0;
             case InputEventKind.Key:
                 {
+                    if (packet.KeyCharacter != 0)
+                    {
+                        // Printable character: deliver exactly one WM_CHAR with
+                        // the real character from the operator; never duplicate
+                        // with WM_KEYDOWN (Chromium would type it twice).
+                        if (!packet.Down) return (int)InputFailureStage.FallbackPostMessage;
+                        if (_lastKeyDown == packet.KeyCode) return (int)InputFailureStage.FallbackPostMessage;
+                        _lastKeyDown = packet.KeyCode;
+                        var charTarget = GetForegroundWindow();
+                        if (charTarget != IntPtr.Zero && PostMessage(charTarget, WmChar, new IntPtr(packet.KeyCharacter), IntPtr.Zero))
+                        {
+                            LogFallback("PostMessage WM_CHAR, SendInputError=" + sendInputError);
+                            return (int)InputFailureStage.FallbackPostMessage;
+                        }
+                        return 0;
+                    }
                     if (packet.Down)
                     {
                         if (_lastKeyDown == packet.KeyCode) return (int)InputFailureStage.FallbackPostMessage;
@@ -315,14 +331,6 @@ internal sealed class InputEngine : IDisposable
                     var target = GetForegroundWindow();
                     if (target != IntPtr.Zero && PostMessage(target, packet.Down ? WmKeyDown : WmKeyUp, new IntPtr(unchecked((long)packet.KeyCode)), IntPtr.Zero))
                     {
-                        if (packet.Down)
-                        {
-                            // WM_KEYDOWN alone never produces WM_CHAR; synthesize it so
-                            // text controls and Chromium-style apps receive characters.
-                            var character = MapVirtualKey(packet.KeyCode, 2 /* MAPVK_VK_TO_CHAR */);
-                            if (character != 0)
-                                PostMessage(target, WmChar, new IntPtr(character & 0xFFFF), IntPtr.Zero);
-                        }
                         LogFallback("PostMessage key, SendInputError=" + sendInputError);
                         return (int)InputFailureStage.FallbackPostMessage;
                     }
@@ -352,8 +360,9 @@ internal sealed class InputEngine : IDisposable
 
         var screenLParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
         var hitCode = 0;
-        var hitResult = SendMessageTimeout(target, WmNcHitTest, IntPtr.Zero, screenLParam, SmtoAbortIfHung | SmtoBlock, 200, out _);
-        if (hitResult != IntPtr.Zero) hitCode = hitResult.ToInt32();
+        var hitSuccess = SendMessageTimeout(target, WmNcHitTest, IntPtr.Zero, screenLParam,
+            SmtoAbortIfHung | SmtoBlock | 0x0010 /* SMTO_ERRORONEXIT */, 200, out var hitResult);
+        if (hitSuccess != IntPtr.Zero && hitResult != IntPtr.Zero) hitCode = hitResult.ToInt32();
 
         if (hitCode != 0 && hitCode != HtClient && nonClientMessage != 0)
         {
@@ -395,9 +404,14 @@ internal sealed class InputEngine : IDisposable
             _lastButtonTarget = target;
             _lastButtonHitCode = HtClient;
             // Activate the owning top-level window so background windows come
-            // to the front on click (the high-integrity helper is allowed to).
+            // to the front on click; verify the result honestly.
             var root = GetAncestor(target, GaRoot);
-            if (root != IntPtr.Zero) SetForegroundWindow(root);
+            if (root != IntPtr.Zero)
+            {
+                if (IsIconic(root)) ShowWindowAsync(root, 9 /* SW_RESTORE */);
+                if (!SetForegroundWindow(root))
+                    _log.Write("Foreground activation denied for window 0x" + root.ToString("X") + ".");
+            }
             if (message == WmLeftDown)
             {
                 var now = Environment.TickCount;
@@ -541,9 +555,10 @@ internal sealed class InputEngine : IDisposable
     [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr window);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsZoomed(IntPtr window);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ShowWindowAsync(IntPtr window, int command);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr window);
-    [DllImport("user32.dll")] private static extern uint MapVirtualKey(uint code, uint mapType);
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; public NativePoint(int x, int y) { X = x; Y = y; } }
 }

@@ -12,7 +12,8 @@ public readonly record struct InputPacket(
     double NormalizedX,
     double NormalizedY,
     int Data,
-    uint KeyCode);
+    uint KeyCode,
+    ushort KeyCharacter);
 
 public readonly record struct VideoPacketHeader(
     VideoCodec Codec,
@@ -25,7 +26,7 @@ public readonly record struct VideoPacketHeader(
 
 public static class InputPacketCodec
 {
-    public const int PacketBytes = 40;
+    public const int PacketBytes = 44;
     private const uint Magic = 0x494C5452; // RTLI in little-endian byte order
     private const ushort Version = 1;
 
@@ -46,6 +47,7 @@ public static class InputPacketCodec
         BinaryPrimitives.WriteInt64LittleEndian(destination.Slice(24, 8), BitConverter.DoubleToInt64Bits(packet.NormalizedY));
         BinaryPrimitives.WriteInt32LittleEndian(destination.Slice(32, 4), packet.Data);
         BinaryPrimitives.WriteUInt32LittleEndian(destination.Slice(36, 4), packet.KeyCode);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(40, 2), packet.KeyCharacter);
     }
 
     public static bool TryRead(ReadOnlySpan<byte> source, out InputPacket packet)
@@ -62,7 +64,8 @@ public static class InputPacketCodec
             !IsNormalized(x) || !IsNormalized(y)) return false;
         packet = new InputPacket(kind, flags != 0, sequence, x, y,
             BinaryPrimitives.ReadInt32LittleEndian(source.Slice(32, 4)),
-            BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(36, 4)));
+            BinaryPrimitives.ReadUInt32LittleEndian(source.Slice(36, 4)),
+            BinaryPrimitives.ReadUInt16LittleEndian(source.Slice(40, 2)));
         return true;
     }
 

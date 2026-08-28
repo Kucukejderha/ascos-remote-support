@@ -189,7 +189,7 @@ static async Task VerifyLatestVideoQueueAsync()
 
 static void VerifyBinaryTransportProtocol()
 {
-    var input = new InputPacket(InputEventKind.Button, true, 42, 0.25, 0.75, 0, 0);
+    var input = new InputPacket(InputEventKind.Button, true, 42, 0.25, 0.75, 0, 0, 0);
     var inputBytes = new byte[InputPacketCodec.PacketBytes];
     InputPacketCodec.Write(inputBytes, input);
     if (!InputPacketCodec.TryRead(inputBytes, out var decodedInput) || decodedInput != input)

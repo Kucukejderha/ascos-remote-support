@@ -285,4 +285,5 @@ internal sealed class InputMessage
     public bool Down { get; set; }
     public int Delta { get; set; }
     public string? Code { get; set; }
+    public string? Key { get; set; }
 }

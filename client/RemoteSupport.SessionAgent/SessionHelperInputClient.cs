@@ -135,8 +135,11 @@ internal sealed class SessionHelperInputClient : IDisposable
         var x = Math.Max(0d, Math.Min(1d, message.NormalizedX ?? Math.Max(0d, Math.Min(1d, message.X / 65535d))));
         var y = Math.Max(0d, Math.Min(1d, message.NormalizedY ?? Math.Max(0d, Math.Min(1d, message.Y / 65535d))));
         var data = message.Type == "button" ? message.Button : message.Delta;
+        var keyCharacter = message.Key is { Length: 1 } keyText && !char.IsControl(keyText[0])
+            ? (ushort)keyText[0]
+            : (ushort)0;
         var packet = new byte[InputPacketCodec.PacketBytes];
-        InputPacketCodec.Write(packet, new InputPacket(kind, message.Down, sequence, x, y, data, WindowsInputDispatcher.MapKey(message.Code)));
+        InputPacketCodec.Write(packet, new InputPacket(kind, message.Down, sequence, x, y, data, WindowsInputDispatcher.MapKey(message.Code), keyCharacter));
         return packet;
     }
 
@@ -145,23 +148,25 @@ internal sealed class SessionHelperInputClient : IDisposable
         var offset = 0;
         while (offset < buffer.Length)
         {
-            // Each BeginRead is matched with exactly one EndRead. The wait uses
-            // our own event set by the completion callback; the pipe's internal
-            // AsyncWaitHandle is never disposed while I/O may still complete,
-            // which previously crashed the process with ObjectDisposedException.
-            var wait = new ManualResetEvent(false);
-            var pending = stream.BeginRead(buffer, offset, buffer.Length - offset,
-                asyncResult => ((ManualResetEvent)asyncResult.AsyncState).Set(), wait);
-            if (!wait.WaitOne(TimeSpan.FromSeconds(2)))
+            // One BeginRead paired with exactly one EndRead inside the
+            // completion callback; the wait is a TaskCompletionSource so no
+            // wait handle can ever be disposed while I/O may still complete.
+            var completion = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            stream.BeginRead(buffer, offset, buffer.Length - offset,
+                asyncResult =>
+                {
+                    try { completion.TrySetResult(stream.EndRead(asyncResult)); }
+                    catch (Exception exception) { completion.TrySetException(exception); }
+                }, null);
+            if (!completion.Task.Wait(TimeSpan.FromSeconds(2)))
             {
                 try { stream.Close(); } catch { }
-                try { stream.EndRead(pending); } catch { }
-                wait.Dispose();
+                completion.Task.ContinueWith(_ => { }, TaskScheduler.Default);
                 throw new TimeoutException("Session helper acknowledgement timed out after 2 seconds.");
             }
             int read;
-            try { read = stream.EndRead(pending); }
-            finally { wait.Dispose(); }
+            try { read = completion.Task.Result; }
+            catch (AggregateException exception) { throw new IOException("Pipe read failed.", exception.InnerException); }
             if (read == 0) throw new EndOfStreamException();
             offset += read;
         }

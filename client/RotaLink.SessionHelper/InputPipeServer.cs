@@ -11,7 +11,7 @@ namespace RotaLink.SessionHelper;
 
 internal sealed class InputPipeServer
 {
-    private const int PacketBytes = 40;
+    private const int PacketBytes = RemoteSupport.Protocol.InputPacketCodec.PacketBytes;
     private const int AcknowledgementBytes = 24;
     private const uint AcknowledgementMagic = 0x4F4C5452;
     private const uint ProcessQueryLimitedInformation = 0x1000;

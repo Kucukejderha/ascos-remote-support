@@ -20,7 +20,7 @@ internal static class RemoteSession
         try
         {
             var completed = await Task.WhenAny(
-                CaptureLoopAsync(videoSocket, token),
+                CaptureLoopAsync(videoSocket, controlSocket, token),
                 ReceiveInputLoopAsync(controlSocket, input, token));
             await completed;
         }
@@ -53,7 +53,7 @@ internal static class RemoteSession
         }
     }
 
-    private static async Task CaptureLoopAsync(ClientWebSocket socket, CancellationToken token)
+    private static async Task CaptureLoopAsync(ClientWebSocket socket, ClientWebSocket controlSocket, CancellationToken token)
     {
         using var native = SessionHelperVideoClient.TryConnect();
         if (native is not null)
@@ -78,6 +78,8 @@ internal static class RemoteSession
         var firstFrame = true;
         GdiScreenCapture? capture = null;
         var accessDeniedLogged = false;
+        var captureStalled = false;
+        var retryDelay = 750;
         while (socket.State == WebSocketState.Open)
         {
             try
@@ -87,12 +89,18 @@ internal static class RemoteSession
                 await Task.Delay(70, token);
                 var frame = capture.Capture();
                 accessDeniedLogged = false;
+                retryDelay = 750;
                 var now = Environment.TickCount;
                 var forceKeyFrame = unchecked(now - nextKeyFrame) >= 0;
                 var packet = encoder.Encode(frame, forceKeyFrame);
                 if (packet is null) continue;
                 if (forceKeyFrame) nextKeyFrame = now + 2_000;
                 await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token);
+                if (captureStalled)
+                {
+                    captureStalled = false;
+                    await SendCaptureStatusAsync(controlSocket, ok: true, token);
+                }
                 if (firstFrame)
                 {
                     AppDiagnostics.Write("First screen frame sent. Bytes=" + packet.Length + ", Type=" + packet[0]);
@@ -103,15 +111,35 @@ internal static class RemoteSession
             {
                 capture?.Dispose();
                 capture = null;
+                if (!captureStalled)
+                {
+                    captureStalled = true;
+                    await SendCaptureStatusAsync(controlSocket, ok: false, token);
+                }
                 if (!accessDeniedLogged)
                 {
                     AppDiagnostics.Write("Screen capture is temporarily unavailable (secure desktop or desktop transition). The session remains connected and capture will retry.", ex);
                     accessDeniedLogged = true;
                 }
-                await Task.Delay(750, token);
+                await Task.Delay(retryDelay, token);
+                retryDelay = Math.Min(retryDelay * 2, 5000);
             }
         }
         capture?.Dispose();
+    }
+
+    private static async Task SendCaptureStatusAsync(ClientWebSocket controlSocket, bool ok, CancellationToken token)
+    {
+        try
+        {
+            if (controlSocket.State != WebSocketState.Open) return;
+            var payload = Encoding.UTF8.GetBytes("{\"type\":\"capture-status\",\"ok\":" + (ok ? "true" : "false") + "}");
+            await controlSocket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, token);
+        }
+        catch
+        {
+            // Status reporting must never break the capture loop.
+        }
     }
 
     private static async Task ReceiveInputLoopAsync(ClientWebSocket socket, WindowsInputDispatcher input, CancellationToken token)
