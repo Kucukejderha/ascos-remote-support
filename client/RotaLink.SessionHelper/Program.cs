@@ -48,7 +48,7 @@ internal static class Program
 
     public static int Main(string[] args)
     {
-        EnablePhysicalPixelCoordinates();
+        var dpiMode = EnablePhysicalPixelCoordinates();
         var sessionId = ParseSessionId(args);
         if (!ProcessIdToSessionId((uint)System.Diagnostics.Process.GetCurrentProcess().Id, out var actualSessionId) || actualSessionId != sessionId)
             return 11;
@@ -60,7 +60,7 @@ internal static class Program
             using var identity = WindowsIdentity.GetCurrent();
             var uiAccess = ReadCurrentUiAccess();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
-                ", UIAccess=" + uiAccess + ", Integrity=" + ReadIntegrityLabel() + ".");
+                ", UIAccess=" + uiAccess + ", Integrity=" + ReadIntegrityLabel() + ", DpiMode=" + dpiMode + ".");
             // The helper must use the same physical pixel space as the DPI-aware
             // agent that captures the screen, otherwise injected coordinates drift.
             log.Write("Screen metrics: virtual origin=" + GetSystemMetrics(76) + "," + GetSystemMetrics(77) +
@@ -148,15 +148,15 @@ internal static class Program
             return "unknown";
         }
     }
-
-    private static void EnablePhysicalPixelCoordinates()
+    private static string EnablePhysicalPixelCoordinates()
     {
         try
         {
-            if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return;
+            if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return "per-monitor-v2";
+            if (SetProcessDpiAwarenessContext(new IntPtr(-3))) return "per-monitor";
         }
         catch (EntryPointNotFoundException) { }
-        SetProcessDPIAware();
+        return SetProcessDPIAware() ? "system-aware" : "unaware";
     }
 
     private static uint ParseSessionId(string[] args)

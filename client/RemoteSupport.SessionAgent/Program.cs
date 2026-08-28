@@ -36,22 +36,29 @@ internal static class Program
         var elevated = IsProcessElevated();
         AppDiagnostics.Write("RotaLink v" + version + " started in the interactive user session on " + Environment.OSVersion +
             ". Session=" + Process.GetCurrentProcess().SessionId + ", Identity=" + identityName +
-            ", Elevated=" + elevated + ", Bitness=" + (Environment.Is64BitProcess ? "x64" : "x86") + ".");
+            ", Elevated=" + elevated + ", DpiMode=" + DpiMode + ", Bitness=" + (Environment.Is64BitProcess ? "x64" : "x86") + ".");
         using var helperRuntime = ElevatedSessionHelper.TryStart();
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm(args.FirstOrDefault(), elevated, helperRuntime is not null));
     }
 
+    private static string DpiMode = "unaware";
+
+    /// <summary>
+    /// Makes the process DPI-aware so GDI capture and injected coordinates use
+    /// the same physical pixel space. PER_MONITOR_AWARE_V2 (-4) requires 1703+;
+    /// PER_MONITOR_AWARE (-3) works on Windows 8.1/Server 2016 and is enough.
+    /// </summary>
     private static void EnablePhysicalPixelCoordinates()
     {
         try
         {
-            if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return;
+            if (SetProcessDpiAwarenessContext(new IntPtr(-4))) { DpiMode = "per-monitor-v2"; return; }
+            if (SetProcessDpiAwarenessContext(new IntPtr(-3))) { DpiMode = "per-monitor"; return; }
         }
         catch (EntryPointNotFoundException) { }
-
-        SetProcessDPIAware();
+        DpiMode = SetProcessDPIAware() ? "system-aware" : "unaware";
     }
 
     /// <summary>

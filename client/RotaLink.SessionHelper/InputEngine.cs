@@ -198,8 +198,8 @@ internal sealed class InputEngine : IDisposable
         // subject to UIPI inside the session, and to window messages. The
         // fallback mechanism is reported as its own stage so operators see
         // exactly how the input was delivered.
-        var fallback = TryFallback(packet, point);
-        if (fallback != 0) return InputInjectionResult.Fallback((InputFailureStage)fallback);
+        var fallback = TryFallback(packet, point, sendInputError);
+        if (fallback != 0) return InputInjectionResult.Fallback((InputFailureStage)fallback, sendInputError);
 
         // Only report the desktop as locked with real evidence: no foreground
         // window AND no window at the pointer position. A null foreground alone
@@ -210,20 +210,20 @@ internal sealed class InputEngine : IDisposable
         throw new Win32Exception(sendInputError, "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
     }
 
-    private int TryFallback(InputPacket packet, VirtualDesktopPoint point)
+    private int TryFallback(InputPacket packet, VirtualDesktopPoint point, int sendInputError)
     {
         switch (packet.Kind)
         {
             case InputEventKind.Move:
                 if (SetPhysicalCursorPos(point.PixelX, point.PixelY))
                 {
-                    LogFallback("SetPhysicalCursorPos move");
+                    LogFallback("SetPhysicalCursorPos move, SendInputError=" + sendInputError);
                     return (int)InputFailureStage.FallbackSetCursorPos;
                 }
                 var physicalCursorError = Marshal.GetLastWin32Error();
                 if (SetCursorPos(point.PixelX, point.PixelY))
                 {
-                    LogFallback("SetCursorPos move");
+                    LogFallback("SetCursorPos move, SendInputError=" + sendInputError);
                     return (int)InputFailureStage.FallbackSetCursorPos;
                 }
                 var cursorError = Marshal.GetLastWin32Error();
@@ -233,12 +233,12 @@ internal sealed class InputEngine : IDisposable
                 var mouseEventError = Marshal.GetLastWin32Error();
                 if (mouseEventError == 0)
                 {
-                    LogFallback("mouse_event move");
+                    LogFallback("mouse_event move (unverifiable), SendInputError=" + sendInputError);
                     return (int)InputFailureStage.FallbackMouseEvent;
                 }
                 if (PostToWindow(point, 0x0200 /* WM_MOUSEMOVE */, 0))
                 {
-                    LogFallback("PostMessage move");
+                    LogFallback("PostMessage move, SendInputError=" + sendInputError);
                     return (int)InputFailureStage.FallbackPostMessage;
                 }
                 LogMoveChainFailure(physicalCursorError, cursorError, mouseEventError);
@@ -274,13 +274,13 @@ internal sealed class InputEngine : IDisposable
                         mouse_event(mouseFlag, 0, 0, 0, UIntPtr.Zero);
                         if (Marshal.GetLastWin32Error() == 0)
                         {
-                            LogFallback("mouse_event button");
+                            LogFallback("mouse_event button (unverifiable), SendInputError=" + sendInputError);
                             return (int)InputFailureStage.FallbackMouseEvent;
                         }
                     }
                     if (PostButton(point, message, nonClientMessage))
                     {
-                        LogFallback("PostMessage button");
+                        LogFallback("PostMessage button, SendInputError=" + sendInputError);
                         return (int)InputFailureStage.FallbackPostMessage;
                     }
                     return 0;
@@ -288,7 +288,7 @@ internal sealed class InputEngine : IDisposable
             case InputEventKind.Wheel:
                 if (PostToWindow(point, WmMouseWheel, unchecked((uint)(packet.Data << 16))))
                 {
-                    LogFallback("PostMessage wheel");
+                    LogFallback("PostMessage wheel, SendInputError=" + sendInputError);
                     return (int)InputFailureStage.FallbackPostMessage;
                 }
                 return 0;
@@ -306,7 +306,7 @@ internal sealed class InputEngine : IDisposable
                     var target = GetForegroundWindow();
                     if (target != IntPtr.Zero && PostMessage(target, packet.Down ? WmKeyDown : WmKeyUp, new IntPtr(unchecked((long)packet.KeyCode)), IntPtr.Zero))
                     {
-                        LogFallback("PostMessage key");
+                        LogFallback("PostMessage key, SendInputError=" + sendInputError);
                         return (int)InputFailureStage.FallbackPostMessage;
                     }
                     return 0;
@@ -340,13 +340,8 @@ internal sealed class InputEngine : IDisposable
         {
             PostMessage(target, 0x0200 /* WM_MOUSEMOVE */, new IntPtr(mouseKey), lParam);
             PostMessage(target, 0x0021 /* WM_MOUSEACTIVATE */, new IntPtr(1), lParam);
-            PostMessage(target, message, new IntPtr(mouseKey), lParam);
-            SendMessageTimeout(target, message, new IntPtr(mouseKey), lParam, 0x0002 /* SMTO_ABORTIFHUNG */, 500, out _);
-            return true;
         }
-        PostMessage(target, message, new IntPtr(mouseKey), lParam);
-        SendMessageTimeout(target, message, new IntPtr(mouseKey), lParam, 0x0002 /* SMTO_ABORTIFHUNG */, 500, out _);
-        return true;
+        return PostMessage(target, message, new IntPtr(mouseKey), lParam);
     }
 
     private bool PostToWindow(VirtualDesktopPoint point, uint message, uint wParam)
@@ -458,7 +453,6 @@ internal sealed class InputEngine : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
-    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; public NativePoint(int x, int y) { X = x; Y = y; } }
 }
@@ -495,5 +489,5 @@ internal readonly struct InputInjectionResult
 
     public static InputInjectionResult Success() => new(true, InputFailureStage.None, 0);
     public static InputInjectionResult Failure(InputFailureStage stage, int errorCode = 0) => new(false, stage, errorCode);
-    public static InputInjectionResult Fallback(InputFailureStage stage) => new(true, stage, 0);
+    public static InputInjectionResult Fallback(InputFailureStage stage, int errorCode = 0) => new(true, stage, errorCode);
 }
