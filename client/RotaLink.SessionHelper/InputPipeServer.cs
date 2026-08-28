@@ -92,9 +92,19 @@ internal sealed class InputPipeServer
                 firstPacket = false;
                 _log.Write("First input packet received. Kind=" + packet.Kind + ", Sequence=" + packet.Sequence + ".");
             }
-            var result = packet.Sequence <= lastSequence
-                ? InputInjectionResult.Failure(InputFailureStage.SequenceRejected)
-                : _engine.InjectAsync(packet, CancellationToken.None).GetAwaiter().GetResult();
+            InputInjectionResult result;
+            if (packet.Sequence <= lastSequence)
+            {
+                result = InputInjectionResult.Failure(InputFailureStage.SequenceRejected);
+            }
+            else
+            {
+                var injectionTask = _engine.InjectAsync(packet, CancellationToken.None);
+                if (injectionTask.Wait(500))
+                    result = injectionTask.Result;
+                else
+                    result = InputInjectionResult.Failure(InputFailureStage.CommandTimeout);
+            }
             if (result.Accepted) lastSequence = packet.Sequence;
             EncodeAcknowledgement(acknowledgement, packet.Sequence, result);
             stream.Write(acknowledgement, 0, acknowledgement.Length);

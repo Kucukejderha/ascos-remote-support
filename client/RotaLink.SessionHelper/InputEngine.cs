@@ -39,6 +39,15 @@ internal sealed class InputEngine : IDisposable
     private const uint WmNcRButtonDown = 0x00A4;
     private const uint WmNcRButtonUp = 0x00A5;
     private const int HtClient = 1;
+    private const uint WmChar = 0x0102;
+    private const uint WmSysCommand = 0x0112;
+    private const uint ScMinimize = 0xF020;
+    private const uint ScMaximize = 0xF030;
+    private const uint ScRestore = 0xF120;
+    private const uint ScClose = 0xF060;
+    private const uint GaRoot = 2;
+    private const uint SmtoAbortIfHung = 0x0002;
+    private const uint SmtoBlock = 0x0001;
     private uint _lastKeyDown;
     private bool _fallbackLogged;
     private readonly BlockingCollection<WorkItem> _queue = new(new ConcurrentQueue<WorkItem>(), 512);
@@ -306,6 +315,14 @@ internal sealed class InputEngine : IDisposable
                     var target = GetForegroundWindow();
                     if (target != IntPtr.Zero && PostMessage(target, packet.Down ? WmKeyDown : WmKeyUp, new IntPtr(unchecked((long)packet.KeyCode)), IntPtr.Zero))
                     {
+                        if (packet.Down)
+                        {
+                            // WM_KEYDOWN alone never produces WM_CHAR; synthesize it so
+                            // text controls and Chromium-style apps receive characters.
+                            var character = MapVirtualKey(packet.KeyCode, 2 /* MAPVK_VK_TO_CHAR */);
+                            if (character != 0)
+                                PostMessage(target, WmChar, new IntPtr(character & 0xFFFF), IntPtr.Zero);
+                        }
                         LogFallback("PostMessage key, SendInputError=" + sendInputError);
                         return (int)InputFailureStage.FallbackPostMessage;
                     }
@@ -317,6 +334,7 @@ internal sealed class InputEngine : IDisposable
     }
 
     private IntPtr _lastButtonTarget;
+    private int _lastButtonHitCode;
     private int _lastLeftDownTick;
     private IntPtr _lastLeftDownTarget;
 
@@ -333,30 +351,31 @@ internal sealed class InputEngine : IDisposable
         }
 
         var screenLParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
-        var hit = SendMessage(target, WmNcHitTest, IntPtr.Zero, screenLParam);
-        var hitCode = hit == IntPtr.Zero ? 0 : hit.ToInt32();
+        var hitCode = 0;
+        var hitResult = SendMessageTimeout(target, WmNcHitTest, IntPtr.Zero, screenLParam, SmtoAbortIfHung | SmtoBlock, 200, out _);
+        if (hitResult != IntPtr.Zero) hitCode = hitResult.ToInt32();
 
         if (hitCode != 0 && hitCode != HtClient && nonClientMessage != 0)
         {
+            // Title-bar button handling: record state on down (no synthetic
+            // non-client message, which can wedge modal tracking), and issue
+            // the matching system command asynchronously on a matching up.
             if (isDown)
             {
                 _lastButtonTarget = target;
-                return PostMessage(target, nonClientMessage, new IntPtr(hitCode), screenLParam);
-            }
-            // Release on a title-bar button: issue the matching system command.
-            var command = hitCode switch
-            {
-                8 => 0xF020u,  // HTMINBUTTON -> SC_MINIMIZE
-                9 => 0xF030u,  // HTMAXBUTTON -> SC_MAXIMIZE/RESTORE
-                20 => 0xF060u, // HTCLOSE -> SC_CLOSE
-                _ => 0u
-            };
-            if (command != 0)
-            {
-                SendMessage(target, 0x0112 /* WM_SYSCOMMAND */, new IntPtr(command), IntPtr.Zero);
+                _lastButtonHitCode = hitCode;
                 return true;
             }
-            return PostMessage(target, nonClientMessage, new IntPtr(hitCode), screenLParam);
+            if (_lastButtonTarget != target || _lastButtonHitCode != hitCode) return false;
+            var command = hitCode switch
+            {
+                8 => ScMinimize,                                      // HTMINBUTTON
+                9 when IsZoomed(target) => ScRestore,                 // HTMAXBUTTON
+                9 => ScMaximize,
+                20 => ScClose,                                        // HTCLOSE
+                _ => 0u
+            };
+            return command != 0 && PostMessage(target, WmSysCommand, new IntPtr(command), IntPtr.Zero);
         }
 
         var clientPoint = new NativePoint(point.PixelX, point.PixelY);
@@ -374,6 +393,11 @@ internal sealed class InputEngine : IDisposable
         if (isDown)
         {
             _lastButtonTarget = target;
+            _lastButtonHitCode = HtClient;
+            // Activate the owning top-level window so background windows come
+            // to the front on click (the high-integrity helper is allowed to).
+            var root = GetAncestor(target, GaRoot);
+            if (root != IntPtr.Zero) SetForegroundWindow(root);
             if (message == WmLeftDown)
             {
                 var now = Environment.TickCount;
@@ -452,6 +476,7 @@ internal sealed class InputEngine : IDisposable
     {
         _lastKeyDown = 0;
         _lastButtonTarget = IntPtr.Zero;
+        _lastButtonHitCode = 0;
         _lastLeftDownTick = 0;
         _lastLeftDownTarget = IntPtr.Zero;
     }
@@ -512,8 +537,13 @@ internal sealed class InputEngine : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
     [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsZoomed(IntPtr window);
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] private static extern uint MapVirtualKey(uint code, uint mapType);
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; public NativePoint(int x, int y) { X = x; Y = y; } }
 }
@@ -532,7 +562,8 @@ internal enum InputFailureStage : byte
     DesktopLocked = 9,
     FallbackSetCursorPos = 10,
     FallbackMouseEvent = 11,
-    FallbackPostMessage = 12
+    FallbackPostMessage = 12,
+    CommandTimeout = 13
 }
 
 internal readonly struct InputInjectionResult

@@ -68,6 +68,7 @@ internal sealed class SessionHelperInputClient : IDisposable
         10 => "fallback-setcursorpos-ok",
         11 => "fallback-mouseevent-ok",
         12 => "fallback-postmessage-ok",
+        13 => "helper-command-timeout",
         _ => "helper-stage-unknown"
     };
 
@@ -144,18 +145,23 @@ internal sealed class SessionHelperInputClient : IDisposable
         var offset = 0;
         while (offset < buffer.Length)
         {
-            var pending = stream.BeginRead(buffer, offset, buffer.Length - offset, null, null);
+            // Each BeginRead is matched with exactly one EndRead. The wait uses
+            // our own event set by the completion callback; the pipe's internal
+            // AsyncWaitHandle is never disposed while I/O may still complete,
+            // which previously crashed the process with ObjectDisposedException.
+            var wait = new ManualResetEvent(false);
+            var pending = stream.BeginRead(buffer, offset, buffer.Length - offset,
+                asyncResult => ((ManualResetEvent)asyncResult.AsyncState).Set(), wait);
+            if (!wait.WaitOne(TimeSpan.FromSeconds(2)))
+            {
+                try { stream.Close(); } catch { }
+                try { stream.EndRead(pending); } catch { }
+                wait.Dispose();
+                throw new TimeoutException("Session helper acknowledgement timed out after 2 seconds.");
+            }
             int read;
-            try
-            {
-                if (!pending.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(2)))
-                    throw new TimeoutException("Session helper acknowledgement timed out after 2 seconds.");
-                read = stream.EndRead(pending);
-            }
-            finally
-            {
-                pending.AsyncWaitHandle.Dispose();
-            }
+            try { read = stream.EndRead(pending); }
+            finally { wait.Dispose(); }
             if (read == 0) throw new EndOfStreamException();
             offset += read;
         }

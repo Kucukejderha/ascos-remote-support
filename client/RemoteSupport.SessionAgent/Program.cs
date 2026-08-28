@@ -19,6 +19,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        RegisterCrashLogging();
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         using var singleInstance = SingleInstanceGuard.TryAcquire();
         if (singleInstance is null)
@@ -44,6 +45,19 @@ internal static class Program
     }
 
     private static string DpiMode = "unaware";
+
+    private static void RegisterCrashLogging()
+    {
+        AppDomain.CurrentDomain.UnhandledException += (sender, eventArgs) =>
+        {
+            try { AppDiagnostics.Write("Unhandled exception: " + eventArgs.ExceptionObject); } catch { }
+        };
+        Application.ThreadException += (sender, eventArgs) =>
+        {
+            try { AppDiagnostics.Write("Thread exception: " + eventArgs.Exception); } catch { }
+        };
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+    }
 
     /// <summary>
     /// Makes the process DPI-aware so GDI capture and injected coordinates use
