@@ -44,6 +44,10 @@ internal sealed class InputPipeServer
             catch (EndOfStreamException) { }
             catch (IOException exception) { _log.Write("Input IPC disconnected: " + exception.Message); }
             catch (InvalidDataException exception) { _log.Write("Input IPC client rejected: " + exception.Message); }
+            finally
+            {
+                _engine.ResetConnectionState();
+            }
         }
     }
 

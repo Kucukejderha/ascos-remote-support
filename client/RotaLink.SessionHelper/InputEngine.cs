@@ -316,31 +316,82 @@ internal sealed class InputEngine : IDisposable
         }
     }
 
+    private IntPtr _lastButtonTarget;
+    private int _lastLeftDownTick;
+    private IntPtr _lastLeftDownTarget;
+
     private bool PostButton(VirtualDesktopPoint point, uint message, uint nonClientMessage)
     {
-        var target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
-        if (target == IntPtr.Zero) return false;
+        var isDown = message is WmLeftDown or WmMiddleDown or WmRightDown;
+        var target = IntPtr.Zero;
+        if (!isDown && _lastButtonTarget != IntPtr.Zero && IsWindow(_lastButtonTarget))
+            target = _lastButtonTarget;
+        if (target == IntPtr.Zero)
+        {
+            target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
+            if (target == IntPtr.Zero) return false;
+        }
+
         var screenLParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
         var hit = SendMessage(target, WmNcHitTest, IntPtr.Zero, screenLParam);
-        if (hit != IntPtr.Zero && hit.ToInt32() != HtClient && nonClientMessage != 0)
+        var hitCode = hit == IntPtr.Zero ? 0 : hit.ToInt32();
+
+        if (hitCode != 0 && hitCode != HtClient && nonClientMessage != 0)
         {
-            return PostMessage(target, nonClientMessage, hit, screenLParam);
+            if (isDown)
+            {
+                _lastButtonTarget = target;
+                return PostMessage(target, nonClientMessage, new IntPtr(hitCode), screenLParam);
+            }
+            // Release on a title-bar button: issue the matching system command.
+            var command = hitCode switch
+            {
+                8 => 0xF020u,  // HTMINBUTTON -> SC_MINIMIZE
+                9 => 0xF030u,  // HTMAXBUTTON -> SC_MAXIMIZE/RESTORE
+                20 => 0xF060u, // HTCLOSE -> SC_CLOSE
+                _ => 0u
+            };
+            if (command != 0)
+            {
+                SendMessage(target, 0x0112 /* WM_SYSCOMMAND */, new IntPtr(command), IntPtr.Zero);
+                return true;
+            }
+            return PostMessage(target, nonClientMessage, new IntPtr(hitCode), screenLParam);
         }
+
         var clientPoint = new NativePoint(point.PixelX, point.PixelY);
         ScreenToClient(target, ref clientPoint);
         var lParam = new IntPtr((clientPoint.Y << 16) | (clientPoint.X & 0xFFFF));
+        // Button state at message time: pressed for downs, released for ups.
         var mouseKey = message switch
         {
-            WmLeftDown or WmLeftUp => 0x0001u,
-            WmRightDown or WmRightUp => 0x0002u,
-            WmMiddleDown or WmMiddleUp => 0x0010u,
+            WmLeftDown => 0x0001u,
+            WmRightDown => 0x0002u,
+            WmMiddleDown => 0x0010u,
             _ => 0u
         };
-        if (message is WmLeftDown or WmMiddleDown or WmRightDown)
+
+        if (isDown)
         {
-            PostMessage(target, 0x0200 /* WM_MOUSEMOVE */, new IntPtr(mouseKey), lParam);
-            PostMessage(target, 0x0021 /* WM_MOUSEACTIVATE */, new IntPtr(1), lParam);
+            _lastButtonTarget = target;
+            if (message == WmLeftDown)
+            {
+                var now = Environment.TickCount;
+                var doubleClickTime = GetDoubleClickTime();
+                if (_lastLeftDownTick != 0 && unchecked(now - _lastLeftDownTick) >= 0 &&
+                    unchecked(now - _lastLeftDownTick) < doubleClickTime && _lastLeftDownTarget == target)
+                {
+                    _lastLeftDownTick = 0;
+                    PostMessage(target, 0x0200 /* WM_MOUSEMOVE */, IntPtr.Zero, lParam);
+                    return PostMessage(target, 0x0203 /* WM_LBUTTONDBLCLK */, new IntPtr(mouseKey), lParam);
+                }
+                _lastLeftDownTick = now;
+                _lastLeftDownTarget = target;
+            }
+            PostMessage(target, 0x0200 /* WM_MOUSEMOVE */, IntPtr.Zero, lParam);
+            return PostMessage(target, message, new IntPtr(mouseKey), lParam);
         }
+
         return PostMessage(target, message, new IntPtr(mouseKey), lParam);
     }
 
@@ -396,6 +447,14 @@ internal sealed class InputEngine : IDisposable
             }
         }
     };
+
+    public void ResetConnectionState()
+    {
+        _lastKeyDown = 0;
+        _lastButtonTarget = IntPtr.Zero;
+        _lastLeftDownTick = 0;
+        _lastLeftDownTarget = IntPtr.Zero;
+    }
 
     private static bool IsExtendedKey(uint key) => key is 0x21 or 0x22 or 0x23 or 0x24 or 0x25 or 0x26 or 0x27 or 0x28 or 0x2D or 0x2E or 0x6F or 0x90 or 0x91;
 
@@ -453,6 +512,8 @@ internal sealed class InputEngine : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr window);
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; public NativePoint(int x, int y) { X = x; Y = y; } }
 }
