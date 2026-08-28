@@ -39,6 +39,10 @@ internal sealed class InputEngine : IDisposable
     private const uint WmNcRButtonDown = 0x00A4;
     private const uint WmNcRButtonUp = 0x00A5;
     private const int HtClient = 1;
+    private const int HtCaption = 2;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
     private const uint WmChar = 0x0102;
     private const uint WmSysCommand = 0x0112;
     private const uint ScMinimize = 0xF020;
@@ -179,7 +183,10 @@ internal sealed class InputEngine : IDisposable
                 input = Mouse(point, MouseMove | MouseWheel, unchecked((uint)packet.Data));
                 break;
             case InputEventKind.Key:
-                if (packet.KeyCode is 0 or > 0xFF) return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
+                // Printable characters are carried in KeyCharacter and may have
+                // KeyCode=0 for punctuation keys that have no virtual-key map.
+                if (packet.KeyCharacter == 0 && (packet.KeyCode is 0 or > 0xFF))
+                    return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
                 var extended = IsExtendedKey(packet.KeyCode) ? KeyExtended : 0u;
                 input = new NativeInput
                 {
@@ -224,6 +231,17 @@ internal sealed class InputEngine : IDisposable
         switch (packet.Kind)
         {
             case InputEventKind.Move:
+                if (_captionDragTarget != IntPtr.Zero && IsWindow(_captionDragTarget))
+                {
+                    // Window drag: move the caption-drag root with the cursor.
+                    SetWindowPos(_captionDragTarget, IntPtr.Zero,
+                        _captionWindowX + point.PixelX - _captionStartX,
+                        _captionWindowY + point.PixelY - _captionStartY,
+                        0, 0, SwpNoSize | SwpNoZOrder | SwpNoActivate);
+                    return (int)InputFailureStage.FallbackSetCursorPos;
+                }
+                var dragKeys = (_leftDown ? 0x0001u : 0u) | (_rightDown ? 0x0002u : 0u) | (_middleDown ? 0x0010u : 0u);
+                if (dragKeys != 0) PostDragMove(point, dragKeys);
                 if (SetPhysicalCursorPos(point.PixelX, point.PixelY))
                 {
                     LogFallback("SetPhysicalCursorPos move, SendInputError=" + sendInputError);
@@ -270,6 +288,13 @@ internal sealed class InputEngine : IDisposable
                     };
                     if (message == 0) return 0;
 
+                    if (packet.Down)
+                    {
+                        if (packet.Data == 0) _leftDown = true;
+                        else if (packet.Data == 1) _middleDown = true;
+                        else if (packet.Data == 2) _rightDown = true;
+                    }
+
                     var mouseFlag = (packet.Data, packet.Down) switch
                     {
                         (0, true) => 0x0002u, (0, false) => 0x0004u,
@@ -284,14 +309,17 @@ internal sealed class InputEngine : IDisposable
                         if (Marshal.GetLastWin32Error() == 0)
                         {
                             LogFallback("mouse_event button (unverifiable), SendInputError=" + sendInputError);
+                            if (!packet.Down) ClearButtonState();
                             return (int)InputFailureStage.FallbackMouseEvent;
                         }
                     }
                     if (PostButton(point, message, nonClientMessage))
                     {
                         LogFallback("PostMessage button, SendInputError=" + sendInputError);
+                        if (!packet.Down) ClearButtonState();
                         return (int)InputFailureStage.FallbackPostMessage;
                     }
+                    if (!packet.Down) ClearButtonState();
                     return 0;
                 }
             case InputEventKind.Wheel:
@@ -307,11 +335,9 @@ internal sealed class InputEngine : IDisposable
                     {
                         // Printable character: deliver exactly one WM_CHAR with
                         // the real character from the operator; never duplicate
-                        // with WM_KEYDOWN (Chromium would type it twice).
+                        // with WM_KEYDOWN and never block repeated characters.
                         if (!packet.Down) return (int)InputFailureStage.FallbackPostMessage;
-                        if (_lastKeyDown == packet.KeyCode) return (int)InputFailureStage.FallbackPostMessage;
-                        _lastKeyDown = packet.KeyCode;
-                        var charTarget = GetForegroundWindow();
+                        var charTarget = GetKeyboardTarget();
                         if (charTarget != IntPtr.Zero && PostMessage(charTarget, WmChar, new IntPtr(packet.KeyCharacter), IntPtr.Zero))
                         {
                             LogFallback("PostMessage WM_CHAR, SendInputError=" + sendInputError);
@@ -328,7 +354,7 @@ internal sealed class InputEngine : IDisposable
                     {
                         _lastKeyDown = 0;
                     }
-                    var target = GetForegroundWindow();
+                    var target = GetKeyboardTarget();
                     if (target != IntPtr.Zero && PostMessage(target, packet.Down ? WmKeyDown : WmKeyUp, new IntPtr(unchecked((long)packet.KeyCode)), IntPtr.Zero))
                     {
                         LogFallback("PostMessage key, SendInputError=" + sendInputError);
@@ -345,6 +371,14 @@ internal sealed class InputEngine : IDisposable
     private int _lastButtonHitCode;
     private int _lastLeftDownTick;
     private IntPtr _lastLeftDownTarget;
+    private bool _leftDown;
+    private bool _rightDown;
+    private bool _middleDown;
+    private IntPtr _captionDragTarget;
+    private int _captionStartX;
+    private int _captionStartY;
+    private int _captionWindowX;
+    private int _captionWindowY;
 
     private bool PostButton(VirtualDesktopPoint point, uint message, uint nonClientMessage)
     {
@@ -357,11 +391,15 @@ internal sealed class InputEngine : IDisposable
             target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
             if (target == IntPtr.Zero) return false;
         }
+        // Popup menus take mouse capture; prefer the capture window so menu
+        // item clicks reach the menu rather than the window under the pointer.
+        var capture = GetCapture();
+        if (capture != IntPtr.Zero && capture != target) target = capture;
 
         var screenLParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
         var hitCode = 0;
         var hitSuccess = SendMessageTimeout(target, WmNcHitTest, IntPtr.Zero, screenLParam,
-            SmtoAbortIfHung | SmtoBlock | 0x0010 /* SMTO_ERRORONEXIT */, 200, out var hitResult);
+            SmtoAbortIfHung | SmtoBlock | 0x0020 /* SMTO_ERRORONEXIT */, 200, out var hitResult);
         if (hitSuccess != IntPtr.Zero && hitResult != IntPtr.Zero) hitCode = hitResult.ToInt32();
 
         if (hitCode != 0 && hitCode != HtClient && nonClientMessage != 0)
@@ -373,6 +411,23 @@ internal sealed class InputEngine : IDisposable
             {
                 _lastButtonTarget = target;
                 _lastButtonHitCode = hitCode;
+                if (hitCode == HtCaption)
+                {
+                    var rootWindow = GetAncestor(target, GaRoot);
+                    if (rootWindow != IntPtr.Zero && GetWindowRect(rootWindow, out var windowRect))
+                    {
+                        _captionDragTarget = rootWindow;
+                        _captionWindowX = windowRect.Left;
+                        _captionWindowY = windowRect.Top;
+                        _captionStartX = point.PixelX;
+                        _captionStartY = point.PixelY;
+                    }
+                }
+                return true;
+            }
+            if (hitCode == HtCaption)
+            {
+                _captionDragTarget = IntPtr.Zero;
                 return true;
             }
             if (_lastButtonTarget != target || _lastButtonHitCode != hitCode) return false;
@@ -443,6 +498,41 @@ internal sealed class InputEngine : IDisposable
         return PostMessage(target, message, new IntPtr(unchecked((long)wParam)), lParam);
     }
 
+    private void ClearButtonState()
+    {
+        _leftDown = false;
+        _rightDown = false;
+        _middleDown = false;
+        _lastButtonTarget = IntPtr.Zero;
+        _lastButtonHitCode = 0;
+        _captionDragTarget = IntPtr.Zero;
+    }
+
+    private void PostDragMove(VirtualDesktopPoint point, uint dragKeys)
+    {
+        var target = _lastButtonTarget;
+        if (target == IntPtr.Zero || !IsWindow(target)) target = GetCapture();
+        if (target == IntPtr.Zero) return;
+        var clientPoint = new NativePoint(point.PixelX, point.PixelY);
+        ScreenToClient(target, ref clientPoint);
+        var lParam = new IntPtr((clientPoint.Y << 16) | (clientPoint.X & 0xFFFF));
+        PostMessage(target, 0x0200 /* WM_MOUSEMOVE */, new IntPtr(dragKeys), lParam);
+    }
+
+    /// <summary>
+    /// Keyboard messages must go to the real focused child window (text boxes,
+    /// custom editors), not the top-level foreground window.
+    /// </summary>
+    private static IntPtr GetKeyboardTarget()
+    {
+        var foreground = GetForegroundWindow();
+        if (foreground == IntPtr.Zero) return IntPtr.Zero;
+        var threadId = GetWindowThreadProcessId(foreground, out _);
+        var info = new GuiThreadInfo { Size = Marshal.SizeOf(typeof(GuiThreadInfo)) };
+        if (GetGUIThreadInfo(threadId, ref info) && info.Focus != IntPtr.Zero) return info.Focus;
+        return foreground;
+    }
+
     private void LogFallback(string mechanism)
     {
         if (_fallbackLogged) return;
@@ -489,8 +579,7 @@ internal sealed class InputEngine : IDisposable
     public void ResetConnectionState()
     {
         _lastKeyDown = 0;
-        _lastButtonTarget = IntPtr.Zero;
-        _lastButtonHitCode = 0;
+        ClearButtonState();
         _lastLeftDownTick = 0;
         _lastLeftDownTarget = IntPtr.Zero;
     }
@@ -559,6 +648,24 @@ internal sealed class InputEngine : IDisposable
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool ShowWindowAsync(IntPtr window, int command);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] private static extern IntPtr GetCapture();
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(IntPtr window, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetWindowRect(IntPtr window, out WindowRect rect);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetGUIThreadInfo(uint threadId, ref GuiThreadInfo info);
+
+    [StructLayout(LayoutKind.Sequential)] private struct WindowRect { public int Left; public int Top; public int Right; public int Bottom; }
+    [StructLayout(LayoutKind.Sequential)] private struct GuiThreadInfo
+    {
+        public int Size;
+        public uint Flags;
+        public IntPtr Active;
+        public IntPtr Focus;
+        public IntPtr Capture;
+        public IntPtr MenuOwner;
+        public IntPtr MoveSize;
+        public IntPtr Caret;
+        public WindowRect CaretRect;
+    }
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; public NativePoint(int x, int y) { X = x; Y = y; } }
 }

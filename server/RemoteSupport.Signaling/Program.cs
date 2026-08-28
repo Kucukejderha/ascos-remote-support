@@ -38,7 +38,12 @@ app.UseRateLimiter();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ascos-remote-support-signaling" }));
-app.MapGet("/operator", () => Results.Content(OperatorPage.Html, "text/html; charset=utf-8"));
+app.MapGet("/operator", (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+    context.Response.Headers.Pragma = "no-cache";
+    return Results.Content(OperatorPage.Html, "text/html; charset=utf-8");
+});
 app.MapGet("/downloads/RotaLink.exe", (HttpContext context, IWebHostEnvironment environment) =>
     CreateClientDownload(context, environment));
 app.MapGet("/downloads/version.json", (HttpContext context, IWebHostEnvironment environment) =>
