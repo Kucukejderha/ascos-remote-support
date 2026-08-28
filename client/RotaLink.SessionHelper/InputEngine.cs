@@ -83,6 +83,12 @@ internal sealed class InputEngine : IDisposable
             {
                 item.CancellationToken.ThrowIfCancellationRequested();
                 desktop.Refresh();
+                if (unchecked(Environment.TickCount - _lastDpiDiagTick) > 5000)
+                {
+                    _lastDpiDiagTick = Environment.TickCount;
+                    _log.Write("DPI diag: SM_CXSCREEN=" + GetSystemMetrics(0) +
+                        ", ThreadDpiAwarenessContext=0x" + GetThreadDpiAwarenessContext().ToInt64().ToString("X") + ".");
+                }
                 item.Completion.TrySetResult(Inject(item.Packet));
             }
             catch (OperationCanceledException)
@@ -165,9 +171,19 @@ internal sealed class InputEngine : IDisposable
         switch (packet.Kind)
         {
             case InputEventKind.Move:
+                // SendInput absolute coordinates are mapped against the
+                // caller's DPI context, which cannot be controlled reliably
+                // for a SYSTEM-token helper (SetThreadDesktop resets it and
+                // SetThreadDpiAwarenessContext fails afterwards). Move the
+                // physical cursor directly: physical pixels, no scaling.
+                if (SetPhysicalCursorPos(point.PixelX, point.PixelY)) return InputInjectionResult.Success();
                 input = Mouse(point, MouseMove, 0);
                 break;
             case InputEventKind.Button:
+                // Position the cursor physically first so the button event
+                // lands on the exact target even if SendInput's own mapping
+                // would use the logical resolution.
+                SetPhysicalCursorPos(point.PixelX, point.PixelY);
                 var buttonFlag = (packet.Data, packet.Down) switch
                 {
                     (0, true) => MouseLeftDown, (0, false) => MouseLeftUp,
@@ -180,6 +196,7 @@ internal sealed class InputEngine : IDisposable
                 break;
             case InputEventKind.Wheel:
                 if (packet.Data is < -1200 or > 1200) return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
+                SetPhysicalCursorPos(point.PixelX, point.PixelY);
                 input = Mouse(point, MouseMove | MouseWheel, unchecked((uint)packet.Data));
                 break;
             case InputEventKind.Key:
@@ -370,6 +387,7 @@ internal sealed class InputEngine : IDisposable
     private IntPtr _lastButtonTarget;
     private int _lastButtonHitCode;
     private int _lastLeftDownTick;
+    private int _lastDpiDiagTick;
     private IntPtr _lastLeftDownTarget;
     private bool _leftDown;
     private bool _rightDown;
@@ -735,6 +753,7 @@ internal sealed class InputEngine : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetClassNameW")]
     private static extern int GetClassNameNative(IntPtr window, StringBuilder className, int maxCount);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")] private static extern IntPtr GetThreadDpiAwarenessContext();
 
     private static string GetClassName(IntPtr window)
     {

@@ -17,6 +17,7 @@ public sealed class WindowsInputDispatcher : IDisposable
     private readonly object _rateGate = new();
     private int _rateWindow = Environment.TickCount;
     private int _eventsInWindow;
+    private int _droppedInWindow;
     private bool _inputLogged;
     private readonly BlockingCollection<InputWorkItem> _queue = new();
     private readonly Thread _desktopThread;
@@ -36,11 +37,12 @@ public sealed class WindowsInputDispatcher : IDisposable
     {
         if (!_consent.IsControlAllowed(_sessionId)) return new InputDispatchReport(false, "consent-denied", 0, null, null);
         if (length <= 0 || length > 4096) return new InputDispatchReport(false, "packet-size-invalid", 0, null, null);
-        if (!TryAcquireRatePermit()) return new InputDispatchReport(false, "rate-limited", 0, null, null);
         InputMessage? message;
         try { message = new JavaScriptSerializer().Deserialize<InputMessage>(Encoding.UTF8.GetString(json, 0, length)); }
         catch (ArgumentException) { return new InputDispatchReport(false, "json-invalid", 0, null, null); }
         if (message is null) return new InputDispatchReport(false, "message-empty", 0, null, null);
+        if (!TryAcquireRatePermit(message))
+            return new InputDispatchReport(false, "rate-limited", 0, null, message.Type);
 
         if (!_inputLogged)
         {
@@ -130,13 +132,35 @@ public sealed class WindowsInputDispatcher : IDisposable
         _helperInput.Dispose();
     }
 
-    private bool TryAcquireRatePermit()
+    private bool TryAcquireRatePermit(InputMessage message)
     {
+        // Release events must never be dropped: a lost mouse-up leaves the
+        // title-bar system buttons stuck in their modal tracking loop and the
+        // whole window appears frozen. Only downward state changes and
+        // continuous events (move/wheel) are rate limited.
+        if (message.Type == "button" && !message.Down) return true;
+        if (message.Type == "key" && !message.Down) return true;
+
         lock (_rateGate)
         {
             var now = Environment.TickCount;
-            if (unchecked(now - _rateWindow) >= 1000) { _rateWindow = now; _eventsInWindow = 0; }
-            return ++_eventsInWindow <= 240;
+            if (unchecked(now - _rateWindow) >= 1000)
+            {
+                if (_droppedInWindow > 0)
+                {
+                    AppDiagnostics.Write("Rate limit: " + _droppedInWindow + " input events were dropped in the last second.");
+                    _droppedInWindow = 0;
+                }
+                _rateWindow = now;
+                _eventsInWindow = 0;
+            }
+            if (_eventsInWindow < 240)
+            {
+                _eventsInWindow++;
+                return true;
+            }
+            _droppedInWindow++;
+            return false;
         }
     }
 

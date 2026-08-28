@@ -22,6 +22,17 @@ internal sealed class InputDesktopContext : IDisposable
             throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenInputDesktop failed.");
 
         var name = ReadDesktopName(next);
+        // Only switch when the input desktop really changed: SetThreadDesktop
+        // resets the thread DPI context (which cannot be restored afterwards)
+        // and SendInput absolute coordinates would then map against the
+        // logical resolution, missing small targets like title-bar buttons.
+        var current = GetThreadDesktop(GetCurrentThreadId());
+        if (string.Equals(ReadDesktopName(current), name, StringComparison.Ordinal))
+        {
+            next.Dispose();
+            return name;
+        }
+
         if (!SetThreadDesktop(next))
         {
             var error = Marshal.GetLastWin32Error();
@@ -43,7 +54,9 @@ internal sealed class InputDesktopContext : IDisposable
         _desktopName = null;
     }
 
-    private static string ReadDesktopName(SafeDesktopHandle desktop)
+    private static string ReadDesktopName(SafeDesktopHandle desktop) => ReadDesktopName(desktop.DangerousGetHandle());
+
+    private static string ReadDesktopName(IntPtr desktop)
     {
         GetUserObjectInformation(desktop, UoiName, IntPtr.Zero, 0, out var required);
         var firstError = Marshal.GetLastWin32Error();
@@ -78,6 +91,10 @@ internal sealed class InputDesktopContext : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetThreadDesktop(SafeDesktopHandle desktop);
 
+    [DllImport("user32.dll")] private static extern IntPtr GetThreadDesktop(uint threadId);
+
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseDesktop(IntPtr desktop);
@@ -85,5 +102,5 @@ internal sealed class InputDesktopContext : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetUserObjectInformation(
-        SafeDesktopHandle handle, int index, IntPtr information, uint length, out uint needed);
+        IntPtr handle, int index, IntPtr information, uint length, out uint needed);
 }
