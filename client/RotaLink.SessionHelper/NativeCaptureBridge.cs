@@ -107,11 +107,9 @@ internal sealed class NativeCaptureBridge : IDisposable
             PipeAccessRights.FullControl, AccessControlType.Allow));
         security.AddAccessRule(new PipeAccessRule(GetInteractiveUserSid(),
             PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
-        var pipe = new NamedPipeServerStream("Global\\RotaLink.SessionHelper." + _sessionId + ".Video.v1",
+        return new NamedPipeServerStream("Global\\RotaLink.SessionHelper." + _sessionId + ".Video.v1",
             PipeDirection.Out, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.WriteThrough,
-            0, 64 * 1024);
-        pipe.SetAccessControl(security);
-        return pipe;
+            0, 64 * 1024, security);
     }
 
     private SecurityIdentifier GetInteractiveUserSid()

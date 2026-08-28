@@ -44,11 +44,12 @@ internal sealed class InputEngine : IDisposable
     private readonly BlockingCollection<WorkItem> _queue = new(new ConcurrentQueue<WorkItem>(), 512);
     private readonly Thread _thread;
     private readonly HelperLog _log;
-    private readonly CoordinateTransformationEngine _coordinates = new();
+    private readonly CoordinateTransformationEngine _coordinates;
 
-    public InputEngine(HelperLog log)
+    public InputEngine(HelperLog log, CoordinateTransformationEngine? coordinates = null)
     {
         _log = log;
+        _coordinates = coordinates ?? new CoordinateTransformationEngine();
         _thread = new Thread(Worker) { IsBackground = true, Name = "RotaLink secure input", Priority = ThreadPriority.AboveNormal };
         _thread.Start();
     }
@@ -104,11 +105,40 @@ internal sealed class InputEngine : IDisposable
             GetWindowThreadProcessId(window, out var processId);
             var title = new StringBuilder(256);
             GetWindowText(window, title, title.Capacity);
-            _log.Write("Foreground window: Process=" + processId + ", Title='" + title + "'.");
+            _log.Write("Foreground window: Process=" + processId + ", Integrity=" + ReadProcessIntegrity(processId) + ", Title='" + title + "'.");
         }
         catch (Exception exception)
         {
             _log.Write("Foreground diagnostics failed: " + exception.Message);
+        }
+    }
+
+    private static string ReadProcessIntegrity(uint processId)
+    {
+        try
+        {
+            using var process = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, processId);
+            if (process.IsInvalid) return "unknown";
+            if (!OpenProcessToken(process, 0x0008, out var token)) return "unknown";
+            using (token)
+            {
+                GetTokenInformation(token, 25, IntPtr.Zero, 0, out var required);
+                var buffer = Marshal.AllocHGlobal(required);
+                try
+                {
+                    if (!GetTokenInformation(token, 25, buffer, required, out _)) return "unknown";
+                    var sid = new System.Security.Principal.SecurityIdentifier(Marshal.ReadIntPtr(buffer));
+                    var binary = new byte[sid.BinaryLength];
+                    sid.GetBinaryForm(binary, 0);
+                    var rid = BitConverter.ToInt32(binary, binary.Length - 4);
+                    return "0x" + rid.ToString("X4");
+                }
+                finally { Marshal.FreeHGlobal(buffer); }
+            }
+        }
+        catch
+        {
+            return "unknown";
         }
     }
 
@@ -178,9 +208,9 @@ internal sealed class InputEngine : IDisposable
         switch (packet.Kind)
         {
             case InputEventKind.Move:
-                if (SetCursorPos(point.PixelX, point.PixelY))
+                if (SetPhysicalCursorPos(point.PixelX, point.PixelY))
                 {
-                    LogFallback("SetCursorPos move");
+                    LogFallback("SetPhysicalCursorPos move");
                     return (int)InputFailureStage.FallbackSetCursorPos;
                 }
                 return 0;
@@ -209,7 +239,7 @@ internal sealed class InputEngine : IDisposable
                         (2, true) => 0x0008u, (2, false) => 0x0010u,
                         _ => 0u
                     };
-                    if (SetCursorPos(point.PixelX, point.PixelY))
+                    if (SetPhysicalCursorPos(point.PixelX, point.PixelY))
                     {
                         SetLastError(0);
                         mouse_event(mouseFlag, 0, 0, 0, UIntPtr.Zero);
@@ -270,12 +300,24 @@ internal sealed class InputEngine : IDisposable
         var clientPoint = new NativePoint(point.PixelX, point.PixelY);
         ScreenToClient(target, ref clientPoint);
         var lParam = new IntPtr((clientPoint.Y << 16) | (clientPoint.X & 0xFFFF));
+        var mouseKey = message switch
+        {
+            WmLeftDown or WmLeftUp => 0x0001u,
+            WmRightDown or WmRightUp => 0x0002u,
+            WmMiddleDown or WmMiddleUp => 0x0010u,
+            _ => 0u
+        };
         if (message is WmLeftDown or WmMiddleDown or WmRightDown)
         {
-            PostMessage(target, 0x0200 /* WM_MOUSEMOVE */, IntPtr.Zero, lParam);
+            PostMessage(target, 0x0200 /* WM_MOUSEMOVE */, new IntPtr(mouseKey), lParam);
             PostMessage(target, 0x0021 /* WM_MOUSEACTIVATE */, new IntPtr(1), lParam);
+            PostMessage(target, message, new IntPtr(mouseKey), lParam);
+            SendMessageTimeout(target, message, new IntPtr(mouseKey), lParam, 0x0002 /* SMTO_ABORTIFHUNG */, 500, out _);
+            return true;
         }
-        return PostMessage(target, message, IntPtr.Zero, lParam);
+        PostMessage(target, message, new IntPtr(mouseKey), lParam);
+        SendMessageTimeout(target, message, new IntPtr(mouseKey), lParam, 0x0002 /* SMTO_ABORTIFHUNG */, 500, out _);
+        return true;
     }
 
     private bool PostToWindow(VirtualDesktopPoint point, uint message, uint wParam)
@@ -342,9 +384,20 @@ internal sealed class InputEngine : IDisposable
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr window, StringBuilder text, int maxCount);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeProcessHandle OpenProcess(uint desiredAccess, bool inheritHandle, uint processId);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenProcessToken(Microsoft.Win32.SafeHandles.SafeProcessHandle process, uint desiredAccess, out Microsoft.Win32.SafeHandles.SafeAccessTokenHandle token);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetTokenInformation(Microsoft.Win32.SafeHandles.SafeAccessTokenHandle token, int informationClass, IntPtr information, int informationLength, out int returnLength);
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetPhysicalCursorPos(int x, int y);
     [DllImport("user32.dll", SetLastError = true)]
     private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(NativePoint point);
@@ -355,6 +408,7 @@ internal sealed class InputEngine : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
 
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X; public int Y; public NativePoint(int x, int y) { X = x; Y = y; } }
 }

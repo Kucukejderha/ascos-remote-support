@@ -24,6 +24,31 @@ public sealed class CoordinateTransformationEngine
     private const int SmYVirtualScreen = 77;
     private const int SmCxVirtualScreen = 78;
     private const int SmCyVirtualScreen = 79;
+    private readonly bool _hasCustomMetrics;
+    private readonly int _customLeft;
+    private readonly int _customTop;
+    private readonly int _customWidth;
+    private readonly int _customHeight;
+
+    public CoordinateTransformationEngine()
+    {
+        _hasCustomMetrics = false;
+    }
+
+    /// <summary>
+    /// Uses the virtual-desktop metrics reported by the capturing agent so the
+    /// coordinate space always matches the transmitted image, regardless of
+    /// per-process DPI differences.
+    /// </summary>
+    public CoordinateTransformationEngine(int left, int top, int width, int height)
+    {
+        if (width <= 0 || height <= 0) throw new ArgumentOutOfRangeException(nameof(width));
+        _hasCustomMetrics = true;
+        _customLeft = left;
+        _customTop = top;
+        _customWidth = width;
+        _customHeight = height;
+    }
 
     public VirtualDesktopPoint Transform(double normalizedX, double normalizedY)
     {
@@ -35,10 +60,10 @@ public sealed class CoordinateTransformationEngine
         normalizedX = Math.Max(0d, Math.Min(1d, normalizedX));
         normalizedY = Math.Max(0d, Math.Min(1d, normalizedY));
 
-        var left = GetSystemMetrics(SmXVirtualScreen);
-        var top = GetSystemMetrics(SmYVirtualScreen);
-        var width = GetSystemMetrics(SmCxVirtualScreen);
-        var height = GetSystemMetrics(SmCyVirtualScreen);
+        var left = _hasCustomMetrics ? _customLeft : GetSystemMetrics(SmXVirtualScreen);
+        var top = _hasCustomMetrics ? _customTop : GetSystemMetrics(SmYVirtualScreen);
+        var width = _hasCustomMetrics ? _customWidth : GetSystemMetrics(SmCxVirtualScreen);
+        var height = _hasCustomMetrics ? _customHeight : GetSystemMetrics(SmCyVirtualScreen);
         if (width <= 0 || height <= 0)
             throw new InvalidOperationException("Windows returned invalid virtual desktop metrics.");
 

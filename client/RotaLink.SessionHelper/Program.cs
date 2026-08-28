@@ -19,6 +19,14 @@ internal static class Program
         "System.Runtime.CompilerServices.Unsafe", "System.Numerics.Vectors"
     };
 
+    static Program()
+    {
+        // Registered in the static constructor so it is active before Main is
+        // JIT-compiled: the JIT resolves assembly references while compiling
+        // Main, before the first statement of Main ever runs.
+        AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedAssemblies;
+    }
+
     private static Assembly? ResolveEmbeddedAssemblies(object sender, ResolveEventArgs args)
     {
         try
@@ -40,7 +48,6 @@ internal static class Program
 
     public static int Main(string[] args)
     {
-        AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedAssemblies;
         EnablePhysicalPixelCoordinates();
         var sessionId = ParseSessionId(args);
         if (!ProcessIdToSessionId((uint)System.Diagnostics.Process.GetCurrentProcess().Id, out var actualSessionId) || actualSessionId != sessionId)
@@ -49,14 +56,17 @@ internal static class Program
         var log = new HelperLog(sessionId);
         try
         {
+            var hasVirtualMetrics = TryParseVirtualMetrics(args, out var virtualLeft, out var virtualTop, out var virtualWidth, out var virtualHeight);
             using var identity = WindowsIdentity.GetCurrent();
             var uiAccess = ReadCurrentUiAccess();
             log.Write("Session helper started. Session=" + sessionId + ", Identity=" + identity.Name +
-                ", UIAccess=" + uiAccess + ".");
+                ", UIAccess=" + uiAccess + ", Integrity=" + ReadIntegrityLabel() + ".");
             // The helper must use the same physical pixel space as the DPI-aware
             // agent that captures the screen, otherwise injected coordinates drift.
             log.Write("Screen metrics: virtual origin=" + GetSystemMetrics(76) + "," + GetSystemMetrics(77) +
                 ", size=" + GetSystemMetrics(78) + "x" + GetSystemMetrics(79) + ".");
+            if (hasVirtualMetrics)
+                log.Write("Using virtual metrics from the agent: " + virtualLeft + "," + virtualTop + " " + virtualWidth + "x" + virtualHeight + ".");
             // The helper is launched with the elevated RotaLink token, so its
             // SendInput calls pass UIPI without needing the UIAccess flag.
             // The flag is only reported for diagnostics.
@@ -66,7 +76,9 @@ internal static class Program
 
             using var stop = new EventWaitHandle(false, EventResetMode.ManualReset,
                 "Global\\RotaLink.SessionHelper.Stop." + sessionId);
-            using var engine = new InputEngine(log);
+            using var engine = hasVirtualMetrics
+                ? new InputEngine(log, new RemoteSupport.Protocol.CoordinateTransformationEngine(virtualLeft, virtualTop, virtualWidth, virtualHeight))
+                : new InputEngine(log);
             using var bridge = new NativeCaptureBridge(sessionId, log);
             var server = new InputPipeServer(sessionId, engine, log);
 
@@ -76,6 +88,13 @@ internal static class Program
             var videoTask = bridge.RunAsync(stopSource.Token);
 
             Task.WaitAny(inputTask, videoTask);
+            if (!inputTask.IsCompleted)
+            {
+                // The video task ended on its own (e.g. no native capture);
+                // keep serving input until the stop event fires.
+                log.Write("Video task ended; input remains active.");
+                inputTask.Wait();
+            }
             stopSource.Cancel();
             try { Task.WaitAll(inputTask, videoTask); }
             catch (AggregateException exception)
@@ -88,6 +107,45 @@ internal static class Program
         {
             log.Write("Fatal helper error: " + exception);
             return 1;
+        }
+    }
+
+    private static bool TryParseVirtualMetrics(string[] args, out int left, out int top, out int width, out int height)
+    {
+        left = top = width = height = 0;
+        var index = Array.FindIndex(args, value => string.Equals(value, "--virtual", StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || index + 1 >= args.Length) return false;
+        var parts = args[index + 1].Split(',');
+        if (parts.Length != 4) return false;
+        if (!int.TryParse(parts[0], out left) || !int.TryParse(parts[1], out top) ||
+            !int.TryParse(parts[2], out width) || !int.TryParse(parts[3], out height)) return false;
+        return width > 0 && height > 0;
+    }
+
+    private static string ReadIntegrityLabel()
+    {
+        try
+        {
+            if (!OpenProcessToken(GetCurrentProcess(), 0x0008, out var token)) return "unknown";
+            using (token)
+            {
+                GetTokenInformationBuffer(token, 25, IntPtr.Zero, 0, out var required);
+                var buffer = Marshal.AllocHGlobal(required);
+                try
+                {
+                    if (!GetTokenInformationBuffer(token, 25, buffer, required, out _)) return "unknown";
+                    var sid = new SecurityIdentifier(Marshal.ReadIntPtr(buffer));
+                    var binary = new byte[sid.BinaryLength];
+                    sid.GetBinaryForm(binary, 0);
+                    var rid = BitConverter.ToInt32(binary, binary.Length - 4);
+                    return "0x" + rid.ToString("X4");
+                }
+                finally { Marshal.FreeHGlobal(buffer); }
+            }
+        }
+        catch
+        {
+            return "unknown";
         }
     }
 
@@ -134,6 +192,10 @@ internal static class Program
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass,
         out int information, int informationLength, out int returnLength);
+    [DllImport("advapi32.dll", EntryPoint = "GetTokenInformation", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetTokenInformationBuffer(SafeAccessTokenHandle token, int informationClass,
+        IntPtr information, int informationLength, out int returnLength);
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetProcessDpiAwarenessContext(IntPtr value);

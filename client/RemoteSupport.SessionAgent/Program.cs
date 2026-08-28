@@ -9,10 +9,16 @@ namespace RemoteSupport.SessionAgent;
 
 internal static class Program
 {
+    static Program()
+    {
+        // Registered before Main is JIT-compiled so embedded assemblies resolve
+        // even when Main itself references types from the embedded DLLs.
+        AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedProtocol;
+    }
+
     [STAThread]
     private static void Main(string[] args)
     {
-        AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedProtocol;
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         using var singleInstance = SingleInstanceGuard.TryAcquire();
         if (singleInstance is null)

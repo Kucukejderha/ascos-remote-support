@@ -111,7 +111,12 @@ internal sealed class ElevatedSessionHelper : IDisposable
                         Size = Marshal.SizeOf<StartupInfo>(),
                         Desktop = "winsta0\\default"
                     };
-                    var commandLine = "\"" + helperPath + "\" --service-child --session " + sessionId;
+                    // Pass the agent's own virtual-desktop metrics so the helper
+                    // transforms normalized coordinates in the exact pixel space
+                    // of the captured image, independent of per-process DPI.
+                    var virtualMetrics = GetSystemMetrics(76) + "," + GetSystemMetrics(77) + "," +
+                        GetSystemMetrics(78) + "," + GetSystemMetrics(79);
+                    var commandLine = "\"" + helperPath + "\" --service-child --session " + sessionId + " --virtual " + virtualMetrics;
                     if (!CreateProcessAsUser(elevatedToken, helperPath, commandLine, IntPtr.Zero, IntPtr.Zero, false,
                             CreateUnicodeEnvironment | CreateNoWindow, environment, Path.GetDirectoryName(helperPath),
                             ref startup, out var processInformation))
@@ -297,6 +302,7 @@ internal sealed class ElevatedSessionHelper : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool TerminateProcess(SafeProcessHandle process, uint exitCode);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern SafeKernelHandle OpenEvent(uint desiredAccess, bool inheritHandle, string name);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool SetEvent(SafeKernelHandle handle);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool OpenProcessToken(IntPtr process, uint desiredAccess, out SafeKernelHandle token);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool DuplicateTokenEx(SafeKernelHandle existingToken, uint desiredAccess, IntPtr attributes, int impersonationLevel, int tokenType, out SafeKernelHandle newToken);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool LookupPrivilegeValue(string? systemName, string name, out Luid luid);
