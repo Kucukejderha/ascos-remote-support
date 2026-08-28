@@ -77,6 +77,10 @@ internal static class Program
             using var windowStation = InteractiveWindowStation.Attach();
             log.Write("Session helper attached to interactive window station WinSta0.");
 
+            // Injected input does not reset the idle timer; keep the session
+            // awake for the whole support lifetime (screen saver, lock, sleep).
+            using var keepAlive = new SessionKeepAlive(log);
+
             using var stop = new EventWaitHandle(false, EventResetMode.ManualReset,
                 "Global\\RotaLink.SessionHelper.Stop." + sessionId);
             using var engine = hasVirtualMetrics

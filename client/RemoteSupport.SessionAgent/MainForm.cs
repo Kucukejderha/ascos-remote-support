@@ -86,12 +86,11 @@ public sealed class MainForm : Form
             Height = 44,
             BackColor = BackColor,
             Padding = new Padding(28, 4, 28, 4),
-            ColumnCount = 3,
+            ColumnCount = 2,
             RowCount = 1
         };
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var diagnostics = new LinkLabel
         {
@@ -116,21 +115,6 @@ public sealed class MainForm : Form
             }
         };
         footer.Controls.Add(diagnostics, 0, 0);
-        var endSupport = new LinkLabel
-        {
-            Text = "Desteği sonlandır",
-            AutoSize = false,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            LinkColor = Color.FromArgb(178, 74, 74)
-        };
-        endSupport.Click += (_, _) =>
-        {
-            _closing = true;
-            StopSession();
-            Application.Exit();
-        };
-        footer.Controls.Add(endSupport, 1, 0);
         footer.Controls.Add(new Label
         {
             Text = "v" + informationalVersion,
@@ -138,23 +122,12 @@ public sealed class MainForm : Form
             AutoSize = false,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleRight
-        }, 2, 0);
+        }, 1, 0);
         Controls.Add(footer);
 
         Shown += async (_, _) => await PrepareSessionAsync();
-        FormClosing += (_, e) =>
+        FormClosing += (_, _) =>
         {
-            // Closing the window with the X button while a support session is
-            // live must never kill the session; the operator would see a frozen
-            // screen. Minimize instead. Real termination goes through the
-            // explicit "Desteği sonlandır" action.
-            if (e.CloseReason == CloseReason.UserClosing && _sessionTask != null)
-            {
-                e.Cancel = true;
-                if (WindowState != FormWindowState.Minimized) WindowState = FormWindowState.Minimized;
-                SetStatus("Pencere küçültüldü — bağlantı aktif. Kapatmak için 'Desteği sonlandır'a basın.", Blue);
-                return;
-            }
             _closing = true;
             StopSession();
         };

@@ -82,7 +82,16 @@ internal sealed class InputEngine : IDisposable
             try
             {
                 item.CancellationToken.ThrowIfCancellationRequested();
-                desktop.Refresh();
+                if (!desktop.Refresh())
+                {
+                    if (unchecked(Environment.TickCount - _lastLockedLogTick) > 5000)
+                    {
+                        _lastLockedLogTick = Environment.TickCount;
+                        _log.Write("Host desktop is locked or secure (Winlogon); input is paused until it is unlocked.");
+                    }
+                    item.Completion.TrySetResult(InputInjectionResult.Failure(InputFailureStage.DesktopLocked, 5));
+                    continue;
+                }
                 if (unchecked(Environment.TickCount - _lastDpiDiagTick) > 5000)
                 {
                     _lastDpiDiagTick = Environment.TickCount;
@@ -388,6 +397,7 @@ internal sealed class InputEngine : IDisposable
     private int _lastButtonHitCode;
     private int _lastLeftDownTick;
     private int _lastDpiDiagTick;
+    private int _lastLockedLogTick;
     private IntPtr _lastLeftDownTarget;
     private bool _leftDown;
     private bool _rightDown;

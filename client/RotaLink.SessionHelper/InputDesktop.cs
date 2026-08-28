@@ -12,10 +12,24 @@ internal sealed class InputDesktop : IDisposable
     private const uint RequiredAccess = 0x10000000;
     private SafeDesktopHandle? _current;
 
-    public void Refresh()
+    /// <summary>
+    /// Attaches the worker to the current input desktop when it changed.
+    /// Returns false when the input desktop is a secure desktop (Winlogon:
+    /// lock screen, UAC, logon) — nothing can be injected there, so the
+    /// caller should report the locked state instead of switching desktops.
+    /// </summary>
+    public bool Refresh()
     {
         var next = OpenInputDesktop(0, false, RequiredAccess);
-        if (next.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenInputDesktop failed.");
+        if (next.IsInvalid)
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "DesktopLocked: input desktop unavailable.");
+
+        var nextName = ReadDesktopName(next.DangerousGetHandle());
+        if (IsSecureDesktop(nextName))
+        {
+            next.Dispose();
+            return false;
+        }
 
         // Switching desktops resets the thread DPI context and, on Windows 11,
         // the context cannot be restored afterwards (SetThreadDpiAwarenessContext
@@ -27,7 +41,7 @@ internal sealed class InputDesktop : IDisposable
         if (DesktopNameEquals(current, next))
         {
             next.Dispose();
-            return;
+            return true;
         }
 
         if (!SetThreadDesktop(next))
@@ -38,7 +52,13 @@ internal sealed class InputDesktop : IDisposable
         }
         var previous = Interlocked.Exchange(ref _current, next);
         previous?.Dispose();
+        return true;
     }
+
+    private static bool IsSecureDesktop(string name) =>
+        string.Equals(name, "Winlogon", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "Screen-saver", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "Disconnect", StringComparison.OrdinalIgnoreCase);
 
     private static bool DesktopNameEquals(IntPtr first, SafeDesktopHandle second)
     {
