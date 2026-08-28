@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -31,13 +31,10 @@ internal sealed class ElevatedSessionHelper : IDisposable
     private const uint StoppedStatus = 0x00000102;
     private const string StaleServiceName = "RotaLinkInputRuntime";
 
-    private static int _isRunning;
     private readonly SafeProcessHandle _helperProcess;
     private readonly uint _sessionId;
     private readonly string _directory;
     private bool _disposed;
-
-    public static bool IsRunning => Volatile.Read(ref _isRunning) != 0;
 
     private ElevatedSessionHelper(SafeProcessHandle helperProcess, uint sessionId, string directory)
     {
@@ -78,7 +75,7 @@ internal sealed class ElevatedSessionHelper : IDisposable
             }
 
             var helperProcess = LaunchHelper(helperPath, sessionId, out var processId);
-            Volatile.Write(ref _isRunning, 1);
+            InputRuntime.IsRunning = 1;
             AppDiagnostics.Write("Elevated SessionHelper started in session " + sessionId + ", process " + processId + ".");
             return new ElevatedSessionHelper(helperProcess, sessionId, directory);
         }
@@ -214,7 +211,7 @@ internal sealed class ElevatedSessionHelper : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        Volatile.Write(ref _isRunning, 0);
+        InputRuntime.IsRunning = 0;
         try
         {
             using var stopEvent = OpenEvent(0x0002, false, "Global\\RotaLink.SessionHelper.Stop." + _sessionId);
@@ -321,3 +318,4 @@ internal sealed class ElevatedSessionHelper : IDisposable
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool DeleteService(SafeServiceHandle service);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool CloseServiceHandle(IntPtr handle);
 }
+

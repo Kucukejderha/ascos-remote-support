@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
@@ -6,24 +6,30 @@ namespace RemoteSupport.Service;
 
 internal sealed class SessionHelperSupervisor : IDisposable
 {
-    private const uint InvalidSessionId = 0xFFFFFFFF;
     private const uint TokenAssignPrimary = 0x0001;
     private const uint TokenDuplicate = 0x0002;
     private const uint TokenQuery = 0x0008;
     private const uint TokenAdjustPrivileges = 0x0020;
     private const uint TokenAdjustDefault = 0x0080;
     private const uint TokenAdjustSessionId = 0x0100;
+    private const uint MaximumAllowed = 0x02000000;
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint CreateNoWindow = 0x08000000;
     private const int TokenSessionId = 12;
-    private const int TokenUiAccess = 26;
+    private const uint StatusPending = 0x00000103;
     private readonly ServiceLog _logger;
+    private readonly uint _sessionId;
+    private readonly string? _virtualMetrics;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private SafeProcessHandle? _helperProcess;
-    private uint _helperSessionId = InvalidSessionId;
     private bool _disposed;
 
-    public SessionHelperSupervisor(ServiceLog logger) => _logger = logger;
+    public SessionHelperSupervisor(ServiceLog logger, uint sessionId, string? virtualMetrics)
+    {
+        _logger = logger;
+        _sessionId = sessionId;
+        _virtualMetrics = virtualMetrics;
+    }
 
     public async Task EnsureActiveSessionAsync(CancellationToken cancellationToken)
     {
@@ -31,21 +37,13 @@ internal sealed class SessionHelperSupervisor : IDisposable
         try
         {
             ThrowIfDisposed();
-            var activeSession = WTSGetActiveConsoleSessionId();
-            if (activeSession == InvalidSessionId)
-            {
-                await StopHelperCoreAsync(cancellationToken).ConfigureAwait(false);
+            if (_helperProcess is { IsInvalid: false, IsClosed: false } && WaitForSingleObject(_helperProcess, 0) == StatusPending)
                 return;
-            }
-
-            if (_helperSessionId == activeSession && _helperProcess is { IsInvalid: false, IsClosed: false } &&
-                WaitForSingleObject(_helperProcess, 0) == 0x00000102) return;
 
             await StopHelperCoreAsync(cancellationToken).ConfigureAwait(false);
-            _helperProcess = LaunchHelper(activeSession, out var processId);
-            _helperSessionId = activeSession;
-            _logger.Write("RotaLink.SessionHelper started with the interactive user's UIAccess token in session " +
-                activeSession + ", process " + processId + ".");
+            _helperProcess = LaunchHelper(out var processId);
+            _logger.Write("RotaLink.SessionHelper started with a SYSTEM token in session " +
+                _sessionId + ", process " + processId + ".");
         }
         finally
         {
@@ -60,7 +58,13 @@ internal sealed class SessionHelperSupervisor : IDisposable
         finally { _gate.Release(); }
     }
 
-    private SafeProcessHandle LaunchHelper(uint sessionId, out uint processId)
+    /// <summary>
+    /// Launches the helper with a SYSTEM token whose session id has been
+    /// switched to the target interactive session. Running at System
+    /// integrity makes SendInput pass every UIPI boundary without needing
+    /// UIAccess or code signing.
+    /// </summary>
+    private SafeProcessHandle LaunchHelper(out uint processId)
     {
         var helperPath = Path.Combine(AppContext.BaseDirectory, "RotaLink.SessionHelper.exe");
         if (!File.Exists(helperPath))
@@ -70,20 +74,21 @@ internal sealed class SessionHelperSupervisor : IDisposable
         EnablePrivilege("SeIncreaseQuotaPrivilege");
         EnablePrivilege("SeTcbPrivilege");
 
-        if (!WTSQueryUserToken(sessionId, out var interactiveToken))
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "WTSQueryUserToken failed for session " + sessionId + ".");
-        using (interactiveToken)
+        if (!OpenProcessToken(GetCurrentProcess(),
+                MaximumAllowed | TokenAssignPrimary | TokenDuplicate | TokenQuery | TokenAdjustPrivileges | TokenAdjustDefault | TokenAdjustSessionId,
+                out var systemToken))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenProcessToken for the service SYSTEM token failed.");
+        using (systemToken)
         {
-            if (!DuplicateTokenEx(interactiveToken, 0x000F01FF, IntPtr.Zero, 2, 1, out var sessionToken))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "DuplicateTokenEx for interactive token failed.");
+            if (!DuplicateTokenEx(systemToken, MaximumAllowed, IntPtr.Zero, 2, 1, out var sessionToken))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "DuplicateTokenEx for the SYSTEM token failed.");
             using (sessionToken)
             {
-                SetTokenUInt32(sessionToken, TokenSessionId, sessionId, "TokenSessionId");
-                SetTokenUInt32(sessionToken, TokenUiAccess, 1, "TokenUIAccess");
-                var uiAccess = GetTokenUInt32(sessionToken, TokenUiAccess, "TokenUIAccess");
-                if (uiAccess != 1)
-                    throw new InvalidOperationException("Session helper token did not retain the UIAccess flag.");
-                _logger.Write("Interactive user helper token prepared. Session=" + sessionId + ", UIAccess=True.");
+                SetTokenUInt32(sessionToken, TokenSessionId, _sessionId, "TokenSessionId");
+                var verifiedSession = GetTokenUInt32(sessionToken, TokenSessionId, "TokenSessionId");
+                if (verifiedSession != _sessionId)
+                    throw new InvalidOperationException("SYSTEM helper token session could not be switched to " + _sessionId + ".");
+                _logger.Write("SYSTEM helper token prepared for session " + _sessionId + ".");
 
                 var environment = IntPtr.Zero;
                 try
@@ -96,7 +101,8 @@ internal sealed class SessionHelperSupervisor : IDisposable
                         Size = Marshal.SizeOf<StartupInfo>(),
                         Desktop = "winsta0\\default"
                     };
-                    var commandLine = "\"" + helperPath + "\" --service-child --session " + sessionId;
+                    var commandLine = "\"" + helperPath + "\" --service-child --session " + _sessionId +
+                        (string.IsNullOrWhiteSpace(_virtualMetrics) ? "" : " --virtual " + _virtualMetrics);
                     if (!CreateProcessAsUser(sessionToken, helperPath, commandLine, IntPtr.Zero, IntPtr.Zero, false,
                             CreateUnicodeEnvironment | CreateNoWindow, environment, AppContext.BaseDirectory,
                             ref startup, out var processInformation))
@@ -144,9 +150,8 @@ internal sealed class SessionHelperSupervisor : IDisposable
     private async Task StopHelperCoreAsync(CancellationToken cancellationToken)
     {
         var process = _helperProcess;
-        var sessionId = _helperSessionId;
+        var sessionId = _sessionId;
         _helperProcess = null;
-        _helperSessionId = InvalidSessionId;
         if (process is null) return;
 
         try
@@ -236,9 +241,6 @@ internal sealed class SessionHelperSupervisor : IDisposable
         string currentDirectory, ref StartupInfo startupInfo, out ProcessInformation processInformation);
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool CreateEnvironmentBlock(out IntPtr environment, SafeKernelHandle token, bool inherit);
     [DllImport("userenv.dll", SetLastError = true)] private static extern bool DestroyEnvironmentBlock(IntPtr environment);
-    [DllImport("kernel32.dll")] private static extern uint WTSGetActiveConsoleSessionId();
-    [DllImport("wtsapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool WTSQueryUserToken(uint sessionId, out SafeKernelHandle token);
     [DllImport("kernel32.dll")] private static extern void SetLastError(uint errorCode);
 }
+

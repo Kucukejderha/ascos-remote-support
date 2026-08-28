@@ -131,7 +131,7 @@ New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 Copy-Item -LiteralPath (Join-Path $bin 'RotaLink.exe') -Destination $output -Force
 
 # Verify the mandatory embedded resources before publishing anything.
-$embeddedChecks = @('RotaLink.Runtime.SessionHelper.exe', 'RotaLink.Runtime.RemoteSupport.Protocol.dll', 'RotaLink.Runtime.System.Memory.dll')
+$embeddedChecks = @('RotaLink.Runtime.SessionHelper.exe', 'RotaLink.Runtime.Service.exe', 'RotaLink.Runtime.RemoteSupport.Protocol.dll', 'RotaLink.Runtime.System.Memory.dll')
 foreach ($required in $embeddedChecks) {
     if (-not (Select-String -Path $output -Pattern $required -SimpleMatch -Quiet)) {
         throw "Release build is missing the embedded resource '$required'; the client would be broken."

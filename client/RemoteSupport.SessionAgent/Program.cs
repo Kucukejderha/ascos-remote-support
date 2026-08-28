@@ -38,10 +38,12 @@ internal static class Program
         AppDiagnostics.Write("RotaLink v" + version + " started in the interactive user session on " + Environment.OSVersion +
             ". Session=" + Process.GetCurrentProcess().SessionId + ", Identity=" + identityName +
             ", Elevated=" + elevated + ", DpiMode=" + DpiMode + ", Bitness=" + (Environment.Is64BitProcess ? "x64" : "x86") + ".");
-        using var helperRuntime = ElevatedSessionHelper.TryStart();
+        IDisposable? helperRuntime = SystemBrokerService.TryStart();
+        if (helperRuntime is null) helperRuntime = ElevatedSessionHelper.TryStart();
+        using var runtime = helperRuntime;
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new MainForm(args.FirstOrDefault(), elevated, helperRuntime is not null));
+        Application.Run(new MainForm(args.FirstOrDefault(), elevated, runtime is not null));
     }
 
     private static string DpiMode = "unaware";

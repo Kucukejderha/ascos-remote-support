@@ -23,6 +23,9 @@
     <ProjectReference Include="..\RemoteSupport.Protocol\RemoteSupport.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\RemoteSupport.Service\bin\$(Configuration)\net48\RotaLink.Service.exe"
+                      LogicalName="RotaLink.Runtime.Service.exe"
+                      Condition="Exists('..\RemoteSupport.Service\bin\$(Configuration)\net48\RotaLink.Service.exe')" />
     <EmbeddedResource Include="..\RotaLink.SessionHelper\bin\$(Configuration)\net48\RotaLink.SessionHelper.exe"
                       LogicalName="RotaLink.Runtime.SessionHelper.exe"
                       Condition="Exists('..\RotaLink.SessionHelper\bin\$(Configuration)\net48\RotaLink.SessionHelper.exe')" />

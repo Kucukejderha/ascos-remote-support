@@ -384,6 +384,19 @@ internal sealed class InputEngine : IDisposable
     {
         var isDown = message is WmLeftDown or WmMiddleDown or WmRightDown;
         var target = IntPtr.Zero;
+
+        // Popup menus take mouse capture in another thread's context. Resolve
+        // the real menu window through the foreground thread's GUI info.
+        var menuWindow = FindPopupMenuWindow(point);
+        if (menuWindow != IntPtr.Zero && message is WmLeftDown or WmLeftUp)
+        {
+            var menuPoint = new NativePoint(point.PixelX, point.PixelY);
+            ScreenToClient(menuWindow, ref menuPoint);
+            var menuLParam = new IntPtr((menuPoint.Y << 16) | (menuPoint.X & 0xFFFF));
+            LogFallbackOnce("PostMessage menu item");
+            return PostMessage(menuWindow, message, new IntPtr(message == WmLeftDown ? 0x0001u : 0u), menuLParam);
+        }
+
         if (!isDown && _lastButtonTarget != IntPtr.Zero && IsWindow(_lastButtonTarget))
             target = _lastButtonTarget;
         if (target == IntPtr.Zero)
@@ -391,16 +404,18 @@ internal sealed class InputEngine : IDisposable
             target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
             if (target == IntPtr.Zero) return false;
         }
-        // Popup menus take mouse capture; prefer the capture window so menu
-        // item clicks reach the menu rather than the window under the pointer.
-        var capture = GetCapture();
-        if (capture != IntPtr.Zero && capture != target) target = capture;
 
         var screenLParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
         var hitCode = 0;
         var hitSuccess = SendMessageTimeout(target, WmNcHitTest, IntPtr.Zero, screenLParam,
             SmtoAbortIfHung | SmtoBlock | 0x0020 /* SMTO_ERRORONEXIT */, 200, out var hitResult);
         if (hitSuccess != IntPtr.Zero && hitResult != IntPtr.Zero) hitCode = hitResult.ToInt32();
+        if (hitCode == 0)
+        {
+            // The target did not answer the hit test (busy UI thread). Fall back
+            // to geometry so title-bar buttons still work (e.g. RotaLink itself).
+            hitCode = GuessNonClientHit(target, point);
+        }
 
         if (hitCode != 0 && hitCode != HtClient && nonClientMessage != 0)
         {
@@ -439,7 +454,31 @@ internal sealed class InputEngine : IDisposable
                 20 => ScClose,                                        // HTCLOSE
                 _ => 0u
             };
-            return command != 0 && PostMessage(target, WmSysCommand, new IntPtr(command), IntPtr.Zero);
+            if (command == 0) return false;
+            var commandWindow = GetAncestor(target, GaRoot);
+            if (commandWindow == IntPtr.Zero) commandWindow = target;
+            SendMessageTimeout(commandWindow, WmSysCommand, new IntPtr(command), IntPtr.Zero,
+                SmtoAbortIfHung | 0x0020 /* SMTO_ERRORONEXIT */, 500, out _);
+            if (command == ScMinimize)
+            {
+                Thread.Sleep(100);
+                if (!IsIconic(commandWindow))
+                {
+                    ShowWindowAsync(commandWindow, 6 /* SW_MINIMIZE */);
+                    _log.Write("SC_MINIMIZE not applied via WM_SYSCOMMAND; used ShowWindowAsync fallback.");
+                }
+            }
+            else if (command == ScMaximize)
+            {
+                Thread.Sleep(100);
+                if (!IsZoomed(commandWindow)) ShowWindowAsync(commandWindow, 3 /* SW_MAXIMIZE */);
+            }
+            else if (command == ScRestore)
+            {
+                Thread.Sleep(100);
+                if (IsIconic(commandWindow)) ShowWindowAsync(commandWindow, 9 /* SW_RESTORE */);
+            }
+            return true;
         }
 
         var clientPoint = new NativePoint(point.PixelX, point.PixelY);
@@ -531,6 +570,47 @@ internal sealed class InputEngine : IDisposable
         var info = new GuiThreadInfo { Size = Marshal.SizeOf(typeof(GuiThreadInfo)) };
         if (GetGUIThreadInfo(threadId, ref info) && info.Focus != IntPtr.Zero) return info.Focus;
         return foreground;
+    }
+
+    private bool _menuFallbackLogged;
+
+    private void LogFallbackOnce(string mechanism)
+    {
+        if (_menuFallbackLogged) return;
+        _menuFallbackLogged = true;
+        _log.Write("Menu fallback active: " + mechanism + ".");
+    }
+
+    private static IntPtr FindPopupMenuWindow(VirtualDesktopPoint point)
+    {
+        var foreground = GetForegroundWindow();
+        if (foreground != IntPtr.Zero)
+        {
+            var threadId = GetWindowThreadProcessId(foreground, out _);
+            var info = new GuiThreadInfo { Size = Marshal.SizeOf(typeof(GuiThreadInfo)) };
+            if (GetGUIThreadInfo(threadId, ref info))
+            {
+                if (info.Capture != IntPtr.Zero && GetClassName(info.Capture) == "#32768") return info.Capture;
+            }
+        }
+        var underPoint = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
+        if (underPoint != IntPtr.Zero && GetClassName(underPoint) == "#32768") return underPoint;
+        return IntPtr.Zero;
+    }
+
+    private static int GuessNonClientHit(IntPtr target, VirtualDesktopPoint point)
+    {
+        if (!GetWindowRect(target, out var rect)) return HtClient;
+        if (point.PixelX < rect.Left || point.PixelX > rect.Right || point.PixelY < rect.Top || point.PixelY > rect.Bottom)
+            return HtClient;
+        var captionHeight = GetSystemMetrics(4 /* SM_CYCAPTION */) + GetSystemMetrics(92 /* SM_CXPADDEDBORDER */);
+        if (point.PixelY >= rect.Top + captionHeight) return HtClient;
+        var fromRight = rect.Right - point.PixelX;
+        var buttonWidth = GetSystemMetrics(49 /* SM_CXSMSIZE */);
+        if (fromRight < buttonWidth) return 20;            // HTCLOSE
+        if (fromRight < buttonWidth * 2) return 9;         // HTMAXBUTTON
+        if (fromRight < buttonWidth * 3) return 8;         // HTMINBUTTON
+        return HtCaption;
     }
 
     private void LogFallback(string mechanism)
@@ -652,6 +732,16 @@ internal sealed class InputEngine : IDisposable
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(IntPtr window, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetWindowRect(IntPtr window, out WindowRect rect);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetGUIThreadInfo(uint threadId, ref GuiThreadInfo info);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetClassNameW")]
+    private static extern int GetClassNameNative(IntPtr window, StringBuilder className, int maxCount);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+
+    private static string GetClassName(IntPtr window)
+    {
+        var builder = new StringBuilder(256);
+        GetClassNameNative(window, builder, builder.Capacity);
+        return builder.ToString();
+    }
 
     [StructLayout(LayoutKind.Sequential)] private struct WindowRect { public int Left; public int Top; public int Right; public int Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct GuiThreadInfo

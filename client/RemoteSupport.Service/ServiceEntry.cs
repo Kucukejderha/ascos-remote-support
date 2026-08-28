@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace RemoteSupport.Service;
@@ -21,9 +21,29 @@ internal static class ServiceEntry
     private static readonly ManualResetEventSlim StopRequested = new(false);
     private static IntPtr _statusHandle;
     private static ServiceStatus _status;
+    private static uint TargetSession;
+    private static string? TargetVirtualMetrics;
+
+    private static uint ParseSessionId(string[] args)
+    {
+        var index = Array.FindIndex(args, value => string.Equals(value, "--session", StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || index + 1 >= args.Length || !uint.TryParse(args[index + 1], out var sessionId))
+            throw new ArgumentException("--session <id> is required for the broker service.");
+        return sessionId;
+    }
+
+    private static string? ParseVirtualMetrics(string[] args)
+    {
+        var index = Array.FindIndex(args, value => string.Equals(value, "--virtual", StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || index + 1 >= args.Length) return null;
+        var parts = args[index + 1].Split(',');
+        return parts.Length == 4 ? args[index + 1] : null;
+    }
 
     public static int Run(string[] args)
     {
+        TargetSession = ParseSessionId(args);
+        TargetVirtualMetrics = ParseVirtualMetrics(args);
         if (args.Contains("--console", StringComparer.OrdinalIgnoreCase))
             return RunConsole();
 
@@ -41,7 +61,7 @@ internal static class ServiceEntry
     private static int RunConsole()
     {
         var logger = new ServiceLog();
-        using var supervisor = new SessionHelperSupervisor(logger);
+        using var supervisor = new SessionHelperSupervisor(logger, TargetSession, TargetVirtualMetrics);
         using var window = new SessionNotificationWindow((reason, session) =>
         {
             logger.Write("Session change " + reason + ", session " + session + ".");
@@ -66,7 +86,7 @@ internal static class ServiceEntry
         var logger = new ServiceLog();
         try
         {
-            using var supervisor = new SessionHelperSupervisor(logger);
+            using var supervisor = new SessionHelperSupervisor(logger, TargetSession, TargetVirtualMetrics);
             using var window = new SessionNotificationWindow((reason, session) =>
             {
                 logger.Write("Session change " + reason + ", session " + session + ".");
@@ -127,3 +147,4 @@ internal static class ServiceEntry
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr RegisterServiceCtrlHandlerEx(string serviceName, HandlerCallback handler, IntPtr context);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool SetServiceStatus(IntPtr statusHandle, ref ServiceStatus status);
 }
+

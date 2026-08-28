@@ -56,7 +56,7 @@ public sealed class WindowsInputDispatcher : IDisposable
                 "system-helper-" + result.Stage,
                 result.ErrorCode, "elevated helper / WinSta0", message.Type);
         }
-        if (ElevatedSessionHelper.IsRunning)
+        if (InputRuntime.IsRunning != 0)
             return new InputDispatchReport(false, "system-helper-ipc-unavailable", 0, "elevated helper", message.Type);
 
         var work = new InputWorkItem(message);
