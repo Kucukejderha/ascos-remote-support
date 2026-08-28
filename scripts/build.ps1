@@ -44,8 +44,8 @@ function Deploy-ToServer([string]$root) {
     cmd /c "`"$pscp`" -batch -hostkey `"$hostkey`" -pw `"$password`" `"$exe`" `"$manifest`" ${sshUser}@${sshHost}:/opt/ascos-remote-support/server/RemoteSupport.Signaling/downloads/" 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Sunucuya dosya yukleme basarisiz.' }
 
-    cmd /c "`"$plink`" -ssh -batch -hostkey `"$hostkey`" -pw `"$password`" ${sshUser}@${sshHost} `"cd /opt/ascos-remote-support && docker compose -f deploy/docker-compose.remote-support.yml up -d --build 2>&1 | tail -3`"" 2>&1 | Select-Object -Last 3
-    if ($LASTEXITCODE -ne 0) { throw 'Sunucu imaj yeniden derleme basarisiz.' }
+    cmd /c "`"$plink`" -ssh -batch -hostkey `"$hostkey`" -pw `"$password`" ${sshUser}@${sshHost} `"cd /opt/ascos-remote-support && docker compose -f deploy/docker-compose.remote-support.yml up -d --no-build 2>&1 | tail -3`"" 2>&1 | Select-Object -Last 3
+    if ($LASTEXITCODE -ne 0) { throw 'Sunucu servisi yeniden baslatma basarisiz.' }
     Write-Host 'Deploy tamamlandi: https://45.87.173.201.nip.io/downloads/RotaLink.exe'
 }
 

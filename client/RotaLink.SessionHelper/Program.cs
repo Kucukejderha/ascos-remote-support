@@ -51,7 +51,10 @@ internal static class Program
         var dpiMode = EnablePhysicalPixelCoordinates();
         var sessionId = ParseSessionId(args);
         if (!ProcessIdToSessionId((uint)System.Diagnostics.Process.GetCurrentProcess().Id, out var actualSessionId) || actualSessionId != sessionId)
+        {
+            WriteEarlyTrace("session mismatch: actual=" + actualSessionId + ", expected=" + sessionId);
             return 11;
+        }
 
         var log = new HelperLog(sessionId);
         try
@@ -148,6 +151,18 @@ internal static class Program
             return "unknown";
         }
     }
+    private static void WriteEarlyTrace(string message)
+    {
+        try
+        {
+            var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RotaLink", "Logs");
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(Path.Combine(directory, "helper-early.log"),
+                DateTimeOffset.Now.ToString("O") + " " + message + Environment.NewLine);
+        }
+        catch { }
+    }
+
     private static string EnablePhysicalPixelCoordinates()
     {
         try
@@ -212,7 +227,11 @@ internal sealed class HelperLog
 
     public HelperLog(uint sessionId)
     {
-        var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RotaLink");
+        // SYSTEM helpers log under ProgramData (the service also writes there);
+        // user-token helpers keep the per-user location.
+        var directory = WindowsIdentity.GetCurrent().IsSystem
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RotaLink", "Logs")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RotaLink");
         Directory.CreateDirectory(directory);
         _path = Path.Combine(directory, "SessionHelper-" + sessionId + ".log");
     }

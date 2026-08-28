@@ -8,6 +8,7 @@ services:
       AUDIT_LOG_PATH: /data/audit.jsonl
     volumes:
       - ./data:/data
+      - ../server/RemoteSupport.Signaling/downloads:/app/downloads:ro
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m

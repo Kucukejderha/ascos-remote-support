@@ -16,7 +16,7 @@ internal sealed class SessionHelperSupervisor : IDisposable
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint CreateNoWindow = 0x08000000;
     private const int TokenSessionId = 12;
-    private const uint StatusPending = 0x00000103;
+    private const uint WaitTimeout = 0x00000102;
     private readonly ServiceLog _logger;
     private readonly uint _sessionId;
     private readonly string? _virtualMetrics;
@@ -37,8 +37,17 @@ internal sealed class SessionHelperSupervisor : IDisposable
         try
         {
             ThrowIfDisposed();
-            if (_helperProcess is { IsInvalid: false, IsClosed: false } && WaitForSingleObject(_helperProcess, 0) == StatusPending)
+            if (_helperProcess is { IsInvalid: false, IsClosed: false } && WaitForSingleObject(_helperProcess, 0) == WaitTimeout)
                 return;
+
+            if (_helperProcess is { IsInvalid: false } exitedProcess)
+            {
+                uint exitCode = 0;
+                if (GetExitCodeProcess(exitedProcess, out exitCode) && exitCode != 259)
+                    _logger.Write("Session helper exited with code " + exitCode + "; restarting.");
+                else
+                    _logger.Write("Session helper is not running; restarting.");
+            }
 
             await StopHelperCoreAsync(cancellationToken).ConfigureAwait(false);
             _helperProcess = LaunchHelper(out var processId);
@@ -226,6 +235,7 @@ internal sealed class SessionHelperSupervisor : IDisposable
     [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr handle);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern uint WaitForSingleObject(SafeProcessHandle handle, uint milliseconds);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GetExitCodeProcess(SafeProcessHandle process, out uint exitCode);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool TerminateProcess(SafeProcessHandle process, uint exitCode);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern SafeKernelHandle OpenEvent(uint desiredAccess, bool inheritHandle, string name);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool SetEvent(SafeKernelHandle handle);

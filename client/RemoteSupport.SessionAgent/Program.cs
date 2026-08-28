@@ -21,6 +21,7 @@ internal static class Program
     {
         RegisterCrashLogging();
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        WaitForPredecessor(args);
         using var singleInstance = SingleInstanceGuard.TryAcquire();
         if (singleInstance is null)
         {
@@ -41,12 +42,43 @@ internal static class Program
         IDisposable? helperRuntime = SystemBrokerService.TryStart();
         if (helperRuntime is null) helperRuntime = ElevatedSessionHelper.TryStart();
         using var runtime = helperRuntime;
+        var serverArgument = args.FirstOrDefault(a => a != "--wait" && !int.TryParse(a, out _));
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new MainForm(args.FirstOrDefault(), elevated, runtime is not null));
+        Application.Run(new MainForm(serverArgument, elevated, runtime is not null));
     }
 
     private static string DpiMode = "unaware";
+
+    /// <summary>
+    /// A self-update relaunch waits for the predecessor instance to release the
+    /// single-instance mutex before acquiring it, so the swap never leaves the
+    /// agent closed.
+    /// </summary>
+    private static void WaitForPredecessor(string[] args)
+    {
+        var pid = 0;
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i] == "--wait" && int.TryParse(args[i + 1], out pid)) break;
+        }
+        if (pid <= 0) return;
+        try
+        {
+            using var predecessor = Process.GetProcessById(pid);
+            if (predecessor.WaitForExit(15000))
+                AppDiagnostics.Write("Self-update: predecessor process " + pid + " exited; starting as the single instance.");
+            else
+                AppDiagnostics.Write("Self-update: predecessor process " + pid + " did not exit within 15 seconds; proceeding anyway.");
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (Exception exception)
+        {
+            AppDiagnostics.Write("Self-update: waiting for the predecessor failed.", exception);
+        }
+    }
 
     private static void RegisterCrashLogging()
     {

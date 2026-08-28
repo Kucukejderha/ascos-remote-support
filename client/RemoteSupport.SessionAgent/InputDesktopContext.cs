@@ -7,20 +7,17 @@ namespace RemoteSupport.SessionAgent;
 
 internal sealed class InputDesktopContext : IDisposable
 {
-    private const uint DesktopReadObjects = 0x0001;
-    private const uint DesktopCreateWindow = 0x0002;
-    private const uint DesktopCreateMenu = 0x0004;
-    private const uint DesktopWriteObjects = 0x0080;
-    private const uint DesktopSwitchDesktop = 0x0100;
+    // GENERIC_ALL: a desktop handle switched in with a narrower access mask
+    // silently breaks SendInput (ERROR_ACCESS_DENIED). The interactive
+    // desktop's DACL allows GENERIC_ALL for user tokens.
+    private const uint DesktopGenericAll = 0x10000000;
     private const int UoiName = 2;
     private SafeDesktopHandle? _attachedDesktop;
     private string? _desktopName;
 
     public string AttachToCurrentInputDesktop()
     {
-        var access = DesktopReadObjects | DesktopCreateWindow | DesktopCreateMenu |
-                     DesktopWriteObjects | DesktopSwitchDesktop;
-        var next = OpenInputDesktop(0, false, access);
+        var next = OpenInputDesktop(0, false, DesktopGenericAll);
         if (next.IsInvalid)
             throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenInputDesktop failed.");
 

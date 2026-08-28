@@ -131,7 +131,9 @@ internal static class SelfUpdate
         try
         {
             var startInfo = new ProcessStartInfo(currentPath) { UseShellExecute = true };
-            if (!string.IsNullOrWhiteSpace(serverArgument)) startInfo.Arguments = "\"" + serverArgument + "\"";
+            var commandLine = "--wait " + Process.GetCurrentProcess().Id;
+            if (!string.IsNullOrWhiteSpace(serverArgument)) commandLine = "\"" + serverArgument + "\" " + commandLine;
+            startInfo.Arguments = commandLine;
             Process.Start(startInfo);
             AppDiagnostics.Write("Self-update: swapped to the new build and relaunched.");
         }

@@ -6,7 +6,10 @@ namespace RotaLink.SessionHelper;
 
 internal sealed class InputDesktop : IDisposable
 {
-    private const uint RequiredAccess = 0x0001 | 0x0002 | 0x0004 | 0x0080 | 0x0100;
+    // GENERIC_ALL: a desktop handle switched in with a narrower access mask
+    // silently breaks SendInput (ERROR_ACCESS_DENIED). The interactive
+    // desktop's DACL allows GENERIC_ALL for user tokens.
+    private const uint RequiredAccess = 0x10000000;
     private SafeDesktopHandle? _current;
 
     public void Refresh()
