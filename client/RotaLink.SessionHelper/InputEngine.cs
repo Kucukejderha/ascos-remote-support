@@ -85,8 +85,11 @@ internal sealed class InputEngine : IDisposable
                         : exception.Message.StartsWith("DesktopLocked", StringComparison.Ordinal)
                             ? InputFailureStage.DesktopLocked
                             : InputFailureStage.SendInput;
-                _log.Write("Input injection failed. Stage=" + stage + ", Win32Error=" + exception.NativeErrorCode + ". " + exception);
-                if (stage == InputFailureStage.SendInput) LogForeground();
+                if (ShouldLogInjectionFailure())
+                {
+                    _log.Write("Input injection failed. Stage=" + stage + ", Win32Error=" + exception.NativeErrorCode + ". " + exception);
+                    if (stage == InputFailureStage.SendInput || stage == InputFailureStage.DesktopLocked) LogForeground();
+                }
                 item.Completion.TrySetResult(InputInjectionResult.Failure(stage, exception.NativeErrorCode));
             }
             catch (Exception exception)
@@ -188,6 +191,7 @@ internal sealed class InputEngine : IDisposable
         SetLastError(0);
         var sent = SendInput(1, new[] { input }, Marshal.SizeOf<NativeInput>());
         if (sent == 1) return InputInjectionResult.Success();
+        var sendInputError = Marshal.GetLastWin32Error();
 
         // Some environments block SendInput (UIPI/desktop restrictions) even
         // for high-integrity callers. Fall back to SetCursorPos, which is not
@@ -197,10 +201,13 @@ internal sealed class InputEngine : IDisposable
         var fallback = TryFallback(packet, point);
         if (fallback != 0) return InputInjectionResult.Fallback((InputFailureStage)fallback);
 
-        if (GetForegroundWindow() == IntPtr.Zero)
-            throw new Win32Exception(5, "DesktopLocked: the interactive desktop has no foreground window (locked or secure desktop).");
+        // Only report the desktop as locked with real evidence: no foreground
+        // window AND no window at the pointer position. A null foreground alone
+        // is normal for an unfocused RDP session and is not a lock.
+        if (GetForegroundWindow() == IntPtr.Zero && WindowFromPoint(new NativePoint(point.PixelX, point.PixelY)) == IntPtr.Zero)
+            throw new Win32Exception(5, "DesktopLocked: no foreground window and no window at the pointer; the desktop appears locked or inactive.");
 
-        throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
+        throw new Win32Exception(sendInputError, "SendInput injected no events. This usually indicates UIPI or desktop-token mismatch.");
     }
 
     private int TryFallback(InputPacket packet, VirtualDesktopPoint point)
@@ -213,6 +220,28 @@ internal sealed class InputEngine : IDisposable
                     LogFallback("SetPhysicalCursorPos move");
                     return (int)InputFailureStage.FallbackSetCursorPos;
                 }
+                var physicalCursorError = Marshal.GetLastWin32Error();
+                if (SetCursorPos(point.PixelX, point.PixelY))
+                {
+                    LogFallback("SetCursorPos move");
+                    return (int)InputFailureStage.FallbackSetCursorPos;
+                }
+                var cursorError = Marshal.GetLastWin32Error();
+                SetLastError(0);
+                mouse_event(MouseMove | MouseAbsolute | MouseVirtualDesktop,
+                    unchecked((uint)point.AbsoluteX), unchecked((uint)point.AbsoluteY), 0, UIntPtr.Zero);
+                var mouseEventError = Marshal.GetLastWin32Error();
+                if (mouseEventError == 0)
+                {
+                    LogFallback("mouse_event move");
+                    return (int)InputFailureStage.FallbackMouseEvent;
+                }
+                if (PostToWindow(point, 0x0200 /* WM_MOUSEMOVE */, 0))
+                {
+                    LogFallback("PostMessage move");
+                    return (int)InputFailureStage.FallbackPostMessage;
+                }
+                LogMoveChainFailure(physicalCursorError, cursorError, mouseEventError);
                 return 0;
             case InputEventKind.Button:
                 {
@@ -335,6 +364,27 @@ internal sealed class InputEngine : IDisposable
         if (_fallbackLogged) return;
         _fallbackLogged = true;
         _log.Write("SendInput is blocked in this session; using the " + mechanism + " fallback.");
+    }
+
+    private int _lastMoveChainLogTick;
+
+    private void LogMoveChainFailure(int physicalCursorError, int cursorError, int mouseEventError)
+    {
+        var now = Environment.TickCount;
+        if (_lastMoveChainLogTick != 0 && unchecked(now - _lastMoveChainLogTick) < 2000) return;
+        _lastMoveChainLogTick = now;
+        _log.Write("Move fallback chain failed. SetPhysicalCursorPos=" + physicalCursorError +
+            ", SetCursorPos=" + cursorError + ", mouse_event=" + mouseEventError + ".");
+    }
+
+    private int _lastInjectionLogTick;
+
+    private bool ShouldLogInjectionFailure()
+    {
+        var now = Environment.TickCount;
+        if (_lastInjectionLogTick != 0 && unchecked(now - _lastInjectionLogTick) < 2000) return false;
+        _lastInjectionLogTick = now;
+        return true;
     }
 
     private static NativeInput Mouse(VirtualDesktopPoint point, uint flags, uint data) => new()

@@ -30,6 +30,11 @@ internal sealed class NativeCaptureBridge : IDisposable
             return;
         }
         StartNativeCapture();
+        if (_capture is { } captureProcess && captureProcess.WaitForExit(2000))
+        {
+            _log.Write("Native capture exited immediately; video acceleration is unsupported on this system.");
+            return;
+        }
         SharedFrameReader frames;
         try
         {
