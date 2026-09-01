@@ -50,6 +50,26 @@ public sealed class MainForm : Form
             AutoSize = true,
             Location = new Point(31, 66)
         });
+        // Large in-form window controls: the native title-bar buttons are tiny
+        // in the half-scale operator video and easy to miss (a click aimed at
+        // maximize lands on minimize). Client-area buttons use ordinary clicks
+        // and are reliable targets at any video scale.
+        var minimizeButton = CreateWindowButton("–", Color.FromArgb(92, 214, 164));
+        minimizeButton.Click += (_, _) => WindowState = FormWindowState.Minimized;
+        var maximizeButton = CreateWindowButton("□", Color.FromArgb(244, 179, 80));
+        maximizeButton.Click += (_, _) => WindowState =
+            WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+        var closeButton = CreateWindowButton("✕", Color.FromArgb(240, 110, 110));
+        closeButton.Click += (_, _) => Close();
+        var windowButtons = new[] { minimizeButton, maximizeButton, closeButton };
+        for (var index = 0; index < windowButtons.Length; index++)
+        {
+            var button = windowButtons[index];
+            button.Size = new Size(42, 34);
+            button.Location = new Point(header.Width - 16 - (42 + 8) * (windowButtons.Length - index), 10);
+            button.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            header.Controls.Add(button);
+        }
         Controls.Add(header);
 
         var card = new Panel { Location = new Point(28, 130), Size = new Size(504, 196), BackColor = Color.White, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
@@ -132,6 +152,18 @@ public sealed class MainForm : Form
             StopSession();
         };
     }
+
+    private static Button CreateWindowButton(string text, Color foreColor) => new()
+    {
+        Text = text,
+        Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+        ForeColor = foreColor,
+        BackColor = Color.FromArgb(23, 57, 87),
+        FlatStyle = FlatStyle.Flat,
+        Cursor = Cursors.Hand,
+        TextAlign = ContentAlignment.MiddleCenter,
+        FlatAppearance = { BorderSize = 0, MouseOverBackColor = Color.FromArgb(11, 102, 195), MouseDownBackColor = Color.FromArgb(9, 82, 158) }
+    };
 
     protected override void WndProc(ref Message m)
     {

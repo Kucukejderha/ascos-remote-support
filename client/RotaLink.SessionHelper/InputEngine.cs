@@ -23,6 +23,7 @@ internal sealed class InputEngine : IDisposable
     private const uint MouseAbsolute = 0x8000;
     private const uint KeyUp = 0x0002;
     private const uint KeyExtended = 0x0001;
+    private const uint KeyUnicode = 0x0004;
     private const uint WmMouseWheel = 0x020A;
     private const uint WmKeyDown = 0x0100;
     private const uint WmKeyUp = 0x0101;
@@ -222,6 +223,27 @@ internal sealed class InputEngine : IDisposable
                 // KeyCode=0 for punctuation keys that have no virtual-key map.
                 if (packet.KeyCharacter == 0 && (packet.KeyCode is 0 or > 0xFF))
                     return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
+                if (packet.KeyCharacter != 0)
+                {
+                    // Unicode injection is keyboard-layout independent: the
+                    // operator's browser sends the real character ('.', 'i',
+                    // 'ş', ...) and the target receives exactly that character
+                    // regardless of the local keyboard layout.
+                    input = new NativeInput
+                    {
+                        Type = InputKeyboard,
+                        Data = new InputUnion
+                        {
+                            Keyboard = new KeyboardInput
+                            {
+                                VirtualKey = packet.KeyCharacter,
+                                ScanCode = packet.KeyCharacter,
+                                Flags = KeyUnicode | (packet.Down ? 0u : KeyUp)
+                            }
+                        }
+                    };
+                    break;
+                }
                 var extended = IsExtendedKey(packet.KeyCode) ? KeyExtended : 0u;
                 input = new NativeInput
                 {
