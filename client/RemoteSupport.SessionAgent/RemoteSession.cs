@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Web.Script.Serialization;
@@ -13,16 +14,16 @@ internal static class RemoteSession
         var sessionId = Guid.ParseExact(session.SessionId, "N");
         consent.Request(sessionId, TimeSpan.FromHours(8));
         consent.Decide(sessionId, approved: true);
-        using var controlSocket = await api.ConnectHostSocketAsync(session, "control", token);
-        using var videoSocket = await api.ConnectHostSocketAsync(session, "video", token);
+        using var controlSocket = await api.ConnectHostSocketAsync(session, "control", token).ConfigureAwait(false);
+        using var videoSocket = await api.ConnectHostSocketAsync(session, "video", token).ConfigureAwait(false);
         AppDiagnostics.Write("Host control and video WebSockets connected.");
         using var input = new WindowsInputDispatcher(consent, sessionId);
         try
         {
             var completed = await Task.WhenAny(
                 CaptureLoopAsync(videoSocket, controlSocket, token),
-                ReceiveInputLoopAsync(controlSocket, input, token));
-            await completed;
+                ReceiveInputLoopAsync(controlSocket, input, token)).ConfigureAwait(false);
+            await completed.ConfigureAwait(false);
         }
         finally
         {
@@ -36,7 +37,7 @@ internal static class RemoteSession
                     await socket.CloseOutputAsync(
                         WebSocketCloseStatus.NormalClosure,
                         "local user stopped",
-                        closeTimeout.Token);
+                        closeTimeout.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -61,8 +62,8 @@ internal static class RemoteSession
             var firstNativeFrame = true;
             while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
             {
-                var packet = await native.ReadWebSocketPacketAsync(token);
-                await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token);
+                var packet = await native.ReadWebSocketPacketAsync(token).ConfigureAwait(false);
+                await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token).ConfigureAwait(false);
                 if (firstNativeFrame)
                 {
                     AppDiagnostics.Write("First DXGI/H.264 frame sent. Bytes=" + packet.Length + ".");
@@ -86,7 +87,7 @@ internal static class RemoteSession
             {
                 capture ??= new GdiScreenCapture(960, 540);
                 if (firstFrame) AppDiagnostics.Write("Screen capture initialized at 960x540.");
-                await Task.Delay(70, token);
+                await Task.Delay(70, token).ConfigureAwait(false);
                 var frame = capture.Capture();
                 accessDeniedLogged = false;
                 retryDelay = 750;
@@ -95,11 +96,11 @@ internal static class RemoteSession
                 var packet = encoder.Encode(frame, forceKeyFrame);
                 if (packet is null) continue;
                 if (forceKeyFrame) nextKeyFrame = now + 2_000;
-                await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token);
+                await socket.SendAsync(new ArraySegment<byte>(packet), WebSocketMessageType.Binary, true, token).ConfigureAwait(false);
                 if (captureStalled)
                 {
                     captureStalled = false;
-                    await SendCaptureStatusAsync(controlSocket, ok: true, token);
+                    await SendCaptureStatusAsync(controlSocket, ok: true, token).ConfigureAwait(false);
                 }
                 if (firstFrame)
                 {
@@ -114,14 +115,14 @@ internal static class RemoteSession
                 if (!captureStalled)
                 {
                     captureStalled = true;
-                    await SendCaptureStatusAsync(controlSocket, ok: false, token);
+                    await SendCaptureStatusAsync(controlSocket, ok: false, token).ConfigureAwait(false);
                 }
                 if (!accessDeniedLogged)
                 {
                     AppDiagnostics.Write("Screen capture is temporarily unavailable (secure desktop or desktop transition). The session remains connected and capture will retry.", ex);
                     accessDeniedLogged = true;
                 }
-                await Task.Delay(retryDelay, token);
+                await Task.Delay(retryDelay, token).ConfigureAwait(false);
                 retryDelay = Math.Min(retryDelay * 2, 5000);
             }
         }
@@ -134,7 +135,7 @@ internal static class RemoteSession
         {
             if (controlSocket.State != WebSocketState.Open) return;
             var payload = Encoding.UTF8.GetBytes("{\"type\":\"capture-status\",\"ok\":" + (ok ? "true" : "false") + "}");
-            await controlSocket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, token);
+            await controlSocket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, token).ConfigureAwait(false);
         }
         catch
         {
@@ -147,13 +148,31 @@ internal static class RemoteSession
         var buffer = new byte[4096];
         string? lastReportedResult = null;
         var serializer = new JavaScriptSerializer();
+        var lastSlowLogTick = 0;
+        AppDiagnostics.Write("Input receive loop running on thread " + Environment.CurrentManagedThreadId + ".");
         while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
         {
-            var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
+            var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), token).ConfigureAwait(false);
             if (result.MessageType == WebSocketMessageType.Close) return;
             if (result.MessageType == WebSocketMessageType.Text && result.EndOfMessage)
             {
+                var dispatchStopwatch = Stopwatch.StartNew();
                 var report = input.TryDispatchDetailed(buffer, result.Count);
+                dispatchStopwatch.Stop();
+                var dispatchMillis = dispatchStopwatch.ElapsedMilliseconds;
+                if (dispatchMillis > 3000)
+                {
+                    StallsInWindow++;
+                    AppDiagnostics.Write("Input dispatch stall detected. ElapsedMs=" + dispatchMillis +
+                        ", TotalStalls=" + StallsInWindow + ", Thread=" + Environment.CurrentManagedThreadId + ".");
+                }
+                else if (dispatchMillis > 500 &&
+                         unchecked(Environment.TickCount - lastSlowLogTick) > 2000)
+                {
+                    lastSlowLogTick = Environment.TickCount;
+                    AppDiagnostics.Write("Slow input dispatch. ElapsedMs=" + dispatchMillis +
+                        ", Thread=" + Environment.CurrentManagedThreadId + ".");
+                }
                 var acknowledgementText = serializer.Serialize(new
                 {
                     type = "control-result",
@@ -166,14 +185,17 @@ internal static class RemoteSession
                 if (!report.Accepted || !string.Equals(acknowledgementText, lastReportedResult, StringComparison.Ordinal))
                 {
                     var acknowledgement = Encoding.UTF8.GetBytes(acknowledgementText);
-                    await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token);
+                    await socket.SendAsync(new ArraySegment<byte>(acknowledgement), WebSocketMessageType.Text, true, token).ConfigureAwait(false);
                     AppDiagnostics.Write("Remote input result reported. Accepted=" + report.Accepted +
                         ", Stage=" + report.Stage + ", Error=" + report.ErrorCode +
-                        ", Desktop=" + report.Desktop + ", Event=" + report.EventType);
+                        ", Desktop=" + report.Desktop + ", Event=" + report.EventType +
+                        ", DispatchMs=" + dispatchMillis);
                     lastReportedResult = acknowledgementText;
                 }
             }
         }
     }
+
+    private static int StallsInWindow;
 
 }

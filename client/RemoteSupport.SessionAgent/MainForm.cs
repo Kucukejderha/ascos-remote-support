@@ -135,13 +135,20 @@ public sealed class MainForm : Form
 
     protected override void WndProc(ref Message m)
     {
-        base.WndProc(ref m);
         if (m.Msg == 0x0112) // WM_SYSCOMMAND
         {
             var command = m.WParam.ToInt64() & 0xFFF0;
-            if (command is 0xF020 or 0xF030 or 0xF120) // SC_MINIMIZE / SC_MAXIMIZE / SC_RESTORE
-                AppDiagnostics.Write("WM_SYSCOMMAND command=0x" + command.ToString("X") + " applied; WindowState=" + WindowState + ".");
+            if (command is 0xF020 or 0xF030 or 0xF120 or 0xF060) // SC_MINIMIZE/MAXIMIZE/RESTORE/CLOSE
+            {
+                AppDiagnostics.Write("WM_SYSCOMMAND enter: command=0x" + command.ToString("X") +
+                    ", WindowState=" + WindowState + ", Thread=" + Environment.CurrentManagedThreadId + ".");
+                base.WndProc(ref m);
+                AppDiagnostics.Write("WM_SYSCOMMAND exit: command=0x" + command.ToString("X") +
+                    ", WindowState=" + WindowState + ".");
+                return;
+            }
         }
+        base.WndProc(ref m);
     }
 
     private async Task PrepareSessionAsync()
@@ -185,7 +192,14 @@ public sealed class MainForm : Form
         _sessionCancellation?.Dispose();
         _sessionCancellation = new CancellationTokenSource();
         AppDiagnostics.Write("Automatic screen sharing started.");
-        _sessionTask = RemoteSession.RunAsync(_api, _session, _sessionCancellation.Token);
+        // The whole session chain (WebSocket receive, input dispatch, capture)
+        // runs on a threadpool thread so the UI message loop is never blocked:
+        // the helper's routed WM_SYSCOMMAND commands must be processed by this
+        // window immediately.
+        var api = _api;
+        var session = _session;
+        var cancellation = _sessionCancellation.Token;
+        _sessionTask = Task.Run(() => RemoteSession.RunAsync(api, session, cancellation));
         _ = ObserveSessionAsync(_sessionTask);
     }
 

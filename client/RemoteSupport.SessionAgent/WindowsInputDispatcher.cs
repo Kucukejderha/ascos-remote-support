@@ -134,12 +134,10 @@ public sealed class WindowsInputDispatcher : IDisposable
 
     private bool TryAcquireRatePermit(InputMessage message)
     {
-        // Release events must never be dropped: a lost mouse-up leaves the
-        // title-bar system buttons stuck in their modal tracking loop and the
-        // whole window appears frozen. Only downward state changes and
+        // State-changing events (button/key, down AND up) are never dropped:
+        // losing a release leaves buttons or keys stuck pressed. Only
         // continuous events (move/wheel) are rate limited.
-        if (message.Type == "button" && !message.Down) return true;
-        if (message.Type == "key" && !message.Down) return true;
+        if (message.Type == "button" || message.Type == "key") return true;
 
         lock (_rateGate)
         {

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using RemoteSupport.Protocol;
@@ -45,6 +46,7 @@ internal sealed class InputEngine : IDisposable
     private const uint SwpNoActivate = 0x0010;
     private const uint WmChar = 0x0102;
     private const uint WmSysCommand = 0x0112;
+    private const uint WmClose = 0x0010;
     private const uint ScMinimize = 0xF020;
     private const uint ScMaximize = 0xF030;
     private const uint ScRestore = 0xF120;
@@ -194,7 +196,7 @@ internal sealed class InputEngine : IDisposable
                 // win32k can silently drop injected non-client clicks for
                 // elevated windows (the RotaLink window itself), which makes
                 // the _ / X buttons appear dead while other windows work.
-                if (packet.Data == 0 && TryHandleSystemButton(point, packet.Down))
+                if (packet.Data == 0 && TryHandleSystemButton(packet, point, packet.Down))
                     return InputInjectionResult.Success();
                 // Position the cursor physically first so the button event
                 // lands on the exact target even if SendInput's own mapping
@@ -405,6 +407,8 @@ internal sealed class InputEngine : IDisposable
     private int _lastLeftDownTick;
     private int _lastDpiDiagTick;
     private int _lastLockedLogTick;
+    private bool _systemButtonHeld;
+    private long _systemButtonSequence;
     private IntPtr _lastLeftDownTarget;
     private bool _leftDown;
     private bool _rightDown;
@@ -423,76 +427,131 @@ internal sealed class InputEngine : IDisposable
     /// while every other window works. Returns true when the event was
     /// consumed. Left-button only; other buttons keep the raw SendInput path.
     /// </summary>
-    private bool TryHandleSystemButton(VirtualDesktopPoint point, bool down)
+    /// <summary>
+    /// Delivers title-bar system-button clicks (minimize/maximize/close) as
+    /// WM_SYSCOMMAND instead of relying on win32k's non-client click delivery.
+    /// Injected non-client clicks can be silently dropped for elevated windows
+    /// (the RotaLink window itself), which makes its _ / X buttons appear dead
+    /// while every other window works. Returns true when the event was
+    /// consumed. Left-button only; other buttons keep the raw SendInput path.
+    /// A routed down always pairs with a routed up (and a raw down never has
+    /// its up consumed), so a real non-client modal tracking loop can never be
+    /// left without its release event.
+    /// </summary>
+    private bool TryHandleSystemButton(InputPacket packet, VirtualDesktopPoint point, bool down)
     {
-        if (!down && _lastButtonTarget == IntPtr.Zero) return false;
-
-        var target = IntPtr.Zero;
-        if (!down && IsWindow(_lastButtonTarget)) target = _lastButtonTarget;
-        if (target == IntPtr.Zero)
-        {
-            target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
-            if (target == IntPtr.Zero) return false;
-        }
-
-        var screenLParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
-        var hitCode = 0;
-        var hitSuccess = SendMessageTimeout(target, WmNcHitTest, IntPtr.Zero, screenLParam,
-            SmtoAbortIfHung | 0x0020 /* SMTO_ERRORONEXIT */, 200, out var hitResult);
-        if (hitSuccess != IntPtr.Zero && hitResult != IntPtr.Zero) hitCode = hitResult.ToInt32();
-        if (hitCode == 0) hitCode = GuessNonClientHit(target, point);
-        if (hitCode is not (8 or 9 or 20)) return false; // HTMINBUTTON / HTMAXBUTTON / HTCLOSE
-
         if (down)
         {
+            var target = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
+            if (target == IntPtr.Zero) return false;
+            if (!TryHitTestNonClient(target, point, out var hitCode) || hitCode is not (8 or 9 or 20))
+                return false;
+            _systemButtonHeld = true;
+            _systemButtonSequence = packet.Sequence;
             _lastButtonTarget = target;
             _lastButtonHitCode = hitCode;
-            _log.Write("Title-bar system button press routed via WM_SYSCOMMAND. Hit=" + hitCode + ".");
+            GetWindowThreadProcessId(target, out var downPid);
+            _log.Write("Title-bar system button DOWN routed. Seq=" + packet.Sequence +
+                ", HWND=0x" + target.ToInt64().ToString("X") + ", PID=" + downPid + ", Hit=" + hitCode + ".");
             return true;
         }
 
-        if (_lastButtonTarget != target || _lastButtonHitCode != hitCode) return false;
-        var command = hitCode switch
+        if (!_systemButtonHeld) return false;
+        _systemButtonHeld = false;
+        var recordedTarget = _lastButtonTarget;
+        var recordedHit = _lastButtonHitCode;
+        var recordedSequence = _systemButtonSequence;
+        ClearButtonState();
+
+        if (recordedTarget == IntPtr.Zero || !IsWindow(recordedTarget))
+        {
+            _log.Write("Title-bar system button target closed before release; command cancelled. Seq=" + packet.Sequence + ".");
+            return true;
+        }
+
+        // Native semantics: releasing outside the button cancels the command.
+        var releaseWindow = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
+        if (releaseWindow == IntPtr.Zero || !TryHitTestNonClient(releaseWindow, point, out var releaseHit) ||
+            releaseHit != recordedHit)
+        {
+            _log.Write("Title-bar system button released outside the button; command cancelled. Seq=" + packet.Sequence + ".");
+            return true;
+        }
+
+        var command = recordedHit switch
         {
             8 => ScMinimize,
-            9 when IsZoomed(target) => ScRestore,
+            9 when IsZoomed(recordedTarget) => ScRestore,
             9 => ScMaximize,
             20 => ScClose,
             _ => 0u
         };
-        if (command == 0) return false;
-        var commandWindow = GetAncestor(target, GaRoot);
-        if (commandWindow == IntPtr.Zero) commandWindow = target;
-        SendMessageTimeout(commandWindow, WmSysCommand, new IntPtr(command), IntPtr.Zero,
-            SmtoAbortIfHung | 0x0020 /* SMTO_ERRORONEXIT */, 500, out _);
-        _log.Write("Title-bar system button routed. Command=0x" + command.ToString("X") + ".");
-        if (command == ScMinimize)
+        if (command == 0) return true;
+
+        var commandWindow = GetAncestor(recordedTarget, GaRoot);
+        if (commandWindow == IntPtr.Zero) commandWindow = recordedTarget;
+
+        // Send the command, record the API result and error, then verify the
+        // window state separately: "sent" and "applied" are distinct outcomes.
+        var stopwatch = Stopwatch.StartNew();
+        SetLastError(0);
+        var delivered = SendMessageTimeout(commandWindow, WmSysCommand, new IntPtr(command), IntPtr.Zero,
+            SmtoAbortIfHung | 0x0020 /* SMTO_ERRORONEXIT */, 500, out var commandResult);
+        var sendError = Marshal.GetLastWin32Error();
+        stopwatch.Stop();
+        _log.Write("Title-bar system button routed. Seq=" + packet.Sequence + ", DownSeq=" + recordedSequence +
+            ", Command=0x" + command.ToString("X") + ", SendMessageTimeout=" + (delivered != IntPtr.Zero) +
+            ", Result=0x" + commandResult.ToInt64().ToString("X") + ", Win32Error=" + sendError +
+            ", ElapsedMs=" + stopwatch.ElapsedMilliseconds + ".");
+
+        if (command == ScClose)
         {
-            Thread.Sleep(100);
-            if (!IsIconic(commandWindow))
-            {
-                ShowWindowAsync(commandWindow, 6 /* SW_MINIMIZE */);
-                _log.Write("SC_MINIMIZE not applied via WM_SYSCOMMAND; used ShowWindowAsync fallback.");
-            }
-        }
-        else if (command == ScMaximize)
-        {
-            Thread.Sleep(100);
-            if (!IsZoomed(commandWindow)) ShowWindowAsync(commandWindow, 3 /* SW_MAXIMIZE */);
-        }
-        else if (command == ScRestore)
-        {
-            Thread.Sleep(100);
-            if (IsIconic(commandWindow)) ShowWindowAsync(commandWindow, 9 /* SW_RESTORE */);
-        }
-        else if (command == ScClose)
-        {
-            Thread.Sleep(100);
+            Thread.Sleep(300);
             if (IsWindow(commandWindow))
-                _log.Write("SC_CLOSE sent but the window is still alive; delivery may have been filtered.");
+            {
+                PostMessage(commandWindow, WmClose, IntPtr.Zero, IntPtr.Zero);
+                _log.Write("SC_CLOSE not effective; posted WM_CLOSE fallback. Seq=" + packet.Sequence + ".");
+                Thread.Sleep(300);
+                _log.Write(IsWindow(commandWindow)
+                    ? "Close verification: window still alive. Seq=" + packet.Sequence + "."
+                    : "Close verification: window closed. Seq=" + packet.Sequence + ".");
+            }
+            else
+            {
+                _log.Write("Close verification: window closed. Seq=" + packet.Sequence + ".");
+            }
+            return true;
         }
-        ClearButtonState();
+
+        Thread.Sleep(300);
+        if (!IsCommandApplied(command, commandWindow))
+        {
+            ShowWindowAsync(commandWindow, command == ScMinimize ? 6 : command == ScMaximize ? 3 : 9);
+            _log.Write("WM_SYSCOMMAND not applied; initiated ShowWindowAsync fallback and re-verifying. Seq=" + packet.Sequence + ".");
+            Thread.Sleep(300);
+        }
+        _log.Write("Title-bar command verification: " + (IsCommandApplied(command, commandWindow) ? "applied" : "NOT applied") +
+            ". Seq=" + packet.Sequence + ".");
         return true;
+    }
+
+    private static bool IsCommandApplied(uint command, IntPtr window) => command switch
+    {
+        ScMinimize => IsIconic(window),
+        ScMaximize => IsZoomed(window),
+        ScRestore => !IsIconic(window) && !IsZoomed(window),
+        _ => false
+    };
+
+    private static bool TryHitTestNonClient(IntPtr target, VirtualDesktopPoint point, out int hitCode)
+    {
+        hitCode = 0;
+        var screenLParam = new IntPtr((point.PixelY << 16) | (point.PixelX & 0xFFFF));
+        var hitSuccess = SendMessageTimeout(target, WmNcHitTest, IntPtr.Zero, screenLParam,
+            SmtoAbortIfHung | 0x0020 /* SMTO_ERRORONEXIT */, 200, out var hitResult);
+        if (hitSuccess != IntPtr.Zero && hitResult != IntPtr.Zero) hitCode = hitResult.ToInt32();
+        if (hitCode == 0) hitCode = GuessNonClientHit(target, point);
+        return hitCode != 0;
     }
 
     private bool PostButton(VirtualDesktopPoint point, uint message, uint nonClientMessage)
@@ -660,6 +719,8 @@ internal sealed class InputEngine : IDisposable
         _lastButtonTarget = IntPtr.Zero;
         _lastButtonHitCode = 0;
         _captionDragTarget = IntPtr.Zero;
+        _systemButtonHeld = false;
+        _systemButtonSequence = 0;
     }
 
     private void PostDragMove(VirtualDesktopPoint point, uint dragKeys)

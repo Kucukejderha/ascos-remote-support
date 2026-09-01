@@ -100,7 +100,11 @@ internal sealed class InputPipeServer
             else
             {
                 var injectionTask = _engine.InjectAsync(packet, CancellationToken.None);
-                if (injectionTask.Wait(500))
+                // The worker's worst case (hit-test 200ms + WM_SYSCOMMAND 500ms
+                // + state verification ~600ms) can exceed 1.5s; 2s matches the
+                // agent's acknowledgement budget so a slow command is reported
+                // truthfully instead of racing the ack.
+                if (injectionTask.Wait(2000))
                     result = injectionTask.Result;
                 else
                     result = InputInjectionResult.Failure(InputFailureStage.CommandTimeout);
