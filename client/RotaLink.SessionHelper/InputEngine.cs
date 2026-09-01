@@ -471,25 +471,27 @@ internal sealed class InputEngine : IDisposable
 
         // Native semantics: releasing outside the button cancels the command.
         var releaseWindow = WindowFromPoint(new NativePoint(point.PixelX, point.PixelY));
-        if (releaseWindow == IntPtr.Zero || !TryHitTestNonClient(releaseWindow, point, out var releaseHit) ||
-            releaseHit != recordedHit)
+        var releaseHit = 0;
+        if (releaseWindow != IntPtr.Zero) TryHitTestNonClient(releaseWindow, point, out releaseHit);
+        if (releaseWindow == IntPtr.Zero || releaseHit != recordedHit)
         {
-            _log.Write("Title-bar system button released outside the button; command cancelled. Seq=" + packet.Sequence + ".");
+            _log.Write("Title-bar system button released outside the button; command cancelled. Seq=" + packet.Sequence +
+                ", RecordedHit=" + recordedHit + ", ReleaseHit=" + releaseHit +
+                ", ReleaseHWND=0x" + (releaseWindow == IntPtr.Zero ? 0 : releaseWindow.ToInt64()).ToString("X") + ".");
             return true;
         }
 
+        var commandWindow = GetAncestor(recordedTarget, GaRoot);
+        if (commandWindow == IntPtr.Zero) commandWindow = recordedTarget;
         var command = recordedHit switch
         {
             8 => ScMinimize,
-            9 when IsZoomed(recordedTarget) => ScRestore,
+            9 when IsZoomed(commandWindow) => ScRestore,
             9 => ScMaximize,
             20 => ScClose,
             _ => 0u
         };
         if (command == 0) return true;
-
-        var commandWindow = GetAncestor(recordedTarget, GaRoot);
-        if (commandWindow == IntPtr.Zero) commandWindow = recordedTarget;
 
         // Send the command, record the API result and error, then verify the
         // window state separately: "sent" and "applied" are distinct outcomes.
