@@ -18,7 +18,7 @@ Sürüm tarihi: 2026-08-05
 - Release derlemesi: sıfır hata ve sıfır uyarı
 - Kurulum gerektirmeyen, self-contained tek EXE
 - HTTPS cihaz kaydı ve P-256 imzalı doğrulama
-- Host açıkken yeniden kullanılabilen 9 haneli kod ve her kullanımda yenilenen operatör anahtarı
+- İlk başarılı kullanımda atomik olarak tüketilen, rastgele ve hız sınırlamalı 9 haneli destek kodu
 - Ayrı host/operatör WSS kimlik doğrulaması
 - 960×540, en fazla 10 FPS, kayıpsız sıkıştırılmış anahtar/delta kare aktarımı
 - Değişmeyen karelerin atlanması

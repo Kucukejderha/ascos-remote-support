@@ -19,7 +19,7 @@ Release date: 2026-08-04
 - Windows package executable starts and prints help
 - Self-contained Windows installer installs the embedded host payload and creates the desktop shortcut without PowerShell interaction
 - HTTPS device registration and P-256 signed challenge authentication
-- Reusable nine-digit support code that remains valid while the local host session is active; guest credentials rotate on every redemption
+- Random, rate-limited nine-digit support code that is atomically consumed on its first successful redemption
 - Separate host and guest WSS authentication
 - Browser WebSocket subprotocol token handling
 - Lossless 960×540 compressed key/delta frame transport at up to 10 FPS, with unchanged-frame suppression

@@ -162,8 +162,24 @@ static void VerifySecurityStore()
     var code = store.CreateCode(deviceId);
     var first = store.Redeem(code.Code);
     if (first.GuestToken.Length != 64) throw new InvalidOperationException("Guest token was not generated.");
+    if (!store.TryAuthorizeSession(code.SessionId, "guest", $"Bearer {first.GuestToken}"))
+        throw new InvalidOperationException("The issued guest token did not authorize session reconnect.");
     try { store.Redeem(code.Code); throw new InvalidOperationException("Support code was redeemable twice."); }
     catch (UnauthorizedAccessException) { }
+
+    var concurrentCode = store.CreateCode(deviceId);
+    var successfulRedemptions = 0;
+    Parallel.For(0, 16, _ =>
+    {
+        try
+        {
+            store.Redeem(concurrentCode.Code);
+            Interlocked.Increment(ref successfulRedemptions);
+        }
+        catch (UnauthorizedAccessException) { }
+    });
+    if (successfulRedemptions != 1)
+        throw new InvalidOperationException($"Concurrent redemption succeeded {successfulRedemptions} times.");
 
     var second = store.CreateCode(deviceId);
     store.MarkHostConnected(second.SessionId);

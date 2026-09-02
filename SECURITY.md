@@ -3,7 +3,7 @@
 - The host must display a native Windows consent dialog for every session.
 - No unattended access, hidden mode, secure-desktop bypass, credential capture, clipboard, or file transfer is implemented.
 - The local user can terminate control at any time; consent expires after 15 minutes.
-- Device authentication uses ECDSA P-256 signed challenges. Support codes are random, rate-limited, and single-use: the first redemption consumes the code and each redemption rotates the guest token. The code is invalidated when the local host ends the session.
+- Device authentication uses ECDSA P-256 signed challenges. Support codes are random, rate-limited, expire after 10 minutes, and are atomically consumed by the first successful redemption. Network reconnects use the session-scoped guest token instead of redeeming the support code again; ending the local host session invalidates that token.
 - Host and guest WebSockets are separately authenticated and scoped to one session.
 - Browser guest tokens are carried as a WebSocket subprotocol rather than a URL query value.
 - Input messages are allow-listed, size-limited, coordinate-limited, capped at 240 events/second, and ignored before explicit consent.

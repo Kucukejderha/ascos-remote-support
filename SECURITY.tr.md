@@ -4,7 +4,7 @@
 - Gözetimsiz erişim, gizli mod, güvenli masaüstü atlatma, kimlik bilgisi yakalama, pano ve dosya aktarımı uygulanmamıştır.
 - Yerel kullanıcı kontrolü istediği anda sonlandırabilir; onay en fazla 15 dakika geçerlidir.
 - Cihaz doğrulaması ECDSA P-256 imzalı challenge kullanır.
-- Dokuz haneli destek kodu tek kullanımlıktır ve hız sınırlamasına tabidir; ilk kullanımda tüketilir, her kullanımda operatör erişim anahtarı yenilenir. Host oturumu kapattığında kod iptal edilir.
+- Dokuz haneli destek kodu rastgeledir, hız sınırlamasına tabidir, 10 dakikada sona erer ve ilk başarılı kullanımda atomik olarak tüketilir. Ağ kopmalarında kod yeniden kullanılmaz; oturuma özel operatör anahtarıyla yeniden bağlanılır. Host oturumu kapandığında bu anahtar da geçersizleşir.
 - Host ve operatör WebSocket bağlantıları ayrı kimlik doğrular ve yalnızca tek oturum için yetkilidir.
 - Input mesajları izin listesi, boyut/koordinat sınırları ve saniyede 240 olay sınırıyla korunur; açık onaydan önce uygulanmaz.
 - Interaktif input pipe'ı ACL ile yalnızca etkileşimli kullanıcıya açıktır; bağlanan process'in kimliği ve görüntü adı doğrulanır; bağlantı başına sıra numaraları tekrar saldırısını reddeder.

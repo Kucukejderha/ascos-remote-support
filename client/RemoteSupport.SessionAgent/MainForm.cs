@@ -15,6 +15,7 @@ public sealed class MainForm : Form
     private readonly Label _status = new();
     private readonly Label _code = new();
     private readonly Button _copy = new();
+    private readonly Button _newCode = new();
     private CancellationTokenSource? _sessionCancellation;
     private Task? _sessionTask;
     private SignalingHostClient? _api;
@@ -82,11 +83,17 @@ public sealed class MainForm : Form
         _code.Location = new Point(22, 48);
         card.Controls.Add(_code);
         _copy.Text = "Kodu kopyala";
-        _copy.Location = new Point(350, 53);
-        _copy.Size = new Size(126, 38);
+        _copy.Location = new Point(236, 53);
+        _copy.Size = new Size(116, 38);
         _copy.Enabled = false;
         _copy.Click += (_, _) => { if (_session != null) Clipboard.SetText(_session.Code); };
         card.Controls.Add(_copy);
+        _newCode.Text = "Yeni kod";
+        _newCode.Location = new Point(360, 53);
+        _newCode.Size = new Size(116, 38);
+        _newCode.Enabled = false;
+        _newCode.Click += async (_, _) => await RequestNewCodeAsync();
+        card.Controls.Add(_newCode);
         _status.Text = "Güvenli bağlantı hazırlanıyor…";
         _status.ForeColor = Color.FromArgb(99, 120, 138);
         _status.AutoEllipsis = true;
@@ -215,6 +222,7 @@ public sealed class MainForm : Form
         try
         {
             _copy.Enabled = false;
+            _newCode.Enabled = false;
             _code.Text = "Hazırlanıyor…";
             SetStatus("Güncelleme denetleniyor…", Color.FromArgb(99, 120, 138));
 
@@ -237,12 +245,35 @@ public sealed class MainForm : Form
             _copy.Enabled = true;
             SetStatus("Bağlantı aktif — destek kodunu iletin.", Blue);
             StartSession();
+            _newCode.Enabled = true;
         }
         catch (Exception ex)
         {
             AppDiagnostics.Write("Session preparation failed.", ex);
+            _session = null;
+            _code.Text = "Kullanılamıyor";
+            _newCode.Enabled = !_closing && !IsDisposed;
             SetStatus("Sunucuya bağlanılamadı: " + ex.Message, Color.Firebrick);
         }
+    }
+
+    private async Task RequestNewCodeAsync()
+    {
+        if (_closing || IsDisposed || !_newCode.Enabled) return;
+
+        _newCode.Enabled = false;
+        _copy.Enabled = false;
+        _code.Text = "Hazırlanıyor…";
+
+        if (_sessionTask is not null)
+        {
+            AppDiagnostics.Write("New support code requested; current session is being revoked.");
+            StopSession();
+            SetStatus("Eski oturum kapatılıyor — yeni kod hazırlanacak…", Color.FromArgb(99, 120, 138));
+            return;
+        }
+
+        await PrepareSessionAsync();
     }
 
     private void StartSession()

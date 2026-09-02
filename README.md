@@ -26,6 +26,7 @@ Phase 1 deliberately does **not** enable unattended access, silent operation, fi
 3. Share the displayed 9-digit code; sharing the code is the user's consent for the session.
 4. The operator opens `/operator`, enters the code, and controls the visible desktop.
 5. The local user closes the RotaLink window at any time to terminate the session.
+6. The code is consumed on first use. Network reconnects use the session credential; choose **New code** in RotaLink to revoke the current session and create a fresh code.
 
 The current transport captures at 960×540 and targets 10 FPS. It skips unchanged frames, sends XOR delta frames between two-second lossless keyframes, and gzip-compresses every transmitted frame. The browser decodes frames in order before rendering, substantially reducing relay bandwidth while improving text clarity. A future DXGI/H.264/WebRTC transport can replace this codec without changing the authenticated session boundary.
 

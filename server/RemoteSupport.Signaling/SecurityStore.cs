@@ -103,17 +103,17 @@ public sealed class SecurityStore
 
     public RedeemSupportCodeResponse Redeem(string code)
     {
-        // The code is the session credential: it stays valid for the whole
-        // support session (RotaLink keeps running) and dies with the session.
-        // Re-redeeming while the session is live returns the same guest
-        // credential instead of a rotating one, so a reconnecting operator
-        // never invalidates an existing connection.
-        if (!_codes.TryGetValue(code, out var item)) throw new UnauthorizedAccessException();
+        // Removing the code is the atomic single-use boundary. Only the caller
+        // that wins TryRemove can receive a guest credential; concurrent or
+        // later redemption attempts are rejected. WebSocket reconnects use the
+        // issued guest token and never redeem the human-readable code again.
+        if (!_codes.TryRemove(code, out var item)) throw new UnauthorizedAccessException();
         if (!_sessions.TryGetValue(item.SessionId, out var session)) throw new UnauthorizedAccessException();
         lock (session.Gate)
         {
-            if (!session.HostConnected && item.ExpiresAt <= _clock.GetUtcNow()) throw new UnauthorizedAccessException();
-            session.GuestToken ??= Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            if (item.ExpiresAt <= _clock.GetUtcNow() || session.GuestToken is not null)
+                throw new UnauthorizedAccessException();
+            session.GuestToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             return new(session.Id, session.HostDeviceId, session.GuestToken, session.ExpiresAt);
         }
     }

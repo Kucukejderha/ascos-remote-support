@@ -38,7 +38,7 @@ Bu yapı metin okunabilirliğini artırırken masaüstü kullanımındaki bant g
 2. Uygulama ekran paylaşımını otomatik başlatır; kullanıcı gösterilen 9 haneli kodu paylaşır.
 3. Operatör `/operator` sayfasına kodu girer.
 4. Yerel kullanıcı RotaLink penceresini kapatarak paylaşımı ve kontrolü sonlandırabilir.
-5. Operatör bağlantısı kapandığında istemci açık kalırsa otomatik olarak yeni bir destek kodu hazırlar ve paylaşımı yeniden başlatır.
+5. Kod ilk kullanımda tüketilir; kısa ağ kopmalarında operatör oturum anahtarıyla yeniden bağlanır. Kullanıcı RotaLink'teki **Yeni kod** düğmesiyle mevcut oturumu iptal edip yeni bir kod oluşturabilir.
 
 ## Derleme
 
