@@ -103,16 +103,18 @@ public sealed class SecurityStore
 
     public RedeemSupportCodeResponse Redeem(string code)
     {
-        // The code is single-use: the first redeem consumes it, so a code that
-        // was already used (or that never existed) cannot be redeemed again.
-        if (!_codes.TryRemove(code, out var item)) throw new UnauthorizedAccessException();
+        // The code is the session credential: it stays valid for the whole
+        // support session (RotaLink keeps running) and dies with the session.
+        // Re-redeeming while the session is live returns the same guest
+        // credential instead of a rotating one, so a reconnecting operator
+        // never invalidates an existing connection.
+        if (!_codes.TryGetValue(code, out var item)) throw new UnauthorizedAccessException();
         if (!_sessions.TryGetValue(item.SessionId, out var session)) throw new UnauthorizedAccessException();
         lock (session.Gate)
         {
             if (!session.HostConnected && item.ExpiresAt <= _clock.GetUtcNow()) throw new UnauthorizedAccessException();
-            var guestToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-            session.GuestToken = guestToken;
-            return new(session.Id, session.HostDeviceId, guestToken, session.ExpiresAt);
+            session.GuestToken ??= Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            return new(session.Id, session.HostDeviceId, session.GuestToken, session.ExpiresAt);
         }
     }
 
