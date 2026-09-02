@@ -230,20 +230,23 @@ internal sealed class InputEngine : IDisposable
                 if (packet.KeyCharacter != 0)
                 {
                     // Character delivery is deterministic: WM_CHAR is posted
-                    // straight to the focused control. SendInput's Unicode path
-                    // can return success without ever producing a character
-                    // (RDP sessions, elevated targets), so it is only the
-                    // fallback. The key release is swallowed; it carries no
-                    // state for WM_CHAR delivery.
+                    // straight to the focused control (falling back to the
+                    // foreground window). SendInput's Unicode path can return
+                    // success without producing a character, and broken targets
+                    // render the low byte as a wrong key ('ı' -> '1'), so it is
+                    // only used for ASCII when no message target exists. The
+                    // key release is swallowed; it carries no state for WM_CHAR.
                     if (!packet.Down) return InputInjectionResult.Success();
                     var charTarget = GetKeyboardTarget();
+                    if (charTarget == IntPtr.Zero) charTarget = GetForegroundWindow();
                     if (charTarget != IntPtr.Zero && PostMessage(charTarget, WmChar, new IntPtr(packet.KeyCharacter), IntPtr.Zero))
                     {
                         LogCharDelivery(packet, charTarget);
                         return InputInjectionResult.Success();
                     }
                     LogCharDelivery(packet, IntPtr.Zero);
-                    // No focused target: fall back to Unicode injection.
+                    if (packet.KeyCharacter > 0xFF)
+                        return InputInjectionResult.Success(); // no target: dropping beats typing garbage
                     input = new NativeInput
                     {
                         Type = InputKeyboard,
