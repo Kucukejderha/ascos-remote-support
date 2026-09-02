@@ -34,6 +34,9 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(560, 380);
         MinimumSize = new Size(520, 380);
+        // The maximize button stays visible in its place but inactive: the
+        // support window is deliberately fixed-size.
+        MaximizeBox = false;
         BackColor = Color.FromArgb(244, 247, 250);
         Font = new Font("Segoe UI", 10F);
 
