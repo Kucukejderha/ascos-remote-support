@@ -28,7 +28,12 @@ function Publish-ToGitHub([string]$root, [string]$stagedExePath) {
     $repo = 'Kucukejderha/ascos-rotalink'
     $tag = 'rotalink-latest'
     $releaseTitle = 'RotaLink en güncel derleme'
-    $exe = $stagedExePath
+    # The staged file must carry the stable asset name RotaLink.exe: GitHub
+    # uses the upload file's own name for the release asset.
+    $stagingDir = Join-Path $env:TEMP 'rotalink-release-stage'
+    New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+    $exe = Join-Path $stagingDir 'RotaLink.exe'
+    [System.IO.File]::Copy($stagedExePath, $exe, $true)
     $manifest = Join-Path $root 'artifacts\version.json'
     if (-not (Test-Path -LiteralPath $exe) -or -not (Test-Path -LiteralPath $manifest)) {
         Write-Warning 'artifacts eksik; GitHub yayinlamasi atlandi.'
