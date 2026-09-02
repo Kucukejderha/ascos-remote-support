@@ -315,4 +315,7 @@ internal sealed class InputMessage
     public int Delta { get; set; }
     public string? Code { get; set; }
     public string? Key { get; set; }
+    public bool Ctrl { get; set; }
+    public bool Alt { get; set; }
+    public bool Meta { get; set; }
 }

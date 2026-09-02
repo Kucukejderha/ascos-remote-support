@@ -229,24 +229,15 @@ internal sealed class InputEngine : IDisposable
                 LogKeyDiagnostic(packet, "routed");
                 if (packet.KeyCharacter != 0)
                 {
-                    // Character delivery is deterministic: WM_CHAR is posted
-                    // straight to the focused control (falling back to the
-                    // foreground window). SendInput's Unicode path can return
-                    // success without producing a character, and broken targets
-                    // render the low byte as a wrong key ('ı' -> '1'), so it is
-                    // only used for ASCII when no message target exists. The
-                    // key release is swallowed; it carries no state for WM_CHAR.
+                    // Character delivery uses SendInput's KEYEVENTF_UNICODE as
+                    // the primary path: it produces exactly the same result as
+                    // physical typing in the target application, for Unicode
+                    // and ANSI windows alike. The key release is swallowed; it
+                    // carries no state for character delivery. If SendInput is
+                    // blocked, the fallback posts WM_CHAR only to windows that
+                    // can actually receive Unicode (IsWindowUnicode) so Turkish
+                    // characters never degrade to their low byte ('ş' -> '_').
                     if (!packet.Down) return InputInjectionResult.Success();
-                    var charTarget = GetKeyboardTarget();
-                    if (charTarget == IntPtr.Zero) charTarget = GetForegroundWindow();
-                    if (charTarget != IntPtr.Zero && PostMessage(charTarget, WmChar, new IntPtr(packet.KeyCharacter), IntPtr.Zero))
-                    {
-                        LogCharDelivery(packet, charTarget);
-                        return InputInjectionResult.Success();
-                    }
-                    LogCharDelivery(packet, IntPtr.Zero);
-                    if (packet.KeyCharacter > 0xFF)
-                        return InputInjectionResult.Success(); // no target: dropping beats typing garbage
                     input = new NativeInput
                     {
                         Type = InputKeyboard,
@@ -408,15 +399,24 @@ internal sealed class InputEngine : IDisposable
                 {
                     if (packet.KeyCharacter != 0)
                     {
-                        // Printable character: deliver exactly one WM_CHAR with
-                        // the real character from the operator; never duplicate
-                        // with WM_KEYDOWN and never block repeated characters.
+                        // WM_CHAR fallback: only deliver the character to a
+                        // window that can actually receive Unicode. Posting a
+                        // wide character to an ANSI window degrades it to its
+                        // low byte ('ş' -> '_', 'ğ' -> nothing), so non-ASCII
+                        // characters are dropped for such targets instead.
                         if (!packet.Down) return (int)InputFailureStage.FallbackPostMessage;
                         var charTarget = GetKeyboardTarget();
-                        if (charTarget != IntPtr.Zero && PostMessage(charTarget, WmChar, new IntPtr(packet.KeyCharacter), IntPtr.Zero))
+                        if (charTarget == IntPtr.Zero) charTarget = GetForegroundWindow();
+                        if (charTarget == IntPtr.Zero) return 0;
+                        var unicodeTarget = IsWindowUnicode(charTarget);
+                        LogCharTarget(charTarget, packet.KeyCharacter, unicodeTarget);
+                        if (unicodeTarget || packet.KeyCharacter <= 0xFF)
                         {
-                            LogFallback("PostMessage WM_CHAR, SendInputError=" + sendInputError);
-                            return (int)InputFailureStage.FallbackPostMessage;
+                            if (PostMessage(charTarget, WmChar, new IntPtr(packet.KeyCharacter), IntPtr.Zero))
+                            {
+                                LogFallback("PostMessage WM_CHAR, SendInputError=" + sendInputError);
+                                return (int)InputFailureStage.FallbackPostMessage;
+                            }
                         }
                         return 0;
                     }
@@ -452,21 +452,18 @@ internal sealed class InputEngine : IDisposable
     private bool _systemButtonHeld;
     private long _systemButtonSequence;
 
-    private void LogCharDelivery(InputPacket packet, IntPtr target)
+    private void LogCharTarget(IntPtr target, ushort character, bool unicodeTarget)
     {
         var now = Environment.TickCount;
         if (_lastCharDiagTick != 0 && unchecked(now - _lastCharDiagTick) < 1000) return;
         _lastCharDiagTick = now;
-        if (target == IntPtr.Zero)
-        {
-            _log.Write("WM_CHAR skipped: no keyboard target; Unicode fallback used. Char=0x" + packet.KeyCharacter.ToString("X4") + ".");
-            return;
-        }
         var title = new StringBuilder(256);
+        var className = new StringBuilder(256);
         GetWindowText(target, title, title.Capacity);
+        GetClassNameNative(target, className, className.Capacity);
         GetWindowThreadProcessId(target, out var processId);
-        _log.Write("WM_CHAR posted. Char=0x" + packet.KeyCharacter.ToString("X4") + ", HWND=0x" + target.ToInt64().ToString("X") +
-            ", PID=" + processId + ", Title='" + title + "'.");
+        _log.Write("Char target. Char=0x" + character.ToString("X4") + ", HWND=0x" + target.ToInt64().ToString("X") +
+            ", PID=" + processId + ", Class='" + className + "', Unicode=" + unicodeTarget + ", Title='" + title + "'.");
     }
 
     private void LogKeyDiagnostic(InputPacket packet, string disposition)
@@ -980,6 +977,9 @@ internal sealed class InputEngine : IDisposable
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetGUIThreadInfo(uint threadId, ref GuiThreadInfo info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetClassNameW")]
     private static extern int GetClassNameNative(IntPtr window, StringBuilder className, int maxCount);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowUnicode(IntPtr window);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll")] private static extern IntPtr GetThreadDpiAwarenessContext();
 

@@ -135,7 +135,11 @@ internal sealed class SessionHelperInputClient : IDisposable
         var x = Math.Max(0d, Math.Min(1d, message.NormalizedX ?? Math.Max(0d, Math.Min(1d, message.X / 65535d))));
         var y = Math.Max(0d, Math.Min(1d, message.NormalizedY ?? Math.Max(0d, Math.Min(1d, message.Y / 65535d))));
         var data = message.Type == "button" ? message.Button : message.Delta;
-        var keyCharacter = message.Key is { Length: 1 } keyText && !char.IsControl(keyText[0])
+        // Shortcut combinations (Ctrl+X, Ctrl+V, Meta+...) must reach the
+        // target as real virtual-key events: the character is blanked so the
+        // helper takes the pure VK path. AltGr combos keep the character.
+        var isModifierCombo = (message.Ctrl && !message.Alt) || message.Meta;
+        var keyCharacter = !isModifierCombo && message.Key is { Length: 1 } keyText && !char.IsControl(keyText[0])
             ? (ushort)keyText[0]
             : (ushort)0;
         var packet = new byte[InputPacketCodec.PacketBytes];
