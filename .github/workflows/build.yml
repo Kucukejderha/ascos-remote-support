@@ -12,9 +12,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Build client package (native capture included)
+      - name: Build native capture
         shell: pwsh
-        run: .\scripts\build.ps1 -Configuration Release
+        run: |
+          cmake -S native -B native/build -G "Visual Studio 17 2022" -A x64
+          cmake --build native/build --config Release
+          New-Item -ItemType Directory -Force native/build/x64 | Out-Null
+          Copy-Item native/build/Release/RotaLink.NativeCapture.exe native/build/x64/RotaLink.NativeCapture.exe -Force
+      - name: Build client package
+        shell: pwsh
+        run: .\scripts\build.ps1 -Configuration Release -UseExistingNativeCapture
       - name: Build server
         run: dotnet build .\server\RemoteSupport.Signaling\RemoteSupport.Signaling.csproj -c Release
       - name: Smoke — architecture checks

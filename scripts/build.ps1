@@ -2,6 +2,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$Full,
     [string]$SignThumbprint = '',
+    [switch]$UseExistingNativeCapture,
     [switch]$Deploy
 )
 $ErrorActionPreference = 'Stop'
@@ -108,7 +109,14 @@ function Build-NativeCapture {
     }
 }
 
-Build-NativeCapture
+if ($UseExistingNativeCapture) {
+    if (-not (Test-Path -LiteralPath $nativeOutput)) {
+        throw "Prebuilt native capture was requested but not found: $nativeOutput"
+    }
+    Write-Host "Using prebuilt native capture: $nativeOutput"
+} else {
+    Build-NativeCapture
+}
 
 $serviceProject = Join-Path $root 'client\RemoteSupport.Service\RemoteSupport.Service.csproj'
 $helperProject = Join-Path $root 'client\RotaLink.SessionHelper\RotaLink.SessionHelper.csproj'
@@ -131,7 +139,7 @@ New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 Copy-Item -LiteralPath (Join-Path $bin 'RotaLink.exe') -Destination $output -Force
 
 # Verify the mandatory embedded resources before publishing anything.
-$embeddedChecks = @('RotaLink.Runtime.SessionHelper.exe', 'RotaLink.Runtime.Service.exe', 'RotaLink.Runtime.RemoteSupport.Protocol.dll', 'RotaLink.Runtime.System.Memory.dll')
+$embeddedChecks = @('RotaLink.Runtime.SessionHelper.exe', 'RotaLink.Runtime.Service.exe', 'RotaLink.Runtime.NativeCapture.exe', 'RotaLink.Runtime.RemoteSupport.Protocol.dll', 'RotaLink.Runtime.System.Memory.dll')
 foreach ($required in $embeddedChecks) {
     if (-not (Select-String -Path $output -Pattern $required -SimpleMatch -Quiet)) {
         throw "Release build is missing the embedded resource '$required'; the client would be broken."
