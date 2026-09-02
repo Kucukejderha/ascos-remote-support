@@ -7,12 +7,16 @@ using System.Web.Script.Serialization;
 namespace RemoteSupport.SessionAgent;
 
 /// <summary>
-/// Checks the server's published client version on startup and, when a newer
-/// build is available, downloads it, verifies its SHA-256 against the server
-/// manifest, swaps the running executable, and relaunches itself.
+/// Checks the GitHub rolling release for a newer published client build and,
+/// when one is available, downloads it, verifies its SHA-256 against the
+/// release manifest, swaps the running executable, and relaunches itself.
+/// The client is distributed exclusively through GitHub Releases; the
+/// signaling server never hosts the executable.
 /// </summary>
 internal static class SelfUpdate
 {
+    private const string ReleaseBaseUrl = "https://github.com/Kucukejderha/ascos-rotalink/releases/latest/download";
+
     private sealed class UpdateManifest
     {
         public string Version { get; set; } = "";
@@ -24,13 +28,14 @@ internal static class SelfUpdate
     /// Returns true when a newer version was installed and the caller should
     /// exit (the updated executable was already launched).
     /// </summary>
-    public static async Task<bool> TryUpdateAsync(Uri baseUri, CancellationToken token)
+    public static async Task<bool> TryUpdateAsync(CancellationToken token)
     {
         try
         {
             var current = CurrentVersion();
-            using (var http = new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(30) })
+            using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) })
             {
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("RotaLink/" + current);
                 var manifest = await DownloadManifestAsync(http, token);
                 if (manifest is null) return false;
                 if (string.Equals(current, manifest.Version, StringComparison.Ordinal))
@@ -51,7 +56,7 @@ internal static class SelfUpdate
                 var temporary = Path.Combine(Path.GetTempPath(), "RotaLink-update-" + Guid.NewGuid().ToString("N") + ".exe");
                 try
                 {
-                    await DownloadFileAsync(http, "/downloads/RotaLink.exe", temporary, token);
+                    await DownloadFileAsync(http, ReleaseBaseUrl + "/RotaLink.exe", temporary, token);
                     if (!Sha256Matches(temporary, manifest.Sha256))
                     {
                         AppDiagnostics.Write("Self-update aborted: downloaded file hash does not match the manifest.");
@@ -75,7 +80,7 @@ internal static class SelfUpdate
 
     private static async Task<UpdateManifest?> DownloadManifestAsync(HttpClient http, CancellationToken token)
     {
-        using var response = await http.GetAsync("/downloads/version.json", token);
+        using var response = await http.GetAsync(ReleaseBaseUrl + "/version.json", token);
         if (!response.IsSuccessStatusCode) return null;
         var text = (await response.Content.ReadAsStringAsync()).TrimStart('\uFEFF', ' ', '\t', '\r', '\n');
         var manifest = new JavaScriptSerializer().Deserialize<UpdateManifest>(text);
@@ -84,9 +89,9 @@ internal static class SelfUpdate
         return manifest;
     }
 
-    private static async Task DownloadFileAsync(HttpClient http, string path, string destination, CancellationToken token)
+    private static async Task DownloadFileAsync(HttpClient http, string url, string destination, CancellationToken token)
     {
-        using var response = await http.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, token);
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
         response.EnsureSuccessStatusCode();
         using var input = await response.Content.ReadAsStreamAsync();
         using var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);

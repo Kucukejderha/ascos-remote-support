@@ -226,7 +226,7 @@ public sealed class MainForm : Form
             _code.Text = "Hazırlanıyor…";
             SetStatus("Güncelleme denetleniyor…", Color.FromArgb(99, 120, 138));
 
-            if (await SelfUpdate.TryUpdateAsync(_server, CancellationToken.None))
+            if (await SelfUpdate.TryUpdateAsync(CancellationToken.None))
             {
                 SetStatus("Yeni sürüm yüklendi — yeniden başlatılıyor…", Blue);
                 Application.Exit();

@@ -11,6 +11,7 @@ $artifacts = Join-Path $root 'artifacts'
 $nugetConfig = Join-Path $root 'NuGet.Config'
 $buildAppData = Join-Path $root 'work\build-appdata'
 New-Item -ItemType Directory -Force -Path (Join-Path $buildAppData 'NuGet') | Out-Null
+$originalAppData = $env:APPDATA
 $env:APPDATA = $buildAppData
 
 $nativeBuild = Join-Path $root 'native\build'
@@ -23,31 +24,36 @@ function Get-ShortPath([string]$path) {
     return $fso.GetFile($resolved).ShortPath
 }
 
-function Deploy-ToServer([string]$root) {
-    $sshHost = '45.87.173.201'
-    $sshUser = 'root'
-    $hostkey = 'SHA256:Zi6JPVk1oRIdHobINCCLpWK/Azc1wrrk6Xs5B2+eUeY'
-    $password = $env:ROTALINK_SSH_PASSWORD
-    if (-not $password) {
-        Write-Warning 'ROTALINK_SSH_PASSWORD ortam degiskeni tanimli degil; sunucuya deploy atlandi.'
+function Publish-ToGitHub([string]$root) {
+    $repo = 'Kucukejderha/ascos-rotalink'
+    $tag = 'rotalink-latest'
+    $releaseTitle = 'RotaLink en güncel derleme'
+    $exe = Join-Path $root 'artifacts\RotaLink.exe'
+    $manifest = Join-Path $root 'artifacts\version.json'
+    if (-not (Test-Path -LiteralPath $exe) -or -not (Test-Path -LiteralPath $manifest)) {
+        Write-Warning 'artifacts eksik; GitHub yayinlamasi atlandi.'
         return
     }
-    $plink = 'C:\Program Files\PuTTY\plink.exe'
-    $pscp = 'C:\Program Files\PuTTY\pscp.exe'
-    if (-not (Test-Path -LiteralPath $plink) -or -not (Test-Path -LiteralPath $pscp)) {
-        Write-Warning 'PuTTY (plink/pscp) bulunamadi; sunucuya deploy atlandi.'
-        return
+    if (Get-Command gh -ErrorAction SilentlyContinue) {
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $env:APPDATA = $originalAppData
+        try {
+            $notes = "En guncel derlenmis RotaLink.exe (self-update manifesti ile birlikte).`n`n- Exe: https://github.com/$repo/releases/latest/download/RotaLink.exe`n- Manifest: https://github.com/$repo/releases/latest/download/version.json"
+            gh release create $tag --repo $repo --title $releaseTitle --notes $notes 2>&1 | Out-Null
+            gh release upload $tag --repo $repo --clobber $exe $manifest 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning 'GitHub release yuklemesi basarisiz.'
+            } else {
+                Write-Host 'GitHub release guncellendi: https://github.com/Kucukejderha/ascos-rotalink/releases/latest'
+            }
+        } finally {
+            $env:APPDATA = $buildAppData
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+    } else {
+        Write-Warning 'gh CLI bulunamadi; GitHub yayinlamasi atlandi.'
     }
-    $serverDownloads = Join-Path $root 'server\RemoteSupport.Signaling\downloads'
-    $exe = Join-Path $serverDownloads 'RotaLink.exe'
-    $manifest = Join-Path $serverDownloads 'version.json'
-
-    cmd /c "`"$pscp`" -batch -hostkey `"$hostkey`" -pw `"$password`" `"$exe`" `"$manifest`" ${sshUser}@${sshHost}:/opt/ascos-remote-support/server/RemoteSupport.Signaling/downloads/" 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Sunucuya dosya yukleme basarisiz.' }
-
-    cmd /c "`"$plink`" -ssh -batch -hostkey `"$hostkey`" -pw `"$password`" ${sshUser}@${sshHost} `"cd /opt/ascos-remote-support && docker compose -f deploy/docker-compose.remote-support.yml up -d --no-build 2>&1 | tail -3`"" 2>&1 | Select-Object -Last 3
-    if ($LASTEXITCODE -ne 0) { throw 'Sunucu servisi yeniden baslatma basarisiz.' }
-    Write-Host 'Deploy tamamlandi: https://45.87.173.201.nip.io/downloads/RotaLink.exe'
 }
 
 function Build-NativeCapture {
@@ -155,18 +161,16 @@ Write-Host "RotaLink created: $output"
 Write-Host "Size: $((Get-Item $output).Length) bytes"
 Write-Host "SHA-256: $portableHash"
 
-# Publish the executable and its version manifest into the server's static
-# downloads folder so the self-update endpoint stays in sync with the build.
-$serverDownloads = Join-Path $root 'server\RemoteSupport.Signaling\downloads'
-Copy-Item -LiteralPath $output -Destination (Join-Path $serverDownloads 'RotaLink.exe') -Force
+# Publish the executable and its version manifest for the GitHub rolling
+# release; the client is distributed exclusively through GitHub Releases.
 $propsContent = Get-Content (Join-Path $root 'Directory.Build.props') -Raw
 $informationalVersion = [regex]::Match($propsContent, '<InformationalVersion>(.*?)</InformationalVersion>').Groups[1].Value.Trim()
 $manifestJson = @{ version = $informationalVersion; fileName = 'RotaLink.exe'; sha256 = $portableHash } | ConvertTo-Json
-[System.IO.File]::WriteAllText((Join-Path $serverDownloads 'version.json'), $manifestJson, (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText((Join-Path $artifacts 'version.json'), $manifestJson, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "Version manifest written: version=$informationalVersion"
 
 if ($Deploy) {
-    Deploy-ToServer $root
+    Publish-ToGitHub $root
 }
 
 if (-not $Full) { return }
@@ -200,10 +204,6 @@ $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installerFile).Ha
 @{ file = (Split-Path -Leaf $archive); sha256 = $hash; installerFile = (Split-Path -Leaf $installerFile); installerSha256 = $installerHash; portableFile = (Split-Path -Leaf $output); portableSha256 = $portableHash; createdAt = [DateTimeOffset]::UtcNow.ToString('O') } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $artifacts 'release-manifest.json') -Encoding UTF8
 Write-Host "Release created: $archive"
-
-if ($Deploy) {
-    Deploy-ToServer $root
-}
 
 function Sign-File([string]$filePath, [string]$thumbprint) {
     $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |

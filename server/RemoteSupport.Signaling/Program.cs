@@ -44,15 +44,6 @@ app.MapGet("/operator", (HttpContext context) =>
     context.Response.Headers.Pragma = "no-cache";
     return Results.Content(OperatorPage.Html, "text/html; charset=utf-8");
 });
-app.MapGet("/downloads/RotaLink.exe", (HttpContext context, IWebHostEnvironment environment) =>
-    CreateClientDownload(context, environment));
-app.MapGet("/downloads/version.json", (HttpContext context, IWebHostEnvironment environment) =>
-{
-    var versionPath = Path.Combine(environment.ContentRootPath, "downloads", "version.json");
-    if (!File.Exists(versionPath)) return Results.NotFound();
-    context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
-    return Results.File(versionPath, "application/json");
-});
 
 app.MapPost("/v1/devices", (RegisterDeviceRequest request, SecurityStore store) =>
 {
@@ -196,16 +187,6 @@ app.Map("/v1/sessions/{sessionId}/signal", async (HttpContext context, string se
 });
 
 app.Run();
-
-static IResult CreateClientDownload(HttpContext context, IWebHostEnvironment environment)
-{
-    var downloadPath = Path.Combine(environment.ContentRootPath, "downloads", "RotaLink.exe");
-    if (!File.Exists(downloadPath)) return Results.NotFound();
-    context.Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
-    context.Response.Headers.Pragma = "no-cache";
-    context.Response.Headers.Expires = "0";
-    return Results.File(downloadPath, "application/vnd.microsoft.portable-executable", "RotaLink.exe", enableRangeProcessing: true);
-}
 
 /// <summary>
 /// Records failed host input acknowledgements ("control-result" with ok=false)
