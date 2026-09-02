@@ -4,6 +4,10 @@
 
 Current release status and live endpoints are recorded in `STATUS.md`.
 
+[Download releases](https://github.com/Kucukejderha/ascos-remote-support/releases) ·
+[Source and license](LICENSE) · [Privacy](PRIVACY.md) ·
+[Code signing policy](CODE_SIGNING_POLICY.md)
+
 Consent-first remote support foundation for Windows 10/11 and the Rotaniz server.
 
 ## Components
@@ -61,6 +65,18 @@ Extract `artifacts/Rotaniz-Remote-Support-Windows.zip` and run:
 ```
 
 The installer is per-user, creates a visible desktop shortcut, and does not install hidden persistence or unattended access.
+
+## License and code signing
+
+Copyright (C) 2026 Ali Haydar Sultan Eroglu. RotaLink is licensed under the
+[GNU Affero General Public License v3.0 only](LICENSE). Commercial distribution and
+paid support are allowed under that license, provided its source-code and license
+obligations are followed. The RotaLink and Rotaniz names and logos are not licensed
+for implying endorsement of modified or third-party builds.
+
+Free code signing is provided by [SignPath.io](https://signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/). See the
+[code signing policy](CODE_SIGNING_POLICY.md) and [privacy policy](PRIVACY.md).
 
 Before starting the Linux compose deployment, make `deploy/data` writable by the ASP.NET container user (`1654:1654`). Audit records are then retained in `deploy/data/audit.jsonl`.
 
