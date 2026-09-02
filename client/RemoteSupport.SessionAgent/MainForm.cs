@@ -51,56 +51,42 @@ public sealed class MainForm : Form
             AutoSize = true,
             Location = new Point(31, 66)
         });
-        // Large in-form window controls: the native title-bar buttons are tiny
-        // in the half-scale operator video and easy to miss (a click aimed at
-        // maximize lands on minimize). Client-area buttons use ordinary clicks
-        // and are reliable targets at any video scale.
-        var minimizeButton = CreateWindowButton("–", Color.FromArgb(92, 214, 164));
-        minimizeButton.Click += (_, _) => WindowState = FormWindowState.Minimized;
-        var maximizeButton = CreateWindowButton("□", Color.FromArgb(244, 179, 80));
-        maximizeButton.Click += (_, _) => WindowState =
-            WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
-        var closeButton = CreateWindowButton("✕", Color.FromArgb(240, 110, 110));
-        closeButton.Click += (_, _) => Close();
-        var windowButtons = new[] { minimizeButton, maximizeButton, closeButton };
-        for (var index = 0; index < windowButtons.Length; index++)
-        {
-            var button = windowButtons[index];
-            button.Size = new Size(42, 34);
-            button.Location = new Point(header.Width - 16 - (42 + 8) * (windowButtons.Length - index), 10);
-            button.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            header.Controls.Add(button);
-        }
         Controls.Add(header);
 
+        // The layout is deliberately static: the title bar stays native (the
+        // main window buttons are only the operating system's), and the card
+        // below is a simple two-row flow that never overflows.
         var card = new Panel { Location = new Point(28, 130), Size = new Size(504, 196), BackColor = Color.White, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
         card.Paint += (_, e) => ControlPaint.DrawBorder(e.Graphics, card.ClientRectangle, Color.FromArgb(220, 230, 237), ButtonBorderStyle.Solid);
-        card.Controls.Add(new Label { Text = "DESTEK KODUNUZ", ForeColor = Blue, Font = new Font("Segoe UI", 9F, FontStyle.Bold), AutoSize = true, Location = new Point(24, 22) });
+        card.Controls.Add(new Label { Text = "DESTEK KODUNUZ", ForeColor = Blue, Font = new Font("Segoe UI", 9F, FontStyle.Bold), AutoSize = true, Location = new Point(24, 20) });
         _code.Text = "Hazırlanıyor…";
         _code.ForeColor = Navy;
         _code.Font = new Font("Segoe UI", 28F, FontStyle.Bold);
         _code.AutoSize = true;
-        _code.Location = new Point(22, 48);
+        _code.AutoEllipsis = true;
+        _code.MaximumSize = new Size(456, 60);
+        _code.Location = new Point(22, 44);
         card.Controls.Add(_code);
         _copy.Text = "Kodu kopyala";
-        _copy.Location = new Point(236, 53);
-        _copy.Size = new Size(116, 38);
+        _copy.Location = new Point(24, 104);
+        _copy.Size = new Size(200, 38);
+        _copy.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _copy.Enabled = false;
         _copy.Click += (_, _) => { if (_session != null) Clipboard.SetText(_session.Code); };
         card.Controls.Add(_copy);
         _newCode.Text = "Yeni kod";
-        _newCode.Location = new Point(360, 53);
-        _newCode.Size = new Size(116, 38);
+        _newCode.Location = new Point(240, 104);
+        _newCode.Size = new Size(200, 38);
+        _newCode.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _newCode.Enabled = false;
         _newCode.Click += async (_, _) => await RequestNewCodeAsync();
         card.Controls.Add(_newCode);
         _status.Text = "Güvenli bağlantı hazırlanıyor…";
         _status.ForeColor = Color.FromArgb(99, 120, 138);
         _status.AutoEllipsis = true;
-        _status.Location = new Point(24, 117);
-        _status.Size = new Size(452, 24);
+        _status.Location = new Point(24, 156);
+        _status.Size = new Size(456, 24);
         card.Controls.Add(_status);
-        card.Controls.Add(new Label { Text = "Bu pencere açık kaldığı sürece destek bağlantısı aktiftir.", ForeColor = Color.FromArgb(70, 96, 117), AutoSize = true, Location = new Point(24, 151) });
         Controls.Add(card);
 
         var informationalVersion = typeof(MainForm).Assembly
@@ -116,9 +102,9 @@ public sealed class MainForm : Form
             ColumnCount = 3,
             RowCount = 1
         };
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var diagnostics = new LinkLabel
         {
@@ -156,7 +142,7 @@ public sealed class MainForm : Form
             try
             {
                 Process.Start(new ProcessStartInfo(
-                    "https://github.com/Kucukejderha/ascos-remote-support")
+                    "https://github.com/Kucukejderha/ascos-rotalink")
                 {
                     UseShellExecute = true
                 });
@@ -186,18 +172,6 @@ public sealed class MainForm : Form
             StopSession();
         };
     }
-
-    private static Button CreateWindowButton(string text, Color foreColor) => new()
-    {
-        Text = text,
-        Font = new Font("Segoe UI", 12F, FontStyle.Bold),
-        ForeColor = foreColor,
-        BackColor = Color.FromArgb(23, 57, 87),
-        FlatStyle = FlatStyle.Flat,
-        Cursor = Cursors.Hand,
-        TextAlign = ContentAlignment.MiddleCenter,
-        FlatAppearance = { BorderSize = 0, MouseOverBackColor = Color.FromArgb(11, 102, 195), MouseDownBackColor = Color.FromArgb(9, 82, 158) }
-    };
 
     protected override void WndProc(ref Message m)
     {
