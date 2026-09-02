@@ -260,6 +260,13 @@ public sealed class WindowsInputDispatcher : IDisposable
             "ShiftLeft" or "ShiftRight" => 0x10, "ControlLeft" or "ControlRight" => 0x11, "AltLeft" or "AltRight" => 0x12,
             "F1" => 0x70, "F2" => 0x71, "F3" => 0x72, "F4" => 0x73, "F5" => 0x74, "F6" => 0x75,
             "F7" => 0x76, "F8" => 0x77, "F9" => 0x78, "F10" => 0x79, "F11" => 0x7A, "F12" => 0x7B,
+            // Punctuation and symbol keys keep working when the browser does
+            // not provide a single-character e.key for them (dead keys, some
+            // IME states); the values are the US VK_OEM_* virtual-key codes.
+            "Period" => 0xBE, "Comma" => 0xBC, "Semicolon" => 0xBA, "Quote" => 0xDE,
+            "Backquote" => 0xC0, "BracketLeft" => 0xDB, "BracketRight" => 0xDD,
+            "Slash" => 0xBF, "Backslash" or "IntlBackslash" => 0xDC, "Minus" => 0xBD, "Equal" => 0xBB,
+            "IntlRo" => 0xC0, "IntlYen" => 0xDC,
             _ => 0
         };
     }

@@ -222,13 +222,21 @@ internal sealed class InputEngine : IDisposable
                 // Printable characters are carried in KeyCharacter and may have
                 // KeyCode=0 for punctuation keys that have no virtual-key map.
                 if (packet.KeyCharacter == 0 && (packet.KeyCode is 0 or > 0xFF))
+                {
+                    LogKeyDiagnostic(packet, "rejected");
                     return InputInjectionResult.Failure(InputFailureStage.PacketInvalid);
+                }
+                LogKeyDiagnostic(packet, "routed");
                 if (packet.KeyCharacter != 0)
                 {
                     // Unicode injection is keyboard-layout independent: the
                     // operator's browser sends the real character ('.', 'i',
                     // 'ş', ...) and the target receives exactly that character
-                    // regardless of the local keyboard layout.
+                    // regardless of the local keyboard layout. The key release
+                    // is deliberately swallowed: SendInput does not reliably
+                    // match a KEYEVENTF_UNICODE key-up, and an unmatched up
+                    // leaves the character stuck so later presses get eaten.
+                    if (!packet.Down) return InputInjectionResult.Success();
                     input = new NativeInput
                     {
                         Type = InputKeyboard,
@@ -238,7 +246,7 @@ internal sealed class InputEngine : IDisposable
                             {
                                 VirtualKey = packet.KeyCharacter,
                                 ScanCode = packet.KeyCharacter,
-                                Flags = KeyUnicode | (packet.Down ? 0u : KeyUp)
+                                Flags = KeyUnicode
                             }
                         }
                     };
@@ -429,8 +437,18 @@ internal sealed class InputEngine : IDisposable
     private int _lastLeftDownTick;
     private int _lastDpiDiagTick;
     private int _lastLockedLogTick;
+    private int _lastKeyDiagTick;
     private bool _systemButtonHeld;
     private long _systemButtonSequence;
+
+    private void LogKeyDiagnostic(InputPacket packet, string disposition)
+    {
+        var now = Environment.TickCount;
+        if (_lastKeyDiagTick != 0 && unchecked(now - _lastKeyDiagTick) < 1000) return;
+        _lastKeyDiagTick = now;
+        _log.Write("Key " + disposition + ". Char=0x" + packet.KeyCharacter.ToString("X4") +
+            ", KeyCode=0x" + packet.KeyCode.ToString("X2") + ", Down=" + packet.Down + ".");
+    }
     private IntPtr _lastLeftDownTarget;
     private bool _leftDown;
     private bool _rightDown;
