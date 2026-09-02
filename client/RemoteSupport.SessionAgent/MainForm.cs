@@ -93,6 +93,10 @@ public sealed class MainForm : Form
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? typeof(MainForm).Assembly.GetName().Version?.ToString()
             ?? "unknown";
+        // Shown on the footer as a short customer-facing version (vX.Y.Z);
+        // the full informational version (with any pre-release label) is kept
+        // in the update manifest only.
+        var displayVersion = "v" + (typeof(MainForm).Assembly.GetName().Version?.ToString(3) ?? informationalVersion);
         var footer = new TableLayoutPanel
         {
             Dock = DockStyle.Bottom,
@@ -157,7 +161,7 @@ public sealed class MainForm : Form
         footer.Controls.Add(sourceAndLicense, 1, 0);
         footer.Controls.Add(new Label
         {
-            Text = "v" + informationalVersion,
+            Text = displayVersion,
             ForeColor = Color.FromArgb(99, 120, 138),
             AutoSize = false,
             Dock = DockStyle.Fill,
