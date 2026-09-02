@@ -1,0 +1,44 @@
+name: Build & smoke
+on:
+  push:
+    paths-ignore: ['docs/**', 'website/**', '*.md']
+  pull_request:
+    paths-ignore: ['docs/**', 'website/**', '*.md']
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build client package (native capture included)
+        shell: pwsh
+        run: .\scripts\build.ps1 -Configuration Release
+      - name: Build server
+        run: dotnet build .\server\RemoteSupport.Signaling\RemoteSupport.Signaling.csproj -c Release
+      - name: Smoke — architecture checks
+        run: dotnet run --project .\tests\RemoteSupport.Smoke -- --architecture-only
+      - name: Smoke — security store checks
+        run: dotnet run --project .\tests\RemoteSupport.Smoke -- --store-only
+      - name: Smoke — live server integration
+        shell: pwsh
+        run: |
+          $server = Start-Process dotnet -ArgumentList @('run','--project','.\server\RemoteSupport.Signaling\RemoteSupport.Signaling.csproj','-c','Release','--','--urls','http://127.0.0.1:5188') -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              try { Invoke-WebRequest http://127.0.0.1:5188/health -UseBasicParsing | Out-Null; $ready = $true; break }
+              catch { Start-Sleep -Seconds 1 }
+            }
+            if (-not $ready) { throw 'Server did not become healthy in time.' }
+            dotnet run --project .\tests\RemoteSupport.Smoke -- http://127.0.0.1:5188
+            if ($LASTEXITCODE -ne 0) { throw 'Integration smoke failed.' }
+          } finally {
+            Stop-Process $server -Force -ErrorAction SilentlyContinue
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RotaLink-win-x64
+          path: artifacts/RotaLink.exe
+          if-no-files-found: error
