@@ -6,6 +6,10 @@
 
 [English documentation](README.md)
 
+[Sürümleri indir](https://github.com/Kucukejderha/ascos-remote-support/releases) ·
+[Kaynak kod ve lisans](LICENSE) · [Gizlilik](PRIVACY.md) ·
+[Kod imzalama politikası](CODE_SIGNING_POLICY.md)
+
 Windows 10/11 ve Rotaniz sunucusu için kullanıcı onayını zorunlu tutan modüler uzaktan destek uygulamasıdır.
 
 ## Bileşenler
@@ -48,3 +52,16 @@ Yalnız taşınabilir istemci için `build.ps1` yeterlidir; kurulum paketi dahil
 Canlı operatör: https://ascos.rotaniz.com/operator
 
 Güvenlik ayrıntıları için [SECURITY.tr.md](SECURITY.tr.md), sürüm durumu için [STATUS.tr.md](STATUS.tr.md) dosyasına bakın.
+
+## Lisans ve kod imzalama
+
+Telif hakkı (C) 2026 Ali Haydar Sultan Eroglu. RotaLink,
+[GNU Affero Genel Kamu Lisansı sürüm 3.0-only](LICENSE) altında yayımlanır. Lisansın
+kaynak kod ve bildirim yükümlülüklerine uyulması şartıyla ticari dağıtım ve ücretli
+destek mümkündür. RotaLink ve Rotaniz adları ile logoları, değiştirilmiş veya üçüncü
+taraf derlemelerin resmî ürün olduğu izlenimini verecek şekilde kullanılamaz.
+
+Ücretsiz kod imzalama [SignPath.io](https://signpath.io/) tarafından, sertifika
+[SignPath Foundation](https://signpath.org/) tarafından sağlanır. Ayrıntılar için
+[kod imzalama politikası](CODE_SIGNING_POLICY.md) ve
+[gizlilik politikası](PRIVACY.md) belgelerine bakın.
