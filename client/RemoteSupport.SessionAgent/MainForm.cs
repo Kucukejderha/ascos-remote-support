@@ -106,11 +106,12 @@ public sealed class MainForm : Form
             Height = 44,
             BackColor = BackColor,
             Padding = new Padding(28, 4, 28, 4),
-            ColumnCount = 2,
+            ColumnCount = 3,
             RowCount = 1
         };
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
         footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var diagnostics = new LinkLabel
         {
@@ -135,6 +136,32 @@ public sealed class MainForm : Form
             }
         };
         footer.Controls.Add(diagnostics, 0, 0);
+        var sourceAndLicense = new LinkLabel
+        {
+            Text = "Kaynak kod ve lisans",
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            LinkColor = Color.FromArgb(70, 96, 117)
+        };
+        sourceAndLicense.Click += (_, _) =>
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(
+                    "https://github.com/Kucukejderha/ascos-remote-support")
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception exception)
+            {
+                AppDiagnostics.Write("Source and license page could not be opened.", exception);
+                MessageBox.Show(this, "Kaynak kod sayfası açılamadı: " + exception.Message,
+                    "RotaLink", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
+        footer.Controls.Add(sourceAndLicense, 1, 0);
         footer.Controls.Add(new Label
         {
             Text = "v" + informationalVersion,
@@ -142,7 +169,7 @@ public sealed class MainForm : Form
             AutoSize = false,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleRight
-        }, 1, 0);
+        }, 2, 0);
         Controls.Add(footer);
 
         Shown += async (_, _) => await PrepareSessionAsync();
