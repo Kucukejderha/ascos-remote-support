@@ -38,8 +38,10 @@ public sealed class MainForm : Form
         Font = new Font("Segoe UI", 10F);
 
         var header = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = Navy };
-        header.Controls.Add(new Label { Text = "RotaLink", ForeColor = Color.White, Font = new Font("Segoe UI", 25F, FontStyle.Bold), AutoSize = true, Location = new Point(28, 18) });
-        header.Controls.Add(new Label
+        // The title and its subtitle are grouped into one block that is
+        // vertically centered inside the header.
+        var titleLabel = new Label { Text = "RotaLink", ForeColor = Color.White, Font = new Font("Segoe UI", 25F, FontStyle.Bold), AutoSize = true };
+        var subtitleLabel = new Label
         {
             Text = privilegedInputReady
                 ? "Rotaniz Remote Support • SYSTEM kontrol motoru hazır"
@@ -48,9 +50,15 @@ public sealed class MainForm : Form
                     : "Rotaniz Remote Support • Sınırlı kullanıcı oturumu",
             ForeColor = privilegedInputReady ? Color.FromArgb(92, 214, 164) : Color.FromArgb(244, 179, 80),
             Font = new Font("Segoe UI", 10F),
-            AutoSize = true,
-            Location = new Point(31, 66)
-        });
+            AutoSize = true
+        };
+        const int titleGap = 6;
+        var blockHeight = titleLabel.PreferredSize.Height + titleGap + subtitleLabel.PreferredSize.Height;
+        var startY = Math.Max(6, (header.Height - blockHeight) / 2);
+        titleLabel.Location = new Point(28, startY);
+        subtitleLabel.Location = new Point(28, startY + titleLabel.PreferredSize.Height + titleGap);
+        header.Controls.Add(titleLabel);
+        header.Controls.Add(subtitleLabel);
         Controls.Add(header);
 
         // The layout is deliberately static: the title bar stays native (the

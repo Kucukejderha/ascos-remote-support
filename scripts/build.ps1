@@ -24,11 +24,11 @@ function Get-ShortPath([string]$path) {
     return $fso.GetFile($resolved).ShortPath
 }
 
-function Publish-ToGitHub([string]$root) {
+function Publish-ToGitHub([string]$root, [string]$stagedExePath) {
     $repo = 'Kucukejderha/ascos-rotalink'
     $tag = 'rotalink-latest'
     $releaseTitle = 'RotaLink en güncel derleme'
-    $exe = Join-Path $root 'artifacts\RotaLink.exe'
+    $exe = $stagedExePath
     $manifest = Join-Path $root 'artifacts\version.json'
     if (-not (Test-Path -LiteralPath $exe) -or -not (Test-Path -LiteralPath $manifest)) {
         Write-Warning 'artifacts eksik; GitHub yayinlamasi atlandi.'
@@ -140,9 +140,18 @@ dotnet build $agentProject -c $Configuration --no-restore
 if ($LASTEXITCODE -ne 0) { throw 'RotaLink build failed.' }
 
 $bin = Join-Path $root "client\RemoteSupport.SessionAgent\bin\$Configuration\net48"
-$output = Join-Path $artifacts 'RotaLink.exe'
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
-Copy-Item -LiteralPath (Join-Path $bin 'RotaLink.exe') -Destination $output -Force
+# Antivirus scanning can lock the just-built executable, so the release is
+# staged under a fresh temporary name and published from there. The local
+# artifacts copy is best-effort only.
+$stagedExe = Join-Path $env:TEMP ('RotaLink-' + [Guid]::NewGuid().ToString('N') + '.exe')
+[System.IO.File]::Copy((Join-Path $bin 'RotaLink.exe'), $stagedExe, $true)
+$output = $stagedExe
+try {
+    [System.IO.File]::Copy($stagedExe, (Join-Path $artifacts 'RotaLink.exe'), $true)
+} catch [System.IO.IOException] {
+    Write-Warning "artifacts\RotaLink.exe kilitli; yerel kopya atlandi (yayin etkilenmez)."
+}
 
 # Verify the mandatory embedded resources before publishing anything.
 $embeddedChecks = @('RotaLink.Runtime.SessionHelper.exe', 'RotaLink.Runtime.Service.exe', 'RotaLink.Runtime.NativeCapture.exe', 'RotaLink.Runtime.RemoteSupport.Protocol.dll', 'RotaLink.Runtime.System.Memory.dll')
@@ -170,7 +179,7 @@ $manifestJson = @{ version = $informationalVersion; fileName = 'RotaLink.exe'; s
 Write-Host "Version manifest written: version=$informationalVersion"
 
 if ($Deploy) {
-    Publish-ToGitHub $root
+    Publish-ToGitHub $root $output
 }
 
 if (-not $Full) { return }
