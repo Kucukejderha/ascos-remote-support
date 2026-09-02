@@ -229,14 +229,21 @@ internal sealed class InputEngine : IDisposable
                 LogKeyDiagnostic(packet, "routed");
                 if (packet.KeyCharacter != 0)
                 {
-                    // Unicode injection is keyboard-layout independent: the
-                    // operator's browser sends the real character ('.', 'i',
-                    // 'ş', ...) and the target receives exactly that character
-                    // regardless of the local keyboard layout. The key release
-                    // is deliberately swallowed: SendInput does not reliably
-                    // match a KEYEVENTF_UNICODE key-up, and an unmatched up
-                    // leaves the character stuck so later presses get eaten.
+                    // Character delivery is deterministic: WM_CHAR is posted
+                    // straight to the focused control. SendInput's Unicode path
+                    // can return success without ever producing a character
+                    // (RDP sessions, elevated targets), so it is only the
+                    // fallback. The key release is swallowed; it carries no
+                    // state for WM_CHAR delivery.
                     if (!packet.Down) return InputInjectionResult.Success();
+                    var charTarget = GetKeyboardTarget();
+                    if (charTarget != IntPtr.Zero && PostMessage(charTarget, WmChar, new IntPtr(packet.KeyCharacter), IntPtr.Zero))
+                    {
+                        LogCharDelivery(packet, charTarget);
+                        return InputInjectionResult.Success();
+                    }
+                    LogCharDelivery(packet, IntPtr.Zero);
+                    // No focused target: fall back to Unicode injection.
                     input = new NativeInput
                     {
                         Type = InputKeyboard,
@@ -438,8 +445,26 @@ internal sealed class InputEngine : IDisposable
     private int _lastDpiDiagTick;
     private int _lastLockedLogTick;
     private int _lastKeyDiagTick;
+    private int _lastCharDiagTick;
     private bool _systemButtonHeld;
     private long _systemButtonSequence;
+
+    private void LogCharDelivery(InputPacket packet, IntPtr target)
+    {
+        var now = Environment.TickCount;
+        if (_lastCharDiagTick != 0 && unchecked(now - _lastCharDiagTick) < 1000) return;
+        _lastCharDiagTick = now;
+        if (target == IntPtr.Zero)
+        {
+            _log.Write("WM_CHAR skipped: no keyboard target; Unicode fallback used. Char=0x" + packet.KeyCharacter.ToString("X4") + ".");
+            return;
+        }
+        var title = new StringBuilder(256);
+        GetWindowText(target, title, title.Capacity);
+        GetWindowThreadProcessId(target, out var processId);
+        _log.Write("WM_CHAR posted. Char=0x" + packet.KeyCharacter.ToString("X4") + ", HWND=0x" + target.ToInt64().ToString("X") +
+            ", PID=" + processId + ", Title='" + title + "'.");
+    }
 
     private void LogKeyDiagnostic(InputPacket packet, string disposition)
     {
