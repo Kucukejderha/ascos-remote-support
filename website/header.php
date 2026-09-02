@@ -20,7 +20,7 @@
             <a href="<?php echo esc_url(home_url('/#surec')); ?>">Nasıl çalışır?</a>
             <a href="<?php echo esc_url(home_url('/#iletisim-formu')); ?>">İletişim</a>
             <a class="btn btn-primary nav-cta"
-               href="<?php echo esc_url('https://45.87.173.201.nip.io/downloads/RotaLink.exe'); ?>"
+               href="<?php echo esc_url('https://github.com/Kucukejderha/ascos-rotalink/releases/latest/download/RotaLink.exe'); ?>"
                download
                aria-label="RotaLink uzaktan destek uygulamasını indir">RotaLink indir ↓</a>
             <a class="btn btn-primary nav-cta" href="<?php echo esc_url(home_url('/servis-talebi/')); ?>">Servis talebi</a>
