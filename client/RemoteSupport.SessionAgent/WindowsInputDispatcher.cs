@@ -18,6 +18,7 @@ public sealed class WindowsInputDispatcher : IDisposable
     private int _rateWindow = Environment.TickCount;
     private int _eventsInWindow;
     private int _droppedInWindow;
+    private int _lastLocalFallbackLogTick;
     private bool _inputLogged;
     private readonly BlockingCollection<InputWorkItem> _queue = new();
     private readonly Thread _desktopThread;
@@ -58,8 +59,18 @@ public sealed class WindowsInputDispatcher : IDisposable
                 "system-helper-" + result.Stage,
                 result.ErrorCode, "elevated helper / WinSta0", message.Type);
         }
+        // The privileged helper is unreachable (crashed or restarting): keep
+        // control alive through the local dispatch worker instead of rejecting
+        // every event with "ipc unavailable".
         if (InputRuntime.IsRunning != 0)
-            return new InputDispatchReport(false, "system-helper-ipc-unavailable", 0, "elevated helper", message.Type);
+        {
+            var now = Environment.TickCount;
+            if (_lastLocalFallbackLogTick == 0 || unchecked(now - _lastLocalFallbackLogTick) > 5000)
+            {
+                _lastLocalFallbackLogTick = now;
+                AppDiagnostics.Write("Privileged helper IPC unavailable; dispatching locally.");
+            }
+        }
 
         var work = new InputWorkItem(message);
         try { _queue.Add(work); }

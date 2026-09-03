@@ -76,14 +76,20 @@ internal sealed class SessionHelperInputClient : IDisposable
     {
         if (_pipe is { IsConnected: true }) return true;
         var now = Environment.TickCount;
-        if (unchecked(now - _nextConnectAttempt) < 0) return false;
+        // Wrap-safe throttle: Environment.TickCount is negative after ~24.9
+        // days of uptime, so the "next attempt in the future" test must only
+        // run after an actual attempt was recorded.
+        if (_nextConnectAttempt != 0 && unchecked(now - _nextConnectAttempt) < 0) return false;
         _nextConnectAttempt = now + 2000;
         Disconnect();
         var candidate = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut,
             PipeOptions.Asynchronous | PipeOptions.WriteThrough);
         try
         {
-            candidate.Connect(0);
+            // A short connect window absorbs helper restarts (the helper can
+            // recreate the pipe at any moment); the default zero-timeout probe
+            // races the server loop and reports a phantom outage.
+            candidate.Connect(1200);
         }
         catch (TimeoutException exception)
         {

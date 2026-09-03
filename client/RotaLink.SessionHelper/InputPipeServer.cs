@@ -143,7 +143,18 @@ internal sealed class InputPipeServer
         var security = new PipeSecurity();
         security.SetAccessRuleProtection(true, false);
         security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
-        security.AddAccessRule(new PipeAccessRule(GetInteractiveUserSid(), PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
+        try
+        {
+            security.AddAccessRule(new PipeAccessRule(GetInteractiveUserSid(), PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
+        }
+        catch (Exception exception)
+        {
+            // The interactive token may be unavailable during session
+            // transitions; fall back to authenticated users. Every connection
+            // is still verified against the session id in VerifyClientIdentity.
+            _log.Write("Interactive pipe ACL could not be applied (" + exception.Message + "); allowing authenticated users.");
+            security.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null), PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
+        }
         return new NamedPipeServerStream(PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.WriteThrough, 4096, 4096, security);
     }
