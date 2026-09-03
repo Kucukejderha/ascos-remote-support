@@ -245,7 +245,10 @@ internal sealed class InputEngine : IDisposable
                         {
                             Keyboard = new KeyboardInput
                             {
-                                VirtualKey = packet.KeyCharacter,
+                                // KEYEVENTF_UNICODE: wScan carries the UTF-16
+                                // code unit and wVk MUST be zero, otherwise
+                                // SendInput fails with ERROR_INVALID_PARAMETER.
+                                VirtualKey = 0,
                                 ScanCode = packet.KeyCharacter,
                                 Flags = KeyUnicode
                             }
